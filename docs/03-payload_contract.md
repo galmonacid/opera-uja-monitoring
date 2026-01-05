@@ -1,0 +1,59 @@
+# 03 — Contrato de payload y parsing
+
+## 1) Campos observados en payload (ejemplo real)
+Campos:
+- ver
+- sn
+- mac
+- ip
+- srcname
+- srctype
+- tz
+- opt
+- meter
+- __dt
+
+Donde:
+- `meter` contiene una lista de entradas con:
+  - `name` (equipo/medidor)
+  - `idowner`
+  - `time` (epoch seconds)
+  - `data[]` con tuplas {var, type, unit, value}
+
+## 2) Punto crítico: JSON válido
+En los ejemplos, el payload aparece con formato tipo `[{name=..., data=[{var=...}]}]`
+Acción:
+- Confirmar con operador si llega como JSON estricto o como formato key=value.
+- Si no es JSON, el backend implementa parser robusto (sin OCR).
+
+## 3) Semántica temporal
+- `meter.time`: epoch seconds (confirmar si UTC).
+- `tz`: timezone del origen (ej: Europe/Paris).
+- Regla: normalizar a UTC en backend.
+
+## 4) Duplicados / orden / backlog
+Confirmar:
+- ¿Puede haber backlog si cae la conexión?
+- ¿Puede llegar fuera de orden?
+- ¿Puede haber duplicados de timestamp?
+Backend debe:
+- Deduplicar por (rt_id, ts_event) en histórico si aplica.
+- Mantener “latest” por rt_id.
+
+## 5) Contrato mínimo para la solución
+Requisitos del payload para que la solución funcione:
+- `meter.time` presente.
+- `data.var`, `data.unit`, `data.value` presentes.
+- `meter.name` estable en el tiempo.
+
+## 6) Lista de datos a solicitar al operador (para cerrar mapeo)
+- Catálogo por gateway:
+  - meter.name
+  - data.var
+  - unit
+- Frecuencia de envío por gateway.
+- Agua: contador acumulado vs incremental.
+- Identificación exacta de:
+  - inversores FV (Endesa/autoconsumo)
+  - CT total
+  - radiación por ubicación
