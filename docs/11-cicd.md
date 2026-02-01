@@ -46,18 +46,20 @@ Infra (IaC):
 Software:
 - Backend (Lambda): zip → S3 → update stack.
 - Datos: carga de `gateway_variable_map` desde CSV (script en `scripts/load_gateway_map.py`).
-- Frontend: Amplify conectado al repo (build y deploy automático).
+- Frontend: workflow que dispara Amplify (`start-job`) y espera el build.
 - Alternativa frontend: build + deploy a S3/CloudFront (si se evita Amplify).
 
 Workflows:
 - Infra: `.github/workflows/cd-infra.yml` (paths: `infra/timestream.yaml`, `infra/dynamodb.yaml`)
 - Backend: `.github/workflows/cd-backend.yml` (paths: `lambda/**`, `seeds/**`, `scripts/**`, `infra/lambda-ingest-telemetry.yaml`, `infra/lambda-aggregations.yaml`, `infra/lambda-api.yaml`, `infra/api-gateway.yaml`, `infra/iot-rule-gw-jaen-energia.yaml`)
-- Frontend: despliegue gestionado por Amplify (sin workflow en repo)
+- Frontend: `.github/workflows/cd-frontend.yml` (paths: `frontend/**`, `amplify.yml`)
 
 ## Variables y secretos
 - `AWS_ROLE_ARN`: rol OIDC para deploy.
 - `LAMBDA_ARTIFACT_BUCKET`: bucket de artefactos Lambda.
 - Región por defecto: `eu-west-1`.
+- `AMPLIFY_APP_ID`: id de la app Amplify.
+- `AMPLIFY_BRANCH`: branch de Amplify (p.ej. `main`).
 
 ## Entornos
 - `dev` / `prod` como mínimo.

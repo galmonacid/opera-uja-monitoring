@@ -1,0 +1,68 @@
+name: cd-frontend
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - "amplify.yml"
+      - ".github/workflows/cd-frontend.yml"
+
+jobs:
+  deploy:
+    if: ${{ secrets.AMPLIFY_APP_ID != '' && secrets.AMPLIFY_BRANCH != '' && secrets.AWS_ROLE_ARN != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+      - name: Trigger Amplify build
+        id: start
+        env:
+          AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
+          AMPLIFY_BRANCH: ${{ secrets.AMPLIFY_BRANCH }}
+        run: |
+          set -euo pipefail
+          job_id=$(aws amplify start-job \
+            --app-id "$AMPLIFY_APP_ID" \
+            --branch-name "$AMPLIFY_BRANCH" \
+            --job-type RELEASE \
+            --query 'jobSummary.jobId' \
+            --output text)
+          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          echo "Started Amplify job $job_id"
+
+      - name: Wait for Amplify job
+        env:
+          AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
+          AMPLIFY_BRANCH: ${{ secrets.AMPLIFY_BRANCH }}
+          AMPLIFY_JOB_ID: ${{ steps.start.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 40); do
+            status=$(aws amplify get-job \
+              --app-id "$AMPLIFY_APP_ID" \
+              --branch-name "$AMPLIFY_BRANCH" \
+              --job-id "$AMPLIFY_JOB_ID" \
+              --query 'job.summary.status' \
+              --output text)
+            echo "Amplify status: $status"
+            if [ "$status" = "SUCCEED" ]; then
+              exit 0
+            fi
+            if [ "$status" = "FAILED" ] || [ "$status" = "CANCELLED" ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "Amplify job timeout"
+          exit 1

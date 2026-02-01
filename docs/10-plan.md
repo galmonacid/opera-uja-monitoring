@@ -62,7 +62,7 @@ Tareas:
 - [COMPLETO] Anadir tests unitarios para `lambda_ingest_telemetry`
 - [COMPLETO] Preparar pipeline CD infra (CloudFormation por entorno)
 - [COMPLETO] Preparar pipeline CD backend (Lambda zip + carga mapping)
-- [] Preparar pipeline CD frontend (Amplify o S3/CloudFront)
+- [COMPLETO] Preparar pipeline CD frontend (Amplify)
 - [COMPLETO] Smoke test post-deploy (MQTT → `latest_readings`)
 
 ## Fase 3A — Backend ampliado (resto gateways) (2-3 semanas)
