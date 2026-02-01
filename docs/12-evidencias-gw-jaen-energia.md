@@ -42,9 +42,11 @@ Opcional (API):
 
 ## Smoke tests agregados (2026-02-01)
 - `lambda_ingest_telemetry` OK: `{"status":"ok","count":11}`
-- `lambda_calc_daily` ERROR: `Column 'rt_id' does not exist` (Timestream)
-- `lambda_calc_monthly` OK: `{"status":"ok","count":0}`
-- `lambda_calc_yearly` OK: `{"status":"ok","count":0}`
+- `lambda_calc_daily` OK (misma fecha, un punto por rt_id): `{"status":"ok","count":1}`
+- `lambda_calc_monthly` OK: `{"status":"ok","count":1}`
+- `lambda_calc_yearly` OK: `{"status":"ok","count":1}`
+
+Nota: si el timestamp del payload es anterior a la ventana de memoria (7 dias), Timestream rechaza los registros. Para smoke tests usar timestamp actual.
 
 ## Notas
 - IoT Things y certificados se gestionan manualmente (no IaC).

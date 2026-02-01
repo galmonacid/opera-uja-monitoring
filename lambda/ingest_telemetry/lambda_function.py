@@ -325,7 +325,13 @@ def write_timestream_records(records):
                 Records=chunk,
             )
         except _get_timestream_client().exceptions.RejectedRecordsException as exc:
+            rejected = []
+            response = getattr(exc, "response", {})
+            if isinstance(response, dict):
+                rejected = response.get("RejectedRecords", [])
             logger.error("timestream rejected records: %s", exc)
+            if rejected:
+                logger.error("timestream rejected details: %s", rejected)
         except ClientError as exc:
             logger.error("timestream write failed: %s", exc)
 
