@@ -71,6 +71,7 @@ Resources:
                 Action:
                   - timestream:DescribeEndpoints
                   - timestream:Query
+                  - timestream:Select
                 Resource: "*"
 
   CalcDailyLambda:

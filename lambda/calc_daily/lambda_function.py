@@ -89,7 +89,7 @@ def query_timestream(rt_id, start, end):
     query = (
         f"SELECT time, measure_value::double AS value "
         f"FROM \"{TS_DATABASE}\".\"{TS_TABLE}\" "
-        f"WHERE rt_id = '{rt_id}' "
+        f"WHERE \"rt_id\" = '{rt_id}' "
         f"AND time BETWEEN from_iso8601_timestamp('{start}') "
         f"AND from_iso8601_timestamp('{end}') "
         f"ORDER BY time ASC"
