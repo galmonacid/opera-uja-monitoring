@@ -45,3 +45,7 @@ npm run dev
 ```yaml
 appRoot: frontend
 ```
+
+## URL (Amplify)
+- App ID: `dqb16efeyz8k3`
+- URL: `https://main.dqb16efeyz8k3.amplifyapp.com`
