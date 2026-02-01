@@ -96,5 +96,6 @@ aws cloudformation deploy \
   --parameter-overrides \
     ApiName=uja-public-api \
     StageName=v1 \
-    LambdaName=lambda_api_public
+    LambdaName=lambda_api_public \
+    DeploymentVersion=$(date +%s)
 ```

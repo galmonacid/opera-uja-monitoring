@@ -25,6 +25,7 @@ jobs:
       AWS_REGION: eu-west-1
       STACK_PREFIX: uja
       LAMBDA_ARTIFACT_BUCKET: ${{ secrets.LAMBDA_ARTIFACT_BUCKET }}
+      LAMBDA_KEY_SUFFIX: ${{ github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,15 +57,15 @@ jobs:
       - name: Upload Lambda artifact
         run: |
           aws s3 cp /tmp/lambda_ingest_telemetry.zip \
-            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_ingest_telemetry.zip"
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_ingest_telemetry-${LAMBDA_KEY_SUFFIX}.zip"
           aws s3 cp /tmp/lambda_calc_daily.zip \
-            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_daily.zip"
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_daily-${LAMBDA_KEY_SUFFIX}.zip"
           aws s3 cp /tmp/lambda_calc_monthly.zip \
-            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_monthly.zip"
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_monthly-${LAMBDA_KEY_SUFFIX}.zip"
           aws s3 cp /tmp/lambda_calc_yearly.zip \
-            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_yearly.zip"
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_yearly-${LAMBDA_KEY_SUFFIX}.zip"
           aws s3 cp /tmp/lambda_api_public.zip \
-            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_api_public.zip"
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_api_public-${LAMBDA_KEY_SUFFIX}.zip"
 
       - name: Deploy Lambda stack
         run: |
@@ -74,7 +75,7 @@ jobs:
             --parameter-overrides \
               FunctionName=lambda_ingest_telemetry \
               CodeS3Bucket="${LAMBDA_ARTIFACT_BUCKET}" \
-              CodeS3Key=lambda/lambda_ingest_telemetry.zip \
+              CodeS3Key=lambda/lambda_ingest_telemetry-${LAMBDA_KEY_SUFFIX}.zip \
             --capabilities CAPABILITY_NAMED_IAM
 
       - name: Deploy aggregation lambdas
@@ -84,9 +85,9 @@ jobs:
             --template-file infra/lambda-aggregations.yaml \
             --parameter-overrides \
               CodeS3Bucket="${LAMBDA_ARTIFACT_BUCKET}" \
-              CodeS3KeyDaily=lambda/lambda_calc_daily.zip \
-              CodeS3KeyMonthly=lambda/lambda_calc_monthly.zip \
-              CodeS3KeyYearly=lambda/lambda_calc_yearly.zip \
+              CodeS3KeyDaily=lambda/lambda_calc_daily-${LAMBDA_KEY_SUFFIX}.zip \
+              CodeS3KeyMonthly=lambda/lambda_calc_monthly-${LAMBDA_KEY_SUFFIX}.zip \
+              CodeS3KeyYearly=lambda/lambda_calc_yearly-${LAMBDA_KEY_SUFFIX}.zip \
             --capabilities CAPABILITY_NAMED_IAM
 
       - name: Deploy API lambda
@@ -97,7 +98,7 @@ jobs:
             --parameter-overrides \
               FunctionName=lambda_api_public \
               CodeS3Bucket="${LAMBDA_ARTIFACT_BUCKET}" \
-              CodeS3Key=lambda/lambda_api_public.zip \
+              CodeS3Key=lambda/lambda_api_public-${LAMBDA_KEY_SUFFIX}.zip \
             --capabilities CAPABILITY_NAMED_IAM
 
       - name: Deploy API Gateway
@@ -108,7 +109,8 @@ jobs:
             --parameter-overrides \
               ApiName=uja-public-api \
               StageName=v1 \
-              LambdaName=lambda_api_public
+              LambdaName=lambda_api_public \
+              DeploymentVersion="${GITHUB_SHA}"
 
       - name: Deploy IoT Rule
         run: |

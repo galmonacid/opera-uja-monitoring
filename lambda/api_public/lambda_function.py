@@ -16,16 +16,18 @@ agg_table = dynamodb.Table(DDB_AGG_TABLE)
 
 def handler(event, context):
     path = event.get("path", "")
+    if path.startswith("/v1/"):
+        path = path[len("/v1") :]
     params = event.get("queryStringParameters") or {}
     multi_params = event.get("multiValueQueryStringParameters") or {}
 
-    if path.endswith("/v1/realtime"):
+    if path.endswith("/realtime"):
         return response(get_realtime(params, multi_params))
-    if path.endswith("/v1/aggregates/daily"):
+    if path.endswith("/aggregates/daily"):
         return response(get_aggregates(params, "daily"))
-    if path.endswith("/v1/aggregates/monthly"):
+    if path.endswith("/aggregates/monthly"):
         return response(get_aggregates(params, "monthly"))
-    if path.endswith("/v1/aggregates/yearly"):
+    if path.endswith("/aggregates/yearly"):
         return response(get_aggregates(params, "yearly"))
 
     return response({"error": "not_found"}, status=404)

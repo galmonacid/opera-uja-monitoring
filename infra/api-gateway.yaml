@@ -17,6 +17,9 @@ Parameters:
   ThrottleBurst:
     Type: Number
     Default: 10
+  DeploymentVersion:
+    Type: String
+    Default: v1
 
 Resources:
   RestApi:
@@ -24,25 +27,18 @@ Resources:
     Properties:
       Name: !Ref ApiName
 
-  ResourceV1:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      RestApiId: !Ref RestApi
-      ParentId: !GetAtt RestApi.RootResourceId
-      PathPart: v1
-
   ResourceRealtime:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref RestApi
-      ParentId: !Ref ResourceV1
+      ParentId: !GetAtt RestApi.RootResourceId
       PathPart: realtime
 
   ResourceAggregates:
     Type: AWS::ApiGateway::Resource
     Properties:
       RestApiId: !Ref RestApi
-      ParentId: !Ref ResourceV1
+      ParentId: !GetAtt RestApi.RootResourceId
       PathPart: aggregates
 
   ResourceDaily:
@@ -123,6 +119,7 @@ Resources:
       - YearlyMethod
     Properties:
       RestApiId: !Ref RestApi
+      Description: !Sub "deploy-${DeploymentVersion}"
 
   ApiStage:
     Type: AWS::ApiGateway::Stage

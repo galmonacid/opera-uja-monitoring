@@ -38,6 +38,7 @@ Para evidenciar con datos reales:
 Opcional (API):
 - `GET https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1/realtime`
 - `GET https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1/aggregates/daily`
+  - Respuesta esperada sin filtros: `{"error":"missing_filters"}` (HTTP 200)
 
 ## Notas
 - IoT Things y certificados se gestionan manualmente (no IaC).
