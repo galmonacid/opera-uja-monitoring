@@ -61,6 +61,7 @@ const Sparkline = ({ series }) => {
 };
 
 function App() {
+  const [viewMode, setViewMode] = useState("functional");
   const [realtime, setRealtime] = useState({
     status: "idle",
     data: null,
@@ -119,6 +120,10 @@ function App() {
     return trimmedSeries[trimmedSeries.length - 1].value;
   }, [trimmedSeries]);
 
+  const lastUpdate = realtime.data?.ts
+    ? new Date(realtime.data.ts * 1000).toLocaleTimeString("es-ES")
+    : "-";
+
   return (
     <div className="app">
       <header className="navbar">
@@ -127,7 +132,7 @@ function App() {
             <span className="brand-mark" />
             <div>
               <div>UJA Monitoring</div>
-              <small>Energia, agua y FV</small>
+              <small>Energia · Agua · FV</small>
             </div>
           </div>
           <nav className="nav-links">
@@ -137,228 +142,279 @@ function App() {
             <a href="#fv">FV</a>
             <a href="#indicadores">Indicadores</a>
           </nav>
+          <div className="view-toggle">
+            <button
+              type="button"
+              className={viewMode === "functional" ? "active" : ""}
+              onClick={() => setViewMode("functional")}
+            >
+              Funcional
+            </button>
+            <button
+              type="button"
+              className={viewMode === "pixel" ? "active" : ""}
+              onClick={() => setViewMode("pixel")}
+            >
+              Pixel match
+            </button>
+          </div>
         </div>
       </header>
 
-      <section id="energia" className="hero">
-        <div className="container hero-grid">
-          <div className="reveal">
-            <div className="eyebrow">Jaen · Campus Lagunillas</div>
-            <h1>Consumo energetico en tiempo casi real.</h1>
-            <p>
-              Lecturas directas del gateway con trazabilidad por edificio, ajustes
-              de autoconsumo y agregados diarios listos para reporting.
-            </p>
-            <div className="cta-row">
-              <button className="button primary">Ver dashboard</button>
-              <button className="button secondary">Descargar informe</button>
-            </div>
-            <div style={{ marginTop: "2rem" }} className="card">
-              <div className="status-pill">
-                Estado API: {realtime.status === "ready" ? "activo" : "sin datos"}
+      {viewMode === "pixel" ? (
+        <main className="pixel">
+          <section id="energia" className="pm-section">
+            <div className="container">
+              <div className="pm-header">
+                <div className="eyebrow">Pagina 1</div>
+                <h2>Consumo energetico</h2>
+                <p>Pixel-match del layout original.</p>
               </div>
-              <div className="metrics" style={{ marginTop: "1rem" }}>
-                <div className="metric">
-                  <div>Lecturas activas</div>
-                  <span>{realtimeItems.length}</span>
-                </div>
-                <div className="metric">
-                  <div>Ultima actualizacion</div>
-                  <span>
-                    {realtime.data?.ts
-                      ? new Date(realtime.data.ts * 1000).toLocaleTimeString("es-ES")
-                      : "-"}
-                  </span>
-                </div>
-                <div className="metric">
-                  <div>Total diario (kWh)</div>
-                  <span>{totalToday ? number.format(totalToday) : "-"}</span>
-                </div>
+              <div className="pm-frame">
+                <img src={section1} alt="Pagina 1 energia" />
               </div>
             </div>
-          </div>
-          <div className="media-frame reveal" style={{ animationDelay: "0.1s" }}>
-            <span className="badge">Seccion 1</span>
-            <img src={section1} alt="Referencia seccion energia" />
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section id="mapa" className="section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Vision general y mapa del campus</h2>
-            <p className="section-subtitle">
-              Vista geografica con el anillo energetico, edificios clave y puntos
-              de medida. Base grafica ajustada al campus.
-            </p>
-          </div>
-          <div className="section-grid">
-            <div className="media-frame reveal">
-              <span className="badge">Mapa campus</span>
-              <img src={campus} alt="Mapa campus Jaen" />
-              <img className="overlay" src={section2} alt="Overlay seccion mapa" />
+          <section id="mapa" className="pm-section">
+            <div className="container">
+              <div className="pm-header">
+                <div className="eyebrow">Pagina 2</div>
+                <h2>Mapa campus</h2>
+                <p>Campus como base grafica con overlay de seccion.</p>
+              </div>
+              <div className="pm-campus">
+                <img
+                  className="pm-campus-base"
+                  src={campus}
+                  alt="Campus base"
+                />
+                <img
+                  className="pm-campus-overlay"
+                  src={section2}
+                  alt="Pagina 2 overlay"
+                />
+              </div>
             </div>
-            <div className="card reveal" style={{ animationDelay: "0.1s" }}>
-              <h3>Resumen operativo</h3>
-              <p>
-                El campus Lagunillas concentra los edificios A, B, C y D junto a
-                puntos de recarga. La web permite filtrar por anillo, edificio y
-                autoconsumo.
-              </p>
-              <div style={{ marginTop: "1rem" }} className="metrics">
-                <div className="metric">
-                  <div>Edificios monitorizados</div>
-                  <span>20</span>
+          </section>
+
+          <section id="agua" className="pm-section">
+            <div className="container">
+              <div className="pm-header">
+                <div className="eyebrow">Pagina 3</div>
+                <h2>Consumo de agua</h2>
+              </div>
+              <div className="pm-frame">
+                <img src={section3} alt="Pagina 3 agua" />
+              </div>
+            </div>
+          </section>
+
+          <section id="fv" className="pm-section">
+            <div className="container">
+              <div className="pm-header">
+                <div className="eyebrow">Pagina 4</div>
+                <h2>Produccion FV</h2>
+              </div>
+              <div className="pm-frame">
+                <img src={section4} alt="Pagina 4 FV" />
+              </div>
+            </div>
+          </section>
+
+          <section id="indicadores" className="pm-section">
+            <div className="container">
+              <div className="pm-header">
+                <div className="eyebrow">Pagina 5</div>
+                <h2>Indicadores</h2>
+              </div>
+              <div className="pm-frame">
+                <img src={section5} alt="Pagina 5 indicadores" />
+              </div>
+            </div>
+          </section>
+        </main>
+      ) : (
+        <main className="functional">
+          <section id="energia" className="section hero">
+            <div className="container hero-grid">
+              <div>
+                <div className="eyebrow">Jaen · Campus Lagunillas</div>
+                <h1>Consumo energetico en tiempo casi real.</h1>
+                <p>
+                  Lecturas directas del gateway, ajustes de autoconsumo y
+                  agregados diarios listos para reporting.
+                </p>
+                <div className="cta-row">
+                  <button className="button primary">Exportar datos</button>
+                  <button className="button secondary">Configuracion</button>
                 </div>
-                <div className="metric">
-                  <div>PV autoconsumo</div>
-                  <span>A0, C4, Magisterio</span>
+                <div style={{ marginTop: "2rem" }} className="card">
+                  <div className="status-pill">
+                    Estado API: {realtime.status === "ready" ? "activo" : "sin datos"}
+                  </div>
+                  <div className="metrics" style={{ marginTop: "1rem" }}>
+                    <div className="metric">
+                      <div>Lecturas activas</div>
+                      <span>{realtimeItems.length}</span>
+                    </div>
+                    <div className="metric">
+                      <div>Ultima actualizacion</div>
+                      <span>{lastUpdate}</span>
+                    </div>
+                    <div className="metric">
+                      <div>Total diario (kWh)</div>
+                      <span>{totalToday ? number.format(totalToday) : "-"}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="metric">
-                  <div>Gateway activo</div>
-                  <span>gw_jaen_energia</span>
+              </div>
+              <div className="media-frame">
+                <span className="badge">Seccion 1</span>
+                <img src={section1} alt="Referencia seccion energia" />
+              </div>
+            </div>
+          </section>
+
+          <section id="mapa" className="section">
+            <div className="container section-grid">
+              <div className="media-frame">
+                <span className="badge">Mapa campus</span>
+                <img src={campus} alt="Mapa campus Jaen" />
+              </div>
+              <div className="card">
+                <h3>Resumen operativo</h3>
+                <p>
+                  Filtros por edificio, autoconsumo y anillo energetico con
+                  comparativas por area.
+                </p>
+                <div style={{ marginTop: "1rem" }} className="metrics">
+                  <div className="metric">
+                    <div>Edificios monitorizados</div>
+                    <span>20</span>
+                  </div>
+                  <div className="metric">
+                    <div>PV autoconsumo</div>
+                    <span>A0, C4, Magisterio</span>
+                  </div>
+                  <div className="metric">
+                    <div>Gateway activo</div>
+                    <span>gw_jaen_energia</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section className="section">
-        <div className="container section-grid">
-          <div className="card reveal">
-            <h3>Realtime (top lecturas)</h3>
-            <p>Lecturas mas recientes del campus Jaen.</p>
-            <div className="metrics" style={{ marginTop: "1rem" }}>
-              {realtimeItems.slice(0, 6).map((item) => (
-                <div key={item.rt_id} className="metric">
-                  <div>{shortRt(item.rt_id)}</div>
-                  <span>
-                    {number.format(item.value)} {item.unit}
-                  </span>
+          <section className="section">
+            <div className="container section-grid">
+              <div className="card">
+                <h3>Realtime (top lecturas)</h3>
+                <p>Lecturas recientes del campus Jaen.</p>
+                <div className="metrics" style={{ marginTop: "1rem" }}>
+                  {realtimeItems.slice(0, 6).map((item) => (
+                    <div key={item.rt_id} className="metric">
+                      <div>{shortRt(item.rt_id)}</div>
+                      <span>
+                        {number.format(item.value)} {item.unit}
+                      </span>
+                    </div>
+                  ))}
+                  {!realtimeItems.length && <div>Sin datos todavia.</div>}
                 </div>
-              ))}
-              {!realtimeItems.length && <div>Sin datos todavia.</div>}
-            </div>
-          </div>
-          <div className="card reveal" style={{ animationDelay: "0.1s" }}>
-            <h3>Agregado diario (total)</h3>
-            <p>Ultimos 7 dias de energia consumida.</p>
-            <Sparkline series={trimmedSeries} />
-            <div className="metrics">
-              {trimmedSeries.map((item) => (
-                <div key={item.date} className="metric">
-                  <div>{item.date}</div>
-                  <span>{number.format(item.value)} kWh</span>
-                </div>
-              ))}
-              {!trimmedSeries.length && <div>Sin datos diarios.</div>}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="agua" className="section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Consumo de agua</h2>
-            <p className="section-subtitle">
-              Seccion preparada para integracion de los gateways de agua.
-            </p>
-          </div>
-          <div className="section-grid">
-            <div className="media-frame reveal">
-              <span className="badge">Seccion 3</span>
-              <img src={section3} alt="Referencia consumo agua" />
-            </div>
-            <div className="card reveal" style={{ animationDelay: "0.1s" }}>
-              <h3>Estado</h3>
-              <p>
-                Pendiente de catalogo definitivo de variables y activacion de
-                gateways. El layout ya contempla comparativas por edificio.
-              </p>
-              <div className="status-pill" style={{ marginTop: "1rem" }}>
-                En cola de integracion
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="fv" className="section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Produccion FV</h2>
-            <p className="section-subtitle">
-              Seguimiento de FV Endesa y autoconsumo con balance energetico.
-            </p>
-          </div>
-          <div className="section-grid">
-            <div className="media-frame reveal">
-              <span className="badge">Seccion 4</span>
-              <img src={section4} alt="Referencia produccion FV" />
-            </div>
-            <div className="card reveal" style={{ animationDelay: "0.1s" }}>
-              <h3>Preparado para FV</h3>
-              <p>
-                El panel permite mezclar generacion con demanda y resaltar
-                exportacion cuando la produccion es mayor.
-              </p>
-              <div className="metrics" style={{ marginTop: "1rem" }}>
-                <div className="metric">
-                  <div>Autoconsumo activo</div>
-                  <span>A0 · C4 · Magisterio</span>
-                </div>
-                <div className="metric">
-                  <div>Estado</div>
-                  <span>Esperando datos</span>
+              <div className="card">
+                <h3>Agregado diario (total)</h3>
+                <p>Ultimos 7 dias de energia consumida.</p>
+                <Sparkline series={trimmedSeries} />
+                <div className="metrics">
+                  {trimmedSeries.map((item) => (
+                    <div key={item.date} className="metric">
+                      <div>{item.date}</div>
+                      <span>{number.format(item.value)} kWh</span>
+                    </div>
+                  ))}
+                  {!trimmedSeries.length && <div>Sin datos diarios.</div>}
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section id="indicadores" className="section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Indicadores y balance</h2>
-            <p className="section-subtitle">
-              Indicadores clave para reportes publicos: CO2 evitado, balance
-              mensual y comparativa de presupuesto.
-            </p>
-          </div>
-          <div className="section-grid">
-            <div className="card reveal">
-              <h3>Indicadores listos</h3>
-              <p>
-                Se obtendran desde agregados y reglas de negocio cuando el
-                modelo de KPIs este cerrado.
-              </p>
-              <div className="metrics" style={{ marginTop: "1rem" }}>
-                <div className="metric">
-                  <div>CO2 evitado</div>
-                  <span>--</span>
-                </div>
-                <div className="metric">
-                  <div>Balance mensual</div>
-                  <span>--</span>
+          <section id="agua" className="section">
+            <div className="container section-grid">
+              <div className="media-frame">
+                <span className="badge">Seccion 3</span>
+                <img src={section3} alt="Referencia consumo agua" />
+              </div>
+              <div className="card">
+                <h3>Consumo de agua</h3>
+                <p>
+                  Seccion preparada para integracion de gateways de agua cuando
+                  el catalogo este completo.
+                </p>
+                <div className="status-pill" style={{ marginTop: "1rem" }}>
+                  En espera de datos
                 </div>
               </div>
             </div>
-            <div className="media-frame reveal" style={{ animationDelay: "0.1s" }}>
-              <span className="badge">Seccion 5</span>
-              <img src={section5} alt="Referencia indicadores" />
+          </section>
+
+          <section id="fv" className="section">
+            <div className="container section-grid">
+              <div className="media-frame">
+                <span className="badge">Seccion 4</span>
+                <img src={section4} alt="Referencia produccion FV" />
+              </div>
+              <div className="card">
+                <h3>Produccion FV</h3>
+                <p>
+                  Balance entre demanda y generacion para autoconsumo y FV
+                  Endesa.
+                </p>
+                <div className="metrics" style={{ marginTop: "1rem" }}>
+                  <div className="metric">
+                    <div>Autoconsumo activo</div>
+                    <span>A0 · C4 · Magisterio</span>
+                  </div>
+                  <div className="metric">
+                    <div>Estado</div>
+                    <span>Esperando datos</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
+
+          <section id="indicadores" className="section">
+            <div className="container section-grid">
+              <div className="card">
+                <h3>Indicadores y balance</h3>
+                <p>
+                  Indicadores clave para reportes publicos: CO2 evitado, balance
+                  mensual y comparativa presupuestaria.
+                </p>
+                <div className="metrics" style={{ marginTop: "1rem" }}>
+                  <div className="metric">
+                    <div>CO2 evitado</div>
+                    <span>--</span>
+                  </div>
+                  <div className="metric">
+                    <div>Balance mensual</div>
+                    <span>--</span>
+                  </div>
+                </div>
+              </div>
+              <div className="media-frame">
+                <span className="badge">Seccion 5</span>
+                <img src={section5} alt="Referencia indicadores" />
+              </div>
+            </div>
+          </section>
+        </main>
+      )}
 
       <footer className="footer">
-        <div className="container">
-          Plataforma UJA Monitoring · Backend activo · API {API_BASE}
-        </div>
+        <div className="container">API base: {API_BASE}</div>
       </footer>
     </div>
   );

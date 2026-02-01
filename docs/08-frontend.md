@@ -16,7 +16,9 @@ Motivos:
 - Consumo API: fetch/axios
 
 ## Estructura en repo
-- App SPA en `frontend/`
+- App SPA en `frontend/` con dos modos de UI:
+  - Pixel match (referencias de Pagina 1-5)
+  - Funcional (optimizado a datos y requerimientos)
 - Assets de secciones en `frontend/src/assets/sections/`
 - Config Amplify en `amplify.yml`
 - Variables en `frontend/.env.example` (usar `VITE_API_BASE`)
