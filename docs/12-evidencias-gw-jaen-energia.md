@@ -40,6 +40,12 @@ Opcional (API):
 - `GET https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1/aggregates/daily`
   - Respuesta esperada sin filtros: `{"error":"missing_filters"}` (HTTP 200)
 
+## Smoke tests agregados (2026-02-01)
+- `lambda_ingest_telemetry` OK: `{"status":"ok","count":11}`
+- `lambda_calc_daily` ERROR: `Column 'rt_id' does not exist` (Timestream)
+- `lambda_calc_monthly` OK: `{"status":"ok","count":0}`
+- `lambda_calc_yearly` OK: `{"status":"ok","count":0}`
+
 ## Notas
 - IoT Things y certificados se gestionan manualmente (no IaC).
 - El medidor B3 esta pendiente de sustitucion.
