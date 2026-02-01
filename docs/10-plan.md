@@ -45,9 +45,9 @@ Entregables (evidencia):
 
 ## Fase 2C — Frontend MVP (solo Jaen energia) (1 semana)
 Tareas:
-- [] SPA base (React + Vite) con sección Consumo energía
-- [] Integración con API (realtime + daily)
-- [] Despliegue inicial en Amplify
+- [COMPLETO] SPA base (React + Vite) con sección Consumo energía
+- [COMPLETO] Integración con API (realtime + daily)
+- [COMPLETO] Despliegue inicial en Amplify
 
 Entregables (evidencia):
 - Web desplegada (URL) con consumo Jaen energia

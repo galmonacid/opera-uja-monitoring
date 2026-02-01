@@ -15,6 +15,12 @@ Motivos:
 - Charts: Recharts o Chart.js
 - Consumo API: fetch/axios
 
+## Estructura en repo
+- App SPA en `frontend/`
+- Assets de secciones en `frontend/src/assets/sections/`
+- Config Amplify en `amplify.yml`
+- Variables en `frontend/.env.example` (usar `VITE_API_BASE`)
+
 ## Secciones (5)
 1. Visión general / mapa (campus)
 2. Consumo energético
@@ -25,3 +31,15 @@ Motivos:
 ## Actualización de datos (recomendación)
 - /realtime y /kpis: cada 60–120s
 - agregados: al cargar vista o cada 5–10 min
+
+## Runbook rápido (local)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Amplify (build)
+```yaml
+appRoot: frontend
+```
