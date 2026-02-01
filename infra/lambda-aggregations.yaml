@@ -70,7 +70,6 @@ Resources:
               - Effect: Allow
                 Action:
                   - timestream:DescribeEndpoints
-                  - timestream:Query
                   - timestream:Select
                 Resource: "*"
 
