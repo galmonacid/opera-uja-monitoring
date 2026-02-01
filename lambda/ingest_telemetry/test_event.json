@@ -1,0 +1,34 @@
+{
+  "topic": "uja/jaen/consumo/energia/gw_jaen_energia",
+  "meter": [
+    {
+      "name": "Consumo_Edif_Lagunillas",
+      "time": 1730000000,
+      "data": [
+        { "var": "A0_KW sys", "unit": "kW", "value": 120.5 },
+        { "var": "A3_KW sys", "unit": "kW", "value": 80.0 },
+        { "var": "A4_KW sys", "unit": "kW", "value": 10.0 },
+        { "var": "B4_KW sys", "unit": "kW", "value": 90.0 },
+        { "var": "B5_KW sys", "unit": "kW", "value": 25.0 },
+        { "var": "D3_KW sys", "unit": "kW", "value": 5.0 }
+      ]
+    },
+    {
+      "name": "Consumo_Edif_Resto",
+      "time": 1730000000,
+      "data": [
+        { "var": "C4_KW sys", "unit": "kW", "value": 40.0 },
+        { "var": "Magisterio_KW sys", "unit": "kW", "value": 35.0 }
+      ]
+    },
+    {
+      "name": "Autoconsumo_FV_Edif",
+      "time": 1730000000,
+      "data": [
+        { "var": "FV_A0_KW sys", "unit": "kW", "value": 15.0 },
+        { "var": "FV_C4_KW sys", "unit": "kW", "value": 5.0 },
+        { "var": "FV_Magisterio_KW sys", "unit": "kW", "value": 6.0 }
+      ]
+    }
+  ]
+}

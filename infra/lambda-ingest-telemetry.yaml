@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Lambda ingest_telemetry for UJA monitoring.
+
+Parameters:
+  FunctionName:
+    Type: String
+    Default: lambda_ingest_telemetry
+    Description: Lambda function name.
+  CodeS3Bucket:
+    Type: String
+    Description: S3 bucket containing the deployment package.
+  CodeS3Key:
+    Type: String
+    Description: S3 key for the deployment package zip.
+  DdbLatestTable:
+    Type: String
+    Default: latest_readings
+  DdbMappingTable:
+    Type: String
+    Default: gateway_variable_map
+  TsDatabase:
+    Type: String
+    Default: uja_monitoring
+  TsTable:
+    Type: String
+    Default: telemetry_rt
+  LogLevel:
+    Type: String
+    Default: INFO
+  MemorySize:
+    Type: Number
+    Default: 256
+  Timeout:
+    Type: Number
+    Default: 30
+
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${FunctionName}-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ingest-ddb-timestream
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:GetItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbMappingTable}"
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:PutItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbLatestTable}"
+              - Effect: Allow
+                Action:
+                  - timestream:DescribeEndpoints
+                  - timestream:WriteRecords
+                Resource: "*"
+
+  IngestTelemetryLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref FunctionName
+      Handler: lambda_function.handler
+      Runtime: python3.11
+      Role: !GetAtt LambdaRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref Timeout
+      Environment:
+        Variables:
+          DDB_LATEST_TABLE: !Ref DdbLatestTable
+          DDB_MAPPING_TABLE: !Ref DdbMappingTable
+          TS_DATABASE: !Ref TsDatabase
+          TS_TABLE: !Ref TsTable
+          LOG_LEVEL: !Ref LogLevel
+
+Outputs:
+  LambdaName:
+    Value: !Ref IngestTelemetryLambda
+  LambdaArn:
+    Value: !GetAtt IngestTelemetryLambda.Arn

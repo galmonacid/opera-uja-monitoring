@@ -18,11 +18,13 @@ en Campus de Jaén y Campus de Linares.
 8. `08_frontend_spa_amplify.md` — Frontend SPA + Amplify (decisión)
 9. `09_security_cost_controls.md` — Seguridad y control de costes/abuso
 10. `10_plan_fase1_fase2.md` — Plan de fases y entregables
+11. `11-cicd.md` — Estrategia CI/CD, testing y despliegues
 
 ## Estado de completitud
-- Variables mapeadas: ✅ 96 definidas (con placeholders donde falta meter.name exacto)
+- Variables mapeadas: ✅ 99 definidas (con placeholders donde falta meter.name exacto)
 - Variables calculadas: ✅ definidas con fórmula exacta
 - Tablas Timestream/DynamoDB: ✅ definidas y justificadas
 - Arquitectura AWS: ✅ definida (IoT Core + Timestream + Lambda + DynamoDB + API GW + Amplify + WAF)
 - Frontend: ✅ decisión SPA (React+Vite) + Amplify
+- CI/CD: ✅ estrategia definida
 - Pendientes externos: ✅ listado de datos a confirmar con operador de gateways (ver 03 y 04)

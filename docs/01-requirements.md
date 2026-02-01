@@ -19,7 +19,7 @@ Acceso:
 
 ### 2.1 Campus Jaén — Consumo eléctrico
 - 1 gateway registra consumo eléctrico de edificios.
-- Total variables requeridas (RT): 25.
+- Total variables requeridas (RT): 28 (25 consumo red + 3 autoconsumo FV en edificios A0/C4/Magisterio).
 
 ### 2.2 Campus Jaén — Consumo agua
 - 1 gateway registra consumo de agua.

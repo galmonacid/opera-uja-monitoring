@@ -1,0 +1,39 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Timestream database and table for UJA monitoring.
+
+Parameters:
+  DatabaseName:
+    Type: String
+    Default: uja_monitoring
+  TableName:
+    Type: String
+    Default: telemetry_rt
+  MemoryRetentionHours:
+    Type: Number
+    Default: 168
+    Description: Memory store retention in hours (7 days default).
+  MagneticRetentionDays:
+    Type: Number
+    Default: 730
+    Description: Magnetic store retention in days (24 months default).
+
+Resources:
+  UjaTimestreamDatabase:
+    Type: AWS::Timestream::Database
+    Properties:
+      DatabaseName: !Ref DatabaseName
+
+  UjaTimestreamTable:
+    Type: AWS::Timestream::Table
+    Properties:
+      DatabaseName: !Ref UjaTimestreamDatabase
+      TableName: !Ref TableName
+      RetentionProperties:
+        MemoryStoreRetentionPeriodInHours: !Ref MemoryRetentionHours
+        MagneticStoreRetentionPeriodInDays: !Ref MagneticRetentionDays
+
+Outputs:
+  TimestreamDatabaseName:
+    Value: !Ref DatabaseName
+  TimestreamTableName:
+    Value: !Ref TableName

@@ -1,0 +1,87 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: DynamoDB tables for UJA monitoring.
+
+Parameters:
+  LatestReadingsTable:
+    Type: String
+    Default: latest_readings
+  AggregatesTable:
+    Type: String
+    Default: aggregates
+  KpisRealtimeTable:
+    Type: String
+    Default: kpis_realtime
+  GatewayVariableMapTable:
+    Type: String
+    Default: gateway_variable_map
+
+Resources:
+  LatestReadings:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref LatestReadingsTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: rt_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: rt_id
+          KeyType: HASH
+
+  Aggregates:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref AggregatesTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
+  KpisRealtime:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref KpisRealtimeTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: campus
+          AttributeType: S
+        - AttributeName: kpi
+          AttributeType: S
+      KeySchema:
+        - AttributeName: campus
+          KeyType: HASH
+        - AttributeName: kpi
+          KeyType: RANGE
+
+  GatewayVariableMap:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref GatewayVariableMapTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: gateway_id
+          AttributeType: S
+        - AttributeName: source_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: gateway_id
+          KeyType: HASH
+        - AttributeName: source_key
+          KeyType: RANGE
+
+Outputs:
+  LatestReadingsTableName:
+    Value: !Ref LatestReadingsTable
+  AggregatesTableName:
+    Value: !Ref AggregatesTable
+  KpisRealtimeTableName:
+    Value: !Ref KpisRealtimeTable
+  GatewayVariableMapTableName:
+    Value: !Ref GatewayVariableMapTable

@@ -1,0 +1,42 @@
+name: cd-infra
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/timestream.yaml
+      - infra/dynamodb.yaml
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy-infra:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: eu-west-1
+      STACK_PREFIX: uja
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Timestream
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${STACK_PREFIX}-timestream" \
+            --template-file infra/timestream.yaml \
+            --parameter-overrides DatabaseName=uja_monitoring TableName=telemetry_rt
+
+      - name: Deploy DynamoDB
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${STACK_PREFIX}-dynamodb" \
+            --template-file infra/dynamodb.yaml
