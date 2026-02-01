@@ -8,17 +8,20 @@ Documentación mínima pero suficiente para construir y mantener una solución d
 en Campus de Jaén y Campus de Linares.
 
 ## Documentos
-1. `01_requirements.md` — Requerimientos y alcance
-2. `02_gateways_topics.md` — Gateways y topics MQTT en AWS IoT
-3. `03_payload_contract.md` — Contrato de payload y parsing
-4. `04_variables_inventory_and_formulas.md` — Inventario completo de variables + fórmulas
-5. `05_data_model_tables.md` — Modelo de datos y tablas (Timestream + DynamoDB)
-6. `06_aws_architecture.md` — Arquitectura AWS y flujo de datos
-7. `07_api_spec.md` — API pública (endpoints y payloads)
-8. `08_frontend_spa_amplify.md` — Frontend SPA + Amplify (decisión)
-9. `09_security_cost_controls.md` — Seguridad y control de costes/abuso
-10. `10_plan_fase1_fase2.md` — Plan de fases y entregables
+1. `01-requirements.md` — Requerimientos y alcance
+2. `02-gateway_topics.md` — Gateways y topics MQTT en AWS IoT
+3. `03-payload_contract.md` — Contrato de payload y parsing
+4. `04-variables.md` — Inventario completo de variables + formulas
+5. `05-data_model.md` — Modelo de datos y tablas (Timestream + DynamoDB)
+6. `06-aws_architecture.md` — Arquitectura AWS y flujo de datos
+7. `07-api_spec.md` — API publica (endpoints y payloads)
+8. `08-frontend.md` — Frontend SPA + Amplify (decision)
+9. `09-controls.md` — Seguridad y control de costes/abuso
+10. `10-plan.md` — Plan de fases y entregables
 11. `11-cicd.md` — Estrategia CI/CD, testing y despliegues
+12. `12-evidencias-gw-jaen-energia.md` — Evidencias backend (gateway consumo energia Jaen)
+13. `13-agentic-protocol.md` — Protocolo de desarrollo agentico
+14. `environments_secrets.md` — Configuracion y secretos por entorno
 
 ## Estado de completitud
 - Variables mapeadas: ✅ 99 definidas (con placeholders donde falta meter.name exacto)

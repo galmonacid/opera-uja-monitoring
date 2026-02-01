@@ -51,7 +51,7 @@ Software:
 
 Workflows:
 - Infra: `.github/workflows/cd-infra.yml` (paths: `infra/timestream.yaml`, `infra/dynamodb.yaml`)
-- Backend: `.github/workflows/cd-backend.yml` (paths: `lambda/**`, `seeds/**`, `scripts/**`, `infra/lambda-ingest-telemetry.yaml`, `infra/iot-rule-gw-jaen-energia.yaml`)
+- Backend: `.github/workflows/cd-backend.yml` (paths: `lambda/**`, `seeds/**`, `scripts/**`, `infra/lambda-ingest-telemetry.yaml`, `infra/lambda-aggregations.yaml`, `infra/lambda-api.yaml`, `infra/api-gateway.yaml`, `infra/iot-rule-gw-jaen-energia.yaml`)
 - Frontend: despliegue gestionado por Amplify (sin workflow en repo)
 
 ## Variables y secretos

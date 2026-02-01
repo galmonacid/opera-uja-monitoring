@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Lambda aggregation jobs (daily, monthly, yearly) for UJA monitoring.
+
+Parameters:
+  CodeS3Bucket:
+    Type: String
+  CodeS3KeyDaily:
+    Type: String
+  CodeS3KeyMonthly:
+    Type: String
+  CodeS3KeyYearly:
+    Type: String
+  DdbAggregatesTable:
+    Type: String
+    Default: aggregates
+  DdbMappingTable:
+    Type: String
+    Default: gateway_variable_map
+  TsDatabase:
+    Type: String
+    Default: uja_monitoring
+  TsTable:
+    Type: String
+    Default: telemetry_rt
+  GatewayId:
+    Type: String
+    Default: gw_jaen_energia
+  RtIdPrefix:
+    Type: String
+    Default: uja.jaen.energia.consumo.
+  MemorySize:
+    Type: Number
+    Default: 256
+  Timeout:
+    Type: Number
+    Default: 60
+  CalcVersion:
+    Type: String
+    Default: v1
+
+Resources:
+  AggregationsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: uja_aggregations_role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: aggregations-ddb-timestream
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbMappingTable}"
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:PutItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAggregatesTable}"
+              - Effect: Allow
+                Action:
+                  - timestream:DescribeEndpoints
+                  - timestream:Query
+                Resource: "*"
+
+  CalcDailyLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: lambda_calc_daily
+      Handler: lambda_function.handler
+      Runtime: python3.11
+      Role: !GetAtt AggregationsRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3KeyDaily
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref Timeout
+      Environment:
+        Variables:
+          DDB_AGG_TABLE: !Ref DdbAggregatesTable
+          DDB_MAPPING_TABLE: !Ref DdbMappingTable
+          TS_DATABASE: !Ref TsDatabase
+          TS_TABLE: !Ref TsTable
+          GATEWAY_ID: !Ref GatewayId
+          RT_ID_PREFIX: !Ref RtIdPrefix
+          CALC_VERSION: !Ref CalcVersion
+
+  CalcMonthlyLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: lambda_calc_monthly
+      Handler: lambda_function.handler
+      Runtime: python3.11
+      Role: !GetAtt AggregationsRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3KeyMonthly
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref Timeout
+      Environment:
+        Variables:
+          DDB_AGG_TABLE: !Ref DdbAggregatesTable
+          CALC_VERSION: !Ref CalcVersion
+
+  CalcYearlyLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: lambda_calc_yearly
+      Handler: lambda_function.handler
+      Runtime: python3.11
+      Role: !GetAtt AggregationsRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3KeyYearly
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref Timeout
+      Environment:
+        Variables:
+          DDB_AGG_TABLE: !Ref DdbAggregatesTable
+          CALC_VERSION: !Ref CalcVersion
+
+  DailyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: uja-calc-daily
+      ScheduleExpression: "cron(5 1 * * ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CalcDailyLambda.Arn
+          Id: calc-daily
+
+  MonthlyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: uja-calc-monthly
+      ScheduleExpression: "cron(10 1 1 * ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CalcMonthlyLambda.Arn
+          Id: calc-monthly
+
+  YearlyRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: uja-calc-yearly
+      ScheduleExpression: "cron(15 1 1 1 ? *)"
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CalcYearlyLambda.Arn
+          Id: calc-yearly
+
+  DailyPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CalcDailyLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DailyRule.Arn
+
+  MonthlyPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CalcMonthlyLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MonthlyRule.Arn
+
+  YearlyPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CalcYearlyLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt YearlyRule.Arn
+
+Outputs:
+  CalcDailyLambdaName:
+    Value: !Ref CalcDailyLambda
+  CalcMonthlyLambdaName:
+    Value: !Ref CalcMonthlyLambda
+  CalcYearlyLambdaName:
+    Value: !Ref CalcYearlyLambda

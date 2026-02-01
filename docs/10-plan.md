@@ -10,15 +10,15 @@ Tareas:
 - [COMPLETO] Mockups/estructura web
 
 Entregables:
-- `01_requirements.md`
-- `02_gateways_topics.md`
-- `03_payload_contract.md`
-- `04_variables_inventory_and_formulas.md`
-- `05_data_model_tables.md`
-- `06_aws_architecture.md`
-- `07_api_spec.md`
-- `08_frontend_spa_amplify.md`
-- `09_security_cost_controls.md`
+- `01-requirements.md`
+- `02-gateway_topics.md`
+- `03-payload_contract.md`
+- `04-variables.md`
+- `05-data_model.md`
+- `06-aws_architecture.md`
+- `07-api_spec.md`
+- `08-frontend.md`
+- `09-controls.md`
 
 ## Fase 2A — Backend MVP (solo gateway consumo energia Jaen) (1-2 semanas)
 Tareas:
@@ -36,9 +36,9 @@ Entregables (evidencia):
 
 ## Fase 2B — Backend API + agregados (solo Jaen energia) (1 semana)
 Tareas:
-- [] Implementar jobs de agregación (daily/monthly/yearly)
-- [] Implementar endpoints `/v1/realtime` y `/v1/aggregates/*` (solo energia Jaen)
-- [] Configurar API Gateway + WAF + throttling
+- [COMPLETO] Implementar jobs de agregacion (daily/monthly/yearly) (IaC + lambdas)
+- [COMPLETO] Implementar endpoints `/v1/realtime` y `/v1/aggregates/*` (solo energia Jaen)
+- [COMPLETO] Configurar API Gateway + WAF + throttling (IaC)
 
 Entregables (evidencia):
 - API desplegada (URL) con datos reales de Jaen energia
@@ -59,7 +59,7 @@ Tareas:
 - [COMPLETO] Preparar pipeline CD infra (CloudFormation por entorno)
 - [COMPLETO] Preparar pipeline CD backend (Lambda zip + carga mapping)
 - [] Preparar pipeline CD frontend (Amplify o S3/CloudFront)
-- [] Smoke test post-deploy (MQTT → `latest_readings`)
+- [COMPLETO] Smoke test post-deploy (MQTT → `latest_readings`)
 
 ## Fase 3A — Backend ampliado (resto gateways) (2-3 semanas)
 Tareas:
@@ -76,5 +76,5 @@ Tareas:
 - [] Ajustes de UI/UX y performance
 
 ## Pendientes externos (bloqueantes suaves)
-- [] Catálogo meter.name/data.var por gateway para cerrar mapeo al 100% (ver `03` y `04`)
+- [] Catálogo meter.name/data.var por gateway para cerrar mapeo al 100% (ver `03-payload_contract.md` y `04-variables.md`)
 - [] Confirmación de conectividad/red del gateway (puertos salientes a AWS IoT)

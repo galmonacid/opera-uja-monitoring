@@ -55,3 +55,46 @@ python3 scripts/load_gateway_map.py \
   --file seeds/gateway_variable_map_gw_jaen_energia.csv \
   --table gateway_variable_map
 ```
+
+## Aggregations (daily/monthly/yearly)
+Template: `infra/lambda-aggregations.yaml`
+
+### Deploy
+```bash
+aws cloudformation deploy \
+  --stack-name uja-lambda-aggregations \
+  --template-file infra/lambda-aggregations.yaml \
+  --parameter-overrides \
+    CodeS3Bucket=<bucket> \
+    CodeS3KeyDaily=<path/to/lambda_calc_daily.zip> \
+    CodeS3KeyMonthly=<path/to/lambda_calc_monthly.zip> \
+    CodeS3KeyYearly=<path/to/lambda_calc_yearly.zip>
+```
+
+## API Lambda
+Template: `infra/lambda-api.yaml`
+
+### Deploy
+```bash
+aws cloudformation deploy \
+  --stack-name uja-lambda-api \
+  --template-file infra/lambda-api.yaml \
+  --parameter-overrides \
+    FunctionName=lambda_api_public \
+    CodeS3Bucket=<bucket> \
+    CodeS3Key=<path/to/lambda_api_public.zip>
+```
+
+## API Gateway + WAF
+Template: `infra/api-gateway.yaml`
+
+### Deploy
+```bash
+aws cloudformation deploy \
+  --stack-name uja-api-gateway \
+  --template-file infra/api-gateway.yaml \
+  --parameter-overrides \
+    ApiName=uja-public-api \
+    StageName=v1 \
+    LambdaName=lambda_api_public
+```

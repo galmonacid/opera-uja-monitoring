@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - infra/lambda-ingest-telemetry.yaml
+      - infra/lambda-aggregations.yaml
+      - infra/lambda-api.yaml
+      - infra/api-gateway.yaml
       - infra/iot-rule-gw-jaen-energia.yaml
       - lambda/**
       - scripts/**
@@ -45,11 +48,23 @@ jobs:
       - name: Package Lambda
         run: |
           zip -j /tmp/lambda_ingest_telemetry.zip lambda/ingest_telemetry/lambda_function.py
+          zip -j /tmp/lambda_calc_daily.zip lambda/calc_daily/lambda_function.py
+          zip -j /tmp/lambda_calc_monthly.zip lambda/calc_monthly/lambda_function.py
+          zip -j /tmp/lambda_calc_yearly.zip lambda/calc_yearly/lambda_function.py
+          zip -j /tmp/lambda_api_public.zip lambda/api_public/lambda_function.py
 
       - name: Upload Lambda artifact
         run: |
           aws s3 cp /tmp/lambda_ingest_telemetry.zip \
             "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_ingest_telemetry.zip"
+          aws s3 cp /tmp/lambda_calc_daily.zip \
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_daily.zip"
+          aws s3 cp /tmp/lambda_calc_monthly.zip \
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_monthly.zip"
+          aws s3 cp /tmp/lambda_calc_yearly.zip \
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_calc_yearly.zip"
+          aws s3 cp /tmp/lambda_api_public.zip \
+            "s3://${LAMBDA_ARTIFACT_BUCKET}/lambda/lambda_api_public.zip"
 
       - name: Deploy Lambda stack
         run: |
@@ -61,6 +76,39 @@ jobs:
               CodeS3Bucket="${LAMBDA_ARTIFACT_BUCKET}" \
               CodeS3Key=lambda/lambda_ingest_telemetry.zip \
             --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Deploy aggregation lambdas
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${STACK_PREFIX}-lambda-aggregations" \
+            --template-file infra/lambda-aggregations.yaml \
+            --parameter-overrides \
+              CodeS3Bucket="${LAMBDA_ARTIFACT_BUCKET}" \
+              CodeS3KeyDaily=lambda/lambda_calc_daily.zip \
+              CodeS3KeyMonthly=lambda/lambda_calc_monthly.zip \
+              CodeS3KeyYearly=lambda/lambda_calc_yearly.zip \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Deploy API lambda
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${STACK_PREFIX}-lambda-api" \
+            --template-file infra/lambda-api.yaml \
+            --parameter-overrides \
+              FunctionName=lambda_api_public \
+              CodeS3Bucket="${LAMBDA_ARTIFACT_BUCKET}" \
+              CodeS3Key=lambda/lambda_api_public.zip \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Deploy API Gateway
+        run: |
+          aws cloudformation deploy \
+            --stack-name "${STACK_PREFIX}-api-gateway" \
+            --template-file infra/api-gateway.yaml \
+            --parameter-overrides \
+              ApiName=uja-public-api \
+              StageName=v1 \
+              LambdaName=lambda_api_public
 
       - name: Deploy IoT Rule
         run: |

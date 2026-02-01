@@ -1,0 +1,79 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Lambda API for public read endpoints.
+
+Parameters:
+  FunctionName:
+    Type: String
+    Default: lambda_api_public
+  CodeS3Bucket:
+    Type: String
+  CodeS3Key:
+    Type: String
+  DdbLatestTable:
+    Type: String
+    Default: latest_readings
+  DdbAggregatesTable:
+    Type: String
+    Default: aggregates
+  AllowedOrigin:
+    Type: String
+    Default: "*"
+  MemorySize:
+    Type: Number
+    Default: 256
+  Timeout:
+    Type: Number
+    Default: 30
+
+Resources:
+  ApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${FunctionName}-role"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: api-ddb-read
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:BatchGetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbLatestTable}"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAggregatesTable}"
+
+  ApiLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Ref FunctionName
+      Handler: lambda_function.handler
+      Runtime: python3.11
+      Role: !GetAtt ApiRole.Arn
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+      MemorySize: !Ref MemorySize
+      Timeout: !Ref Timeout
+      Environment:
+        Variables:
+          DDB_LATEST_TABLE: !Ref DdbLatestTable
+          DDB_AGG_TABLE: !Ref DdbAggregatesTable
+          ALLOWED_ORIGIN: !Ref AllowedOrigin
+
+Outputs:
+  ApiLambdaName:
+    Value: !Ref ApiLambda
+  ApiLambdaArn:
+    Value: !GetAtt ApiLambda.Arn
