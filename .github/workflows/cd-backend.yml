@@ -112,6 +112,14 @@ jobs:
               LambdaName=lambda_api_public \
               DeploymentVersion="${GITHUB_SHA}"
 
+      - name: Create API deployment
+        run: |
+          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='uja-public-api'].id | [0]" --output text)
+          aws apigateway create-deployment \
+            --rest-api-id "${API_ID}" \
+            --stage-name v1 \
+            --description "ci-${GITHUB_SHA}"
+
       - name: Deploy IoT Rule
         run: |
           aws cloudformation deploy \
