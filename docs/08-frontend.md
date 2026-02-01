@@ -1,40 +1,40 @@
-# 08 — Frontend (decisión SPA + React/Vite + Amplify)
+# 08 — Frontend (SPA + React/Vite + Amplify)
 
-## Decisión
-Para Fase 1 se implementa una SPA (Single Page Application) desplegada en AWS Amplify.
+## Decision
+Para el MVP se implementa una SPA (Single Page Application) desplegada en AWS Amplify.
 
 Motivos:
-- Caso de uso: dashboards + polling.
-- No hay requerimiento explícito de SEO/SSR.
-- Menor coste/operación y menor riesgo de gasto ante abuso.
+- Caso de uso: dashboards con polling.
+- No hay requerimiento explicito de SEO/SSR.
+- Menor coste/operacion y menor riesgo de gasto ante abuso.
 - CI/CD simple.
 
 ## Stack
 - React + Vite
-- UI: Material UI (o similar)
-- Charts: Recharts o Chart.js
-- Consumo API: fetch/axios
+- UI: CSS custom + SVG inline
+- Charts: SVG propio (area chart MVP)
+- Consumo API: fetch
 
 ## Estructura en repo
-- App SPA en `frontend/` con dos modos de UI:
-  - Pixel match (referencias de Pagina 1-5)
-  - Funcional (optimizado a datos y requerimientos)
-- Assets de secciones en `frontend/src/assets/sections/`
+- App SPA en `frontend/`
+- Assets: `frontend/src/assets/sections/campus.png`
 - Config Amplify en `amplify.yml`
 - Variables en `frontend/.env.example` (usar `VITE_API_BASE`)
 
-## Secciones (5)
-1. Visión general / mapa (campus)
-2. Consumo energético
-3. Consumo de agua
-4. Producción FV
-5. Indicadores (balance, CO2)
+## MVP (2 secciones)
+1. Balance de energia en tiempo real
+   - Infografia: demanda campus, FV campus, energia de red
+   - Grafica de areas 24h desde `/series/24h`
+2. Mapa del campus
+   - `campus.png` con overlays por edificio
+   - Valores instantaneos desde `/realtime` segun `gateway_variable_map_gw_jaen_energia`
+   - Labels de valor colocados a la derecha del identificador de edificio en la imagen
 
-## Actualización de datos (recomendación)
-- /realtime y /kpis: cada 60–120s
-- agregados: al cargar vista o cada 5–10 min
+## Actualizacion de datos (MVP)
+- `/realtime`: cada 60s
+- `/series/24h`: cada 5 min
 
-## Runbook rápido (local)
+## Runbook rapido (local)
 ```bash
 cd frontend
 npm install

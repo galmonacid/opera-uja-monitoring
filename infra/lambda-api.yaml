@@ -18,6 +18,12 @@ Parameters:
   AllowedOrigin:
     Type: String
     Default: "*"
+  TimestreamDatabase:
+    Type: String
+    Default: uja_monitoring
+  TimestreamTable:
+    Type: String
+    Default: telemetry_rt
   MemorySize:
     Type: Number
     Default: 256
@@ -53,6 +59,15 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbLatestTable}"
                   - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAggregatesTable}"
+        - PolicyName: api-timestream-read
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - timestream:Select
+                  - timestream:DescribeEndpoints
+                Resource: "*"
 
   ApiLambda:
     Type: AWS::Lambda::Function
@@ -71,6 +86,8 @@ Resources:
           DDB_LATEST_TABLE: !Ref DdbLatestTable
           DDB_AGG_TABLE: !Ref DdbAggregatesTable
           ALLOWED_ORIGIN: !Ref AllowedOrigin
+          TS_DATABASE: !Ref TimestreamDatabase
+          TS_TABLE: !Ref TimestreamTable
 
 Outputs:
   ApiLambdaName:

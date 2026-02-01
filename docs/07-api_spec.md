@@ -62,6 +62,23 @@ Respuesta:
   ]
 }
 
+### GET /v1/series/24h
+Serie temporal (24h) para grafica de balance energetico.
+
+Query params:
+- campus=jaen
+
+Respuesta:
+{
+  "campus":"jaen",
+  "interval_minutes":15,
+  "unit":"kW",
+  "series":[
+    {"ts":173...,"demand":123.4,"pv":45.6},
+    ...
+  ]
+}
+
 ## 3) Limits (desde API Gateway/WAF)
 - Rate limit por IP.
 - Burst limit.

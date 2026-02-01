@@ -82,7 +82,9 @@ aws cloudformation deploy \
   --parameter-overrides \
     FunctionName=lambda_api_public \
     CodeS3Bucket=<bucket> \
-    CodeS3Key=<path/to/lambda_api_public.zip>
+    CodeS3Key=<path/to/lambda_api_public.zip> \
+    TimestreamDatabase=uja_monitoring \
+    TimestreamTable=telemetry_rt
 ```
 
 ## API Gateway + WAF

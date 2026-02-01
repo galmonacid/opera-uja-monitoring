@@ -39,14 +39,18 @@ Tareas:
 - [COMPLETO] Implementar jobs de agregacion (daily/monthly/yearly) (IaC + lambdas)
 - [COMPLETO] Implementar endpoints `/v1/realtime` y `/v1/aggregates/*` (solo energia Jaen)
 - [COMPLETO] Configurar API Gateway + WAF + throttling (IaC)
+- [COMPLETO] Endpoint serie 24h (demanda + FV campus) para grafica de areas
 
 Entregables (evidencia):
 - API desplegada (URL) con datos reales de Jaen energia
 
 ## Fase 2C — Frontend MVP (solo Jaen energia) (1 semana)
 Tareas:
-- [COMPLETO] SPA base (React + Vite) con sección Consumo energía
-- [COMPLETO] Integración con API (realtime + daily)
+- [COMPLETO] Redisenio MVP funcional (solo 2 secciones)
+- [COMPLETO] Infografia balance (demanda/FV/red) desde `/realtime`
+- [COMPLETO] Grafica de areas 24h desde `/series/24h`
+- [COMPLETO] Mapa campus con `campus.png` + overlays por edificio (primeras coordenadas)
+- [COMPLETO] SPA base (React + Vite)
 - [COMPLETO] Despliegue inicial en Amplify
 
 Entregables (evidencia):
