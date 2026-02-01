@@ -81,9 +81,4 @@ jobs:
             --function-name lambda_ingest_telemetry \
             --payload fileb://lambda/ingest_telemetry/test_event.json \
             /tmp/lambda_ingest_response.json
-          python - <<'PY'
-import json
-with open("/tmp/lambda_ingest_response.json", "r", encoding="utf-8") as handle:
-    payload = json.load(handle)
-assert payload.get("status") == "ok"
-PY
+          python -c "import json; payload=json.load(open('/tmp/lambda_ingest_response.json','r',encoding='utf-8')); assert payload.get('status')=='ok'"

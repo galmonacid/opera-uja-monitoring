@@ -18,13 +18,56 @@ TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 DEFAULT_GATEWAY_ID = os.getenv("DEFAULT_GATEWAY_ID")
 
-dynamodb = boto3.resource("dynamodb")
-ddb_client = boto3.client("dynamodb")
-timestream = boto3.client("timestream-write")
-
-latest_table = dynamodb.Table(DDB_LATEST_TABLE)
 serializer = TypeSerializer()
 deserializer = TypeDeserializer()
+_dynamodb = None
+_ddb_client = None
+_timestream = None
+_latest_table = None
+
+
+def _get_region():
+    return os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+
+
+def _get_dynamodb_resource():
+    global _dynamodb
+    if _dynamodb is None:
+        region = _get_region()
+        if region:
+            _dynamodb = boto3.resource("dynamodb", region_name=region)
+        else:
+            _dynamodb = boto3.resource("dynamodb")
+    return _dynamodb
+
+
+def _get_ddb_client():
+    global _ddb_client
+    if _ddb_client is None:
+        region = _get_region()
+        if region:
+            _ddb_client = boto3.client("dynamodb", region_name=region)
+        else:
+            _ddb_client = boto3.client("dynamodb")
+    return _ddb_client
+
+
+def _get_timestream_client():
+    global _timestream
+    if _timestream is None:
+        region = _get_region()
+        if region:
+            _timestream = boto3.client("timestream-write", region_name=region)
+        else:
+            _timestream = boto3.client("timestream-write")
+    return _timestream
+
+
+def _get_latest_table():
+    global _latest_table
+    if _latest_table is None:
+        _latest_table = _get_dynamodb_resource().Table(DDB_LATEST_TABLE)
+    return _latest_table
 
 
 def handler(event, context):
@@ -179,7 +222,7 @@ def fetch_mappings(gateway_id, source_keys):
     request = {DDB_MAPPING_TABLE: {"Keys": [serialize_item(k) for k in keys]}}
 
     while True:
-        response = ddb_client.batch_get_item(RequestItems=request)
+        response = _get_ddb_client().batch_get_item(RequestItems=request)
         items.extend(response.get("Responses", {}).get(DDB_MAPPING_TABLE, []))
         unprocessed = response.get("UnprocessedKeys", {})
         if not unprocessed or DDB_MAPPING_TABLE not in unprocessed:
@@ -238,7 +281,7 @@ def apply_adjustments(records_by_rt_id, raw_values, raw_ts):
 
 def write_latest_readings(records):
     now = int(time.time())
-    with latest_table.batch_writer() as batch:
+    with _get_latest_table().batch_writer() as batch:
         for record in records:
             try:
                 batch.put_item(
@@ -276,12 +319,12 @@ def write_timestream_records(records):
 
     for chunk in chunked(ts_records, 100):
         try:
-            timestream.write_records(
+            _get_timestream_client().write_records(
                 DatabaseName=TS_DATABASE,
                 TableName=TS_TABLE,
                 Records=chunk,
             )
-        except timestream.exceptions.RejectedRecordsException as exc:
+        except _get_timestream_client().exceptions.RejectedRecordsException as exc:
             logger.error("timestream rejected records: %s", exc)
         except ClientError as exc:
             logger.error("timestream write failed: %s", exc)
