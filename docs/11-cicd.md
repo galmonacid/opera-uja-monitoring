@@ -46,7 +46,7 @@ Infra (IaC):
 Software:
 - Backend (Lambda): zip → S3 → update stack.
 - Datos: carga de `gateway_variable_map` desde CSV (script en `scripts/load_gateway_map.py`).
-- Frontend: workflow que dispara Amplify (`start-job`) y espera el build.
+- Frontend: workflow manual (build local + `create-deployment` + upload zip).
 - Alternativa frontend: build + deploy a S3/CloudFront (si se evita Amplify).
 
 Workflows:
@@ -60,6 +60,7 @@ Workflows:
 - Región por defecto: `eu-west-1`.
 - `AMPLIFY_APP_ID`: id de la app Amplify.
 - `AMPLIFY_BRANCH`: branch de Amplify (p.ej. `main`).
+- `VITE_API_BASE`: URL base de la API (GitHub variable).
 
 ## Entornos
 - `dev` / `prod` como mínimo.

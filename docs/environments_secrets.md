@@ -9,6 +9,7 @@ Documentar configuracion requerida para CI/CD y trabajo local sin exponer secret
 - `AWS_REGION` (variable): `eu-west-1`.
 - `AMPLIFY_APP_ID` (secreto): id de app Amplify.
 - `AMPLIFY_BRANCH` (secreto): branch de Amplify (p.ej. `main`).
+- `VITE_API_BASE` (variable): URL base de la API para el build del frontend.
 
 ## Desarrollo local
 - `AWS_PROFILE=uja` (recomendado) con region en `~/.aws/config`.

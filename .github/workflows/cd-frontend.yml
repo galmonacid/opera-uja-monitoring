@@ -19,33 +19,73 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
 
-      - name: Trigger Amplify build
-        id: start
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE: ${{ vars.VITE_API_BASE || 'https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1' }}
+        run: npm run build
+        working-directory: frontend
+
+      - name: Package dist
+        run: zip -r /tmp/frontend-dist.zip .
+        working-directory: frontend/dist
+
+      - name: Create deployment
+        id: deployment
         env:
           AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
           AMPLIFY_BRANCH: ${{ secrets.AMPLIFY_BRANCH }}
         run: |
           set -euo pipefail
-          job_id=$(aws amplify start-job \
+          response=$(aws amplify create-deployment \
             --app-id "$AMPLIFY_APP_ID" \
-            --branch-name "$AMPLIFY_BRANCH" \
-            --job-type RELEASE \
-            --query 'jobSummary.jobId' \
-            --output text)
-          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
-          echo "Started Amplify job $job_id"
+            --branch-name "$AMPLIFY_BRANCH")
+          python3 - <<'PY' "$response" >> "$GITHUB_OUTPUT"
+import json
+import sys
 
-      - name: Wait for Amplify job
+data = json.loads(sys.argv[1])
+print(f"job_id={data['jobId']}")
+print(f"upload_url={data['zipUploadUrl']}")
+PY
+
+      - name: Upload dist
+        run: |
+          set -euo pipefail
+          curl --fail --upload-file /tmp/frontend-dist.zip "${{ steps.deployment.outputs.upload_url }}"
+
+      - name: Start deployment
+        id: start
         env:
           AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
           AMPLIFY_BRANCH: ${{ secrets.AMPLIFY_BRANCH }}
-          AMPLIFY_JOB_ID: ${{ steps.start.outputs.job_id }}
+          AMPLIFY_JOB_ID: ${{ steps.deployment.outputs.job_id }}
+        run: |
+          set -euo pipefail
+          aws amplify start-deployment \
+            --app-id "$AMPLIFY_APP_ID" \
+            --branch-name "$AMPLIFY_BRANCH" \
+            --job-id "$AMPLIFY_JOB_ID"
+
+      - name: Wait for deployment
+        env:
+          AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
+          AMPLIFY_BRANCH: ${{ secrets.AMPLIFY_BRANCH }}
+          AMPLIFY_JOB_ID: ${{ steps.deployment.outputs.job_id }}
         run: |
           set -euo pipefail
           for _ in $(seq 1 40); do
