@@ -1,4 +1,4 @@
-name: cd-frontend
+name: CD Frontend
 
 on:
   push:
@@ -7,6 +7,7 @@ on:
       - "frontend/**"
       - "amplify.yml"
       - ".github/workflows/cd-frontend.yml"
+  workflow_dispatch:
 
 jobs:
   deploy:
