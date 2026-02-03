@@ -21,7 +21,8 @@ en Campus de Jaén y Campus de Linares.
 11. `11-cicd.md` — Estrategia CI/CD, testing y despliegues
 12. `12-evidencias-gw-jaen-energia.md` — Evidencias backend (gateway consumo energia Jaen)
 13. `13-agentic-protocol.md` — Protocolo de desarrollo agentico
-14. `environments_secrets.md` — Configuracion y secretos por entorno
+14. `14-sample_payloads.md` — Samples de payload (redactados)
+15. `environments_secrets.md` — Configuracion y secretos por entorno
 
 ## Estado de completitud
 - Variables mapeadas: ✅ 99 definidas (con placeholders donde falta meter.name exacto)
