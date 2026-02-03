@@ -33,6 +33,8 @@ Ejemplos:
 
 > Nota: en FV y radiación, el `meter.name` exacto se completa con el operador.  
 > Aquí usamos placeholders `<...>` sin romper el modelo.
+> Normalización en ingestión: si el gateway envía `meter.name` con prefijo `UJA-OPERA--Edif-.`, se elimina el prefijo.  
+> También se normaliza `data.var` para aceptar `kW sys` y convertirlo a `KW sys`.
 
 ---
 

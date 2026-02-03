@@ -177,7 +177,7 @@ def extract_measurements(payload):
     for meter in meters:
         if not isinstance(meter, dict):
             continue
-        meter_name = meter.get("name") or meter.get("meter")
+        meter_name = normalize_meter_name(meter.get("name") or meter.get("meter"))
         data_list = meter.get("data") or meter.get("data[]") or []
         if isinstance(data_list, dict):
             data_list = [data_list]
@@ -189,7 +189,7 @@ def extract_measurements(payload):
         for data in data_list:
             if not isinstance(data, dict):
                 continue
-            var = data.get("var")
+            var = normalize_var_name(data.get("var"))
             value = data.get("value")
             unit = data.get("unit")
             if meter_name is None or var is None or value is None:
@@ -213,6 +213,22 @@ def extract_measurements(payload):
             raw_ts[source_key] = ts_event
 
     return measurements, raw_values, raw_ts
+
+
+def normalize_meter_name(value):
+    if not isinstance(value, str):
+        return value
+    if value.startswith("UJA-OPERA--Edif-."):
+        return value.split(".", 1)[1]
+    return value
+
+
+def normalize_var_name(value):
+    if not isinstance(value, str):
+        return value
+    if "kW sys" in value:
+        return value.replace("kW sys", "KW sys")
+    return value
 
 
 def parse_ts(value):
