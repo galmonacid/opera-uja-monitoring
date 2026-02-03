@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import time
 from decimal import Decimal
@@ -18,6 +19,7 @@ TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 DEFAULT_GATEWAY_ID = os.getenv("DEFAULT_GATEWAY_ID")
 LOG_SAMPLE_LIMIT = int(os.getenv("LOG_SAMPLE_LIMIT", "10"))
+MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
 
 serializer = TypeSerializer()
 deserializer = TypeDeserializer()
@@ -198,6 +200,8 @@ def extract_measurements(payload):
             try:
                 value_f = float(value)
             except (TypeError, ValueError):
+                continue
+            if not math.isfinite(value_f) or abs(value_f) > MAX_VALID_VALUE:
                 continue
 
             source_key = f"{meter_name}::{var}"
