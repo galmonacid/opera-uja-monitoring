@@ -56,10 +56,10 @@ jobs:
             --app-id "$AMPLIFY_APP_ID" \
             --branch-name "$AMPLIFY_BRANCH" \
             --output json)
-          job_id=$(printf '%s' "$response" | python3 -c "import json,sys; print(json.load(sys.stdin)['jobId'])")
-          upload_url=$(printf '%s' "$response" | python3 -c \"import json,sys; print(json.load(sys.stdin)['zipUploadUrl'])\")
-          echo \"job_id=$job_id\" >> \"$GITHUB_OUTPUT\"
-          echo \"upload_url=$upload_url\" >> \"$GITHUB_OUTPUT\"
+          job_id=$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["jobId"])')
+          upload_url=$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["zipUploadUrl"])')
+          echo "job_id=$job_id" >> "$GITHUB_OUTPUT"
+          echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
 
       - name: Upload dist
         run: |
