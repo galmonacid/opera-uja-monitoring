@@ -3,9 +3,11 @@ import "./App.css";
 
 import campus from "./assets/sections/campus.png";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  "https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1";
+const DEFAULT_API_BASE = "https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1";
+const API_BASES = [
+  import.meta.env.VITE_API_BASE,
+  DEFAULT_API_BASE,
+].filter(Boolean);
 
 const number = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
@@ -173,17 +175,29 @@ function App() {
     error: null,
   });
 
+  const fetchWithFallback = async (path) => {
+    let lastError = null;
+    for (const base of API_BASES) {
+      try {
+        const response = await fetch(`${base}${path}`);
+        const payload = await response.json();
+        if (!response.ok || payload.error) {
+          throw new Error(payload.error || "api_error");
+        }
+        return payload;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error("api_error");
+  };
+
   const fetchRealtime = async () => {
     try {
       setRealtime((prev) => ({ ...prev, status: "loading", error: null }));
-      const response = await fetch(
-        `${API_BASE}/realtime?campus=jaen&domain=energia`
+      const payload = await fetchWithFallback(
+        "/realtime?campus=jaen&domain=energia"
       );
-      const payload = await response.json();
-      if (!response.ok || payload.error) {
-        throw new Error(payload.error || "realtime_error");
-      }
-
       setRealtime({ status: "ready", data: payload, error: null });
     } catch (error) {
       setRealtime({ status: "error", data: null, error: error.message });
@@ -193,11 +207,7 @@ function App() {
   const fetchSeries24h = async () => {
     try {
       setSeries24h((prev) => ({ ...prev, status: "loading", error: null }));
-      const response = await fetch(`${API_BASE}/series/24h?campus=jaen`);
-      const payload = await response.json();
-      if (!response.ok || payload.error) {
-        throw new Error(payload.error || "series_error");
-      }
+      const payload = await fetchWithFallback("/series/24h?campus=jaen");
       setSeries24h({ status: "ready", data: payload, error: null });
     } catch (error) {
       setSeries24h({ status: "error", data: null, error: error.message });
