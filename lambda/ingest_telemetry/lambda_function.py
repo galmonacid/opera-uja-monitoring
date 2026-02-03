@@ -17,6 +17,7 @@ DDB_MAPPING_TABLE = os.getenv("DDB_MAPPING_TABLE", "gateway_variable_map")
 TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 DEFAULT_GATEWAY_ID = os.getenv("DEFAULT_GATEWAY_ID")
+LOG_SAMPLE_LIMIT = int(os.getenv("LOG_SAMPLE_LIMIT", "10"))
 
 serializer = TypeSerializer()
 deserializer = TypeDeserializer()
@@ -88,6 +89,13 @@ def handler(event, context):
 
     source_keys = sorted({m["source_key"] for m in measurements})
     mappings = fetch_mappings(gateway_id, source_keys)
+    logger.info(
+        "ingest metrics: gateway=%s measurements=%d unique_keys=%d mappings=%d",
+        gateway_id,
+        len(measurements),
+        len(source_keys),
+        len(mappings),
+    )
 
     records_by_rt_id = {}
     for measurement in measurements:
@@ -109,6 +117,13 @@ def handler(event, context):
     apply_adjustments(records_by_rt_id, raw_values, raw_ts)
 
     if not records_by_rt_id:
+        missing_keys = [k for k in source_keys if k not in mappings]
+        sample_missing = missing_keys[:LOG_SAMPLE_LIMIT]
+        if sample_missing:
+            logger.warning(
+                "no mapped records; sample missing mappings: %s",
+                ", ".join(sample_missing),
+            )
         logger.warning("no mapped records to write")
         return {"status": "ignored", "reason": "no_mapped_records"}
 
