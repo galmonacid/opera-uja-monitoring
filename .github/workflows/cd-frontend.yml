@@ -11,7 +11,6 @@ on:
 
 jobs:
   deploy:
-    if: secrets.AMPLIFY_APP_ID && secrets.AMPLIFY_BRANCH && secrets.AWS_ROLE_ARN
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -20,32 +19,47 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check required secrets
+        run: |
+          if [ -z "${{ secrets.AMPLIFY_APP_ID }}" ] || [ -z "${{ secrets.AMPLIFY_BRANCH }}" ] || [ -z "${{ secrets.AWS_ROLE_ARN }}" ]; then
+            echo "Missing Amplify secrets. Skipping deployment."
+            echo "DEPLOY=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "DEPLOY=true" >> "$GITHUB_ENV"
+
       - name: Set up Node
+        if: env.DEPLOY == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "22.12.0"
 
       - name: Configure AWS credentials
+        if: env.DEPLOY == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'eu-west-1' }}
 
       - name: Install dependencies
+        if: env.DEPLOY == 'true'
         run: npm ci
         working-directory: frontend
 
       - name: Build frontend
+        if: env.DEPLOY == 'true'
         env:
           VITE_API_BASE: ${{ vars.VITE_API_BASE || 'https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1' }}
         run: npm run build
         working-directory: frontend
 
       - name: Package dist
+        if: env.DEPLOY == 'true'
         run: zip -r /tmp/frontend-dist.zip .
         working-directory: frontend/dist
 
       - name: Create deployment
+        if: env.DEPLOY == 'true'
         id: deployment
         env:
           AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
@@ -62,11 +76,13 @@ jobs:
           echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
 
       - name: Upload dist
+        if: env.DEPLOY == 'true'
         run: |
           set -euo pipefail
           curl --fail --upload-file /tmp/frontend-dist.zip "${{ steps.deployment.outputs.upload_url }}"
 
       - name: Start deployment
+        if: env.DEPLOY == 'true'
         id: start
         env:
           AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
@@ -80,6 +96,7 @@ jobs:
             --job-id "$AMPLIFY_JOB_ID"
 
       - name: Wait for deployment
+        if: env.DEPLOY == 'true'
         env:
           AMPLIFY_APP_ID: ${{ secrets.AMPLIFY_APP_ID }}
           AMPLIFY_BRANCH: ${{ secrets.AMPLIFY_BRANCH }}
