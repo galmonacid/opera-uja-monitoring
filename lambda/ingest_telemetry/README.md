@@ -11,3 +11,5 @@
 ## Notes
 - Expects `meter.name` / `data.var` split as confirmed for `gw_jaen_energia`.
 - Applies A0/C4/Magisterio sum rules and A3/B4 downstream adjustments before write.
+
+<!-- noop change to trigger cd-backend -->
