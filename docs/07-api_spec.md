@@ -79,6 +79,9 @@ Respuesta:
   ]
 }
 
+Notas:
+- Se filtran valores inválidos/sentinela en Timestream (por defecto `abs(value) > 1e6`).
+
 ## 3) Limits (desde API Gateway/WAF)
 - Rate limit por IP.
 - Burst limit.

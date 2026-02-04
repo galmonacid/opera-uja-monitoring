@@ -11,6 +11,7 @@ DDB_AGG_TABLE = os.getenv("DDB_AGG_TABLE", "aggregates")
 TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
+MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
 
 _dynamodb = None
 _latest_table = None
@@ -224,6 +225,8 @@ FROM "{TS_DATABASE}"."{TS_TABLE}"
 WHERE time > ago(24h)
   AND measure_name = 'value'
   AND rt_id IN ({in_clause})
+  AND measure_value::double <= {MAX_VALID_VALUE}
+  AND measure_value::double >= {-MAX_VALID_VALUE}
 GROUP BY bin(time, {SERIES_INTERVAL_MINUTES}m)
 ORDER BY bin(time, {SERIES_INTERVAL_MINUTES}m)
 """
