@@ -129,7 +129,7 @@ const AreaChart = ({ series }) => {
             <g key={`y-${idx}`} transform={`translate(0, ${y})`}>
               <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
               <text className="axis-label axis-label-y" x="-2" y="-1">
-                {number.format(Math.round(value))}
+                {number.format(Math.round(value / 100) * 100)}
               </text>
             </g>
           );
