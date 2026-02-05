@@ -39,6 +39,7 @@ Confirmar:
 Backend debe:
 - Deduplicar por (rt_id, ts_event) en histórico si aplica.
 - Mantener “latest” por rt_id.
+ - Si un mismo evento trae varias entradas `meter[]` con tiempos distintos, se almacenan todas en histórico.
 
 ## 5) Contrato mínimo para la solución
 Requisitos del payload para que la solución funcione:

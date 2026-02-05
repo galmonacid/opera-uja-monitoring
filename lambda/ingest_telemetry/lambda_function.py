@@ -84,7 +84,7 @@ def handler(event, context):
         logger.error("gateway_id not found")
         return {"status": "ignored", "reason": "missing_gateway_id"}
 
-    measurements, raw_values, raw_ts = extract_measurements(payload)
+    measurements, raw_values_by_ts = extract_measurements(payload)
     if not measurements:
         logger.warning("no measurements found")
         return {"status": "ignored", "reason": "no_measurements"}
@@ -99,7 +99,7 @@ def handler(event, context):
         len(mappings),
     )
 
-    records_by_rt_id = {}
+    records_by_ts = {}
     for measurement in measurements:
         source_key = measurement["source_key"]
         mapping = mappings.get(source_key)
@@ -108,17 +108,25 @@ def handler(event, context):
 
         rt_id = mapping["rt_id"]
         unit = mapping.get("unit_expected") or measurement.get("unit") or "kW"
-        records_by_rt_id[rt_id] = {
+        ts_event = measurement["ts_event"]
+        records_by_ts.setdefault(ts_event, {})
+        records_by_ts[ts_event][rt_id] = {
             "rt_id": rt_id,
             "value": measurement["value"],
             "unit": unit,
-            "ts_event": measurement["ts_event"],
+            "ts_event": ts_event,
             "gateway_id": gateway_id,
         }
 
-    apply_adjustments(records_by_rt_id, raw_values, raw_ts)
+    for ts_event, records_by_rt_id in records_by_ts.items():
+        raw_values = raw_values_by_ts.get(ts_event, {})
+        apply_adjustments(records_by_rt_id, raw_values)
 
-    if not records_by_rt_id:
+    all_records = []
+    for records_by_rt_id in records_by_ts.values():
+        all_records.extend(records_by_rt_id.values())
+
+    if not all_records:
         missing_keys = [k for k in source_keys if k not in mappings]
         sample_missing = missing_keys[:LOG_SAMPLE_LIMIT]
         if sample_missing:
@@ -129,10 +137,10 @@ def handler(event, context):
         logger.warning("no mapped records to write")
         return {"status": "ignored", "reason": "no_mapped_records"}
 
-    write_latest_readings(list(records_by_rt_id.values()))
-    write_timestream_records(list(records_by_rt_id.values()))
+    write_latest_readings(all_records)
+    write_timestream_records(all_records)
 
-    return {"status": "ok", "count": len(records_by_rt_id)}
+    return {"status": "ok", "count": len(all_records)}
 
 
 def extract_payload(event):
@@ -173,8 +181,7 @@ def extract_measurements(payload):
         return [], {}, {}
 
     measurements = []
-    raw_values = {}
-    raw_ts = {}
+    raw_values_by_ts = {}
 
     for meter in meters:
         if not isinstance(meter, dict):
@@ -213,10 +220,10 @@ def extract_measurements(payload):
                     "ts_event": ts_event,
                 }
             )
-            raw_values[source_key] = value_f
-            raw_ts[source_key] = ts_event
+            raw_values_by_ts.setdefault(ts_event, {})
+            raw_values_by_ts[ts_event][source_key] = value_f
 
-    return measurements, raw_values, raw_ts
+    return measurements, raw_values_by_ts
 
 
 def normalize_meter_name(value):
@@ -275,7 +282,7 @@ def serialize_item(item):
     return {k: serializer.serialize(v) for k, v in item.items()}
 
 
-def apply_adjustments(records_by_rt_id, raw_values, raw_ts):
+def apply_adjustments(records_by_rt_id, raw_values):
     adjustments = {
         "uja.jaen.energia.consumo.edificio_a0.p_kw": [
             ("Consumo_Edif_Lagunillas::A0_KW sys", 1),
@@ -308,16 +315,20 @@ def apply_adjustments(records_by_rt_id, raw_values, raw_ts):
             logger.warning("adjustment skipped for %s (missing: %s)", rt_id, ",".join(missing))
             continue
         value = sum(raw_values[key] * sign for key, sign in terms)
-        ts_event = max(raw_ts.get(key, int(time.time())) for key, _ in terms)
         records_by_rt_id[rt_id]["value"] = value
-        records_by_rt_id[rt_id]["ts_event"] = ts_event
         records_by_rt_id[rt_id]["unit"] = "kW"
 
 
 def write_latest_readings(records):
+    latest_by_rt = {}
+    for record in records:
+        rt_id = record["rt_id"]
+        if rt_id not in latest_by_rt or record["ts_event"] > latest_by_rt[rt_id]["ts_event"]:
+            latest_by_rt[rt_id] = record
+
     now = int(time.time())
     with _get_latest_table().batch_writer() as batch:
-        for record in records:
+        for record in latest_by_rt.values():
             try:
                 batch.put_item(
                     Item={
