@@ -96,6 +96,14 @@ const AreaChart = ({ series }) => {
   const start = now - 86400;
   const range = 86400;
   const height = 60;
+  const ticksY = 4;
+  const ticksX = [0, 6, 12, 18, 24];
+
+  const formatHour = (hoursAgo) => {
+    const date = new Date((now - hoursAgo * 3600) * 1000);
+    const hh = String(date.getHours()).padStart(2, "0");
+    return `${hh}:00`;
+  };
 
   const buildPath = (key) => {
     const points = chartSeries.map((item) => {
@@ -113,6 +121,33 @@ const AreaChart = ({ series }) => {
 
   return (
     <svg className="area-chart" viewBox="0 0 100 60" role="img">
+      <g className="axis axis-y">
+        {Array.from({ length: ticksY + 1 }).map((_, idx) => {
+          const y = (height / ticksY) * idx;
+          const value = maxValue - (maxValue / ticksY) * idx;
+          return (
+            <g key={`y-${idx}`} transform={`translate(0, ${y})`}>
+              <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
+              <text className="axis-label" x="0" y="-1">
+                {number.format(value)}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+      <g className="axis axis-x">
+        {ticksX.map((hours) => {
+          const x = (hours / 24) * 100;
+          return (
+            <g key={`x-${hours}`} transform={`translate(${x}, ${height})`}>
+              <line className="axis-tick" x1="0" x2="0" y1="0" y2="2" />
+              <text className="axis-label" x="0" y="6">
+                {formatHour(24 - hours)}
+              </text>
+            </g>
+          );
+        })}
+      </g>
       <path className="area area-demand" d={demandPath.area} />
       <path className="area area-pv" d={pvPath.area} />
       <polyline className="line line-demand" points={demandPath.line} />
@@ -296,9 +331,8 @@ function App() {
               </div>
               <div className="chart-card">
                 <div className="chart-legend">
-                  <span className="legend-item demand">Demanda campus</span>
-                  <span className="legend-item pv">FV campus</span>
-                  <span className="legend-item">24h</span>
+                  <span className="legend-item demand">Curva Demanda kW</span>
+                  <span className="legend-item pv">Curva Generación kW</span>
                 </div>
                 <AreaChart series={chartSeries} />
               </div>
