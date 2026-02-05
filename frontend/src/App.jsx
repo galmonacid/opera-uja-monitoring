@@ -15,7 +15,11 @@ const number = new Intl.NumberFormat("es-ES", {
 
 const CAMPUS_DEMAND_PREFIX = "uja.jaen.energia.consumo.edificio_";
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
-const CAMPUS_PV_RT_ID = "uja.jaen.fv.auto.edificio_a0.p_kw";
+const CAMPUS_PV_RT_IDS = [
+  "uja.jaen.fv.auto.edificio_a0.p_kw",
+  "uja.jaen.fv.auto.edificio_c4.p_kw",
+  "uja.jaen.fv.auto.magisterio.p_kw",
+];
 
 const MAP_POINTS = [
   { label: "A0", rtId: "uja.jaen.energia.consumo.edificio_a0.p_kw", x: 79, y: 15 },
@@ -57,7 +61,7 @@ const calcTotals = (items) => {
     ) {
       demand += value;
     }
-    if (item.rt_id === CAMPUS_PV_RT_ID) {
+    if (CAMPUS_PV_RT_IDS.includes(item.rt_id)) {
       pv += value;
     }
   });
