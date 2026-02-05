@@ -120,7 +120,7 @@ const AreaChart = ({ series }) => {
   const pvPath = buildPath("pv");
 
   return (
-    <svg className="area-chart" viewBox="0 0 100 60" role="img">
+    <svg className="area-chart" viewBox="-12 0 112 60" role="img">
       <g className="axis axis-y">
         {Array.from({ length: ticksY + 1 }).map((_, idx) => {
           const y = (height / ticksY) * idx;
@@ -128,8 +128,8 @@ const AreaChart = ({ series }) => {
           return (
             <g key={`y-${idx}`} transform={`translate(0, ${y})`}>
               <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
-              <text className="axis-label" x="0" y="-1">
-                {number.format(value)}
+              <text className="axis-label axis-label-y" x="-2" y="-1">
+                {number.format(Math.round(value))}
               </text>
             </g>
           );

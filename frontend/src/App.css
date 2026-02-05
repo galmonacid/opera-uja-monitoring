@@ -183,8 +183,8 @@
   dominant-baseline: hanging;
 }
 
-.axis-y .axis-label {
-  transform: translate(2px, 0);
+.axis-label-y {
+  text-anchor: end;
 }
 
 .axis-x .axis-label {
