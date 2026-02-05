@@ -18,7 +18,7 @@ _latest_table = None
 _agg_table = None
 _ts_query = None
 
-SERIES_INTERVAL_MINUTES = 15
+SERIES_INTERVAL_MINUTES = 5
 SERIES_CONFIG = {
     "jaen": {
         "demand_rt_ids": [
@@ -219,16 +219,22 @@ def query_timeseries(rt_ids):
         return {}
     in_clause = ",".join([f"'{rt_id}'" for rt_id in rt_ids])
     query = f"""
-SELECT bin(time, {SERIES_INTERVAL_MINUTES}m) AS ts,
-       sum(measure_value::double) AS value
-FROM "{TS_DATABASE}"."{TS_TABLE}"
-WHERE time > ago(24h)
-  AND measure_name = 'value'
-  AND rt_id IN ({in_clause})
-  AND measure_value::double <= {MAX_VALID_VALUE}
-  AND measure_value::double >= {-MAX_VALID_VALUE}
-GROUP BY bin(time, {SERIES_INTERVAL_MINUTES}m)
-ORDER BY bin(time, {SERIES_INTERVAL_MINUTES}m)
+SELECT ts, sum(value) AS value
+FROM (
+  SELECT
+    bin(time, {SERIES_INTERVAL_MINUTES}m) AS ts,
+    rt_id,
+    max_by(measure_value::double, time) AS value
+  FROM "{TS_DATABASE}"."{TS_TABLE}"
+  WHERE time > ago(24h)
+    AND measure_name = 'value'
+    AND rt_id IN ({in_clause})
+    AND measure_value::double <= {MAX_VALID_VALUE}
+    AND measure_value::double >= {-MAX_VALID_VALUE}
+  GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)
+)
+GROUP BY ts
+ORDER BY ts
 """
     rows = query_timestream(query)
     result = {}

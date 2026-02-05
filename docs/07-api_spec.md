@@ -71,7 +71,7 @@ Query params:
 Respuesta:
 {
   "campus":"jaen",
-  "interval_minutes":15,
+  "interval_minutes":5,
   "unit":"kW",
   "series":[
     {"ts":173...,"demand":123.4,"pv":45.6},
