@@ -234,9 +234,7 @@ function App() {
   const fetchRealtime = async () => {
     try {
       setRealtime((prev) => ({ ...prev, status: "loading", error: null }));
-      const payload = await fetchWithFallback(
-        "/realtime?campus=jaen&domain=energia"
-      );
+      const payload = await fetchWithFallback("/realtime?campus=jaen");
       setRealtime({ status: "ready", data: payload, error: null });
     } catch (error) {
       setRealtime({ status: "error", data: null, error: error.message });
