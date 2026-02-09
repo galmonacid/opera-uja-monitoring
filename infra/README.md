@@ -3,14 +3,21 @@
 ## IoT Core
 IoT Things and certificates are managed manually and intentionally excluded from IaC.
 
-## IoT Rule (gw_jaen_energia only)
-Template: `infra/iot-rule-gw-jaen-energia.yaml`
+## IoT Rule
+Templates:
+- `infra/iot-rule-gw-jaen-energia.yaml`
+- `infra/iot-rule-gw-endesa-linares.yaml`
 
 ### Deploy
 ```bash
 aws cloudformation deploy \
   --stack-name uja-iot-rule-gw-jaen-energia \
   --template-file infra/iot-rule-gw-jaen-energia.yaml \
+  --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
+
+aws cloudformation deploy \
+  --stack-name uja-iot-rule-gw-endesa-linares \
+  --template-file infra/iot-rule-gw-endesa-linares.yaml \
   --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
 ```
 
