@@ -183,16 +183,15 @@ CT total (1) + Radiación (5):
 | 83 | uja.jaen.fv.endesa.rad04.g_wm2 | W/m² | `<RAD04_METER>::Irradiación transitoria` |
 | 84 | uja.jaen.fv.endesa.rad05.g_wm2 | W/m² | `<RAD05_METER>::Irradiación transitoria` |
 
-### 1.5 FV Endesa Linares (5)
+### 1.5 FV Endesa Linares (4)
 Gateway: `gw_endesa_linares`
 
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 85 | uja.linares.fv.endesa.inv01.p_ac_kw | kW | `<INV01_METER>::kW sys` |
-| 86 | uja.linares.fv.endesa.inv02.p_ac_kw | kW | `<INV02_METER>::kW sys` |
-| 87 | uja.linares.fv.endesa.inv03.p_ac_kw | kW | `<INV03_METER>::kW sys` |
-| 88 | uja.linares.fv.endesa.ct_total.p_kw | kW | `<CT_METER>::kW sys` |
-| 89 | uja.linares.fv.endesa.rad01.g_wm2 | W/m² | `<RAD01_METER>::Irradiación transitoria` |
+| 85 | uja.linares.fv.endesa.ct_total.p_kw | kW | `LIN_OPERA_FV.Lin::FV_KW sys` |
+| 86 | uja.linares.fv.endesa.ct_total.e_kwh | kWh | `LIN_OPERA_FV.Lin::FV_kWh` |
+| 87 | uja.linares.fv.endesa.rad01.g_wm2 | W/m² | `LIN_OPERA_FV.Lin::Radiación` |
+| 88 | uja.linares.fv.endesa.temp01.t_c | °C | `LIN_OPERA_FV.Lin::Temperatura` |
 
 ### 1.6 FV Autoconsumo Jaén (10)
 Gateway: `gw_autoconsumo_jaen`

@@ -20,6 +20,7 @@ TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 DEFAULT_GATEWAY_ID = os.getenv("DEFAULT_GATEWAY_ID")
 LOG_SAMPLE_LIMIT = int(os.getenv("LOG_SAMPLE_LIMIT", "10"))
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
+MAX_VALID_VALUE_KWH = float(os.getenv("MAX_VALID_VALUE_KWH", "1000000000"))
 
 serializer = TypeSerializer()
 deserializer = TypeDeserializer()
@@ -208,7 +209,9 @@ def extract_measurements(payload):
                 value_f = float(value)
             except (TypeError, ValueError):
                 continue
-            if not math.isfinite(value_f) or abs(value_f) > MAX_VALID_VALUE:
+            unit_norm = unit.lower() if isinstance(unit, str) else ""
+            max_value = MAX_VALID_VALUE_KWH if unit_norm == "kwh" else MAX_VALID_VALUE
+            if not math.isfinite(value_f) or abs(value_f) > max_value:
                 continue
 
             source_key = f"{meter_name}::{var}"

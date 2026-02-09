@@ -1,0 +1,5 @@
+gateway_id,source_key,rt_id,unit_expected,enabled,notes
+gw_endesa_linares,"LIN_OPERA_FV.Lin::FV_KW sys",uja.linares.fv.endesa.ct_total.p_kw,kW,true,"observed payload: system power"
+gw_endesa_linares,"LIN_OPERA_FV.Lin::FV_kWh",uja.linares.fv.endesa.ct_total.e_kwh,kWh,true,"observed payload: system energy counter"
+gw_endesa_linares,"LIN_OPERA_FV.Lin::Radiación",uja.linares.fv.endesa.rad01.g_wm2,"W/m²",true,"observed payload"
+gw_endesa_linares,"LIN_OPERA_FV.Lin::Temperatura",uja.linares.fv.endesa.temp01.t_c,"°C",true,"observed payload"

@@ -7,6 +7,8 @@
 - `TS_TABLE` (default: `telemetry_rt`)
 - `DEFAULT_GATEWAY_ID` (optional)
 - `LOG_LEVEL` (default: `INFO`)
+- `MAX_VALID_VALUE` (default: `1000000`)
+- `MAX_VALID_VALUE_KWH` (default: `1000000000`)
 
 ## Notes
 - Expects `meter.name` / `data.var` split as confirmed for `gw_jaen_energia`.
