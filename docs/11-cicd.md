@@ -75,3 +75,4 @@ Workflows:
 - Smoke test post-deploy.
 - CloudFormation rollback automático.
 - Versionado de Lambda (alias `prod`) para rollback rápido.
+<!-- noop: trigger workflows -->
