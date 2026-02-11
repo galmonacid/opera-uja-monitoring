@@ -11,9 +11,38 @@ DDB_AGG_TABLE = os.getenv("DDB_AGG_TABLE", "aggregates")
 DDB_CONFIG_TABLE = os.getenv("DDB_CONFIG_TABLE", "aggregation_configs")
 CALC_VERSION = os.getenv("CALC_VERSION", "v1")
 
-dynamodb = boto3.resource("dynamodb")
-agg_table = dynamodb.Table(DDB_AGG_TABLE)
-config_table = dynamodb.Table(DDB_CONFIG_TABLE)
+_dynamodb = None
+_agg_table = None
+_config_table = None
+
+
+def _get_region():
+    return os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+
+
+def get_dynamodb():
+    global _dynamodb
+    if _dynamodb is None:
+        region = _get_region()
+        if region:
+            _dynamodb = boto3.resource("dynamodb", region_name=region)
+        else:
+            _dynamodb = boto3.resource("dynamodb")
+    return _dynamodb
+
+
+def get_agg_table():
+    global _agg_table
+    if _agg_table is None:
+        _agg_table = get_dynamodb().Table(DDB_AGG_TABLE)
+    return _agg_table
+
+
+def get_config_table():
+    global _config_table
+    if _config_table is None:
+        _config_table = get_dynamodb().Table(DDB_CONFIG_TABLE)
+    return _config_table
 
 
 def handler(event, context):
@@ -55,7 +84,7 @@ def fetch_configs():
         kwargs = {}
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
-        response = config_table.scan(**kwargs)
+        response = get_config_table().scan(**kwargs)
         for item in response.get("Items", []):
             if item.get("enabled") is False:
                 continue
@@ -91,7 +120,7 @@ def query_pk(pk):
         kwargs = {"KeyConditionExpression": Key("pk").eq(pk)}
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
-        response = agg_table.query(**kwargs)
+        response = get_agg_table().query(**kwargs)
         for item in response.get("Items", []):
             yield item
         last_key = response.get("LastEvaluatedKey")
@@ -112,6 +141,6 @@ def build_item(pk, sk, value, config):
 
 
 def write_items(items):
-    with agg_table.batch_writer() as batch:
+    with get_agg_table().batch_writer() as batch:
         for item in items:
             batch.put_item(Item=item)

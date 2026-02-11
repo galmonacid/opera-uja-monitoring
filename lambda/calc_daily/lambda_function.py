@@ -14,12 +14,58 @@ TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 CALC_VERSION = os.getenv("CALC_VERSION", "v1")
 
-dynamodb = boto3.resource("dynamodb")
-ts_query = boto3.client("timestream-query")
+_dynamodb = None
+_ts_query = None
+_agg_table = None
+_mapping_table = None
+_config_table = None
 
-agg_table = dynamodb.Table(DDB_AGG_TABLE)
-mapping_table = dynamodb.Table(DDB_MAPPING_TABLE)
-config_table = dynamodb.Table(DDB_CONFIG_TABLE)
+
+def _get_region():
+    return os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+
+
+def get_dynamodb():
+    global _dynamodb
+    if _dynamodb is None:
+        region = _get_region()
+        if region:
+            _dynamodb = boto3.resource("dynamodb", region_name=region)
+        else:
+            _dynamodb = boto3.resource("dynamodb")
+    return _dynamodb
+
+
+def get_ts_query():
+    global _ts_query
+    if _ts_query is None:
+        region = _get_region()
+        if region:
+            _ts_query = boto3.client("timestream-query", region_name=region)
+        else:
+            _ts_query = boto3.client("timestream-query")
+    return _ts_query
+
+
+def get_agg_table():
+    global _agg_table
+    if _agg_table is None:
+        _agg_table = get_dynamodb().Table(DDB_AGG_TABLE)
+    return _agg_table
+
+
+def get_mapping_table():
+    global _mapping_table
+    if _mapping_table is None:
+        _mapping_table = get_dynamodb().Table(DDB_MAPPING_TABLE)
+    return _mapping_table
+
+
+def get_config_table():
+    global _config_table
+    if _config_table is None:
+        _config_table = get_dynamodb().Table(DDB_CONFIG_TABLE)
+    return _config_table
 
 
 def handler(event, context):
@@ -64,7 +110,7 @@ def fetch_configs():
         kwargs = {}
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
-        response = config_table.scan(**kwargs)
+        response = get_config_table().scan(**kwargs)
         for item in response.get("Items", []):
             if item.get("enabled") is False:
                 continue
@@ -101,7 +147,7 @@ def fetch_rt_ids(config):
         kwargs = {"KeyConditionExpression": Key("gateway_id").eq(config["gateway_id"])}
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
-        response = mapping_table.query(**kwargs)
+        response = get_mapping_table().query(**kwargs)
         for item in response.get("Items", []):
             rt_id = item.get("rt_id")
             if rt_id and rt_id.startswith(config["rt_id_prefix"]):
@@ -136,10 +182,10 @@ def query_timestream(rt_id, start, end):
         f"ORDER BY time ASC"
     )
     rows = []
-    response = ts_query.query(QueryString=query)
+    response = get_ts_query().query(QueryString=query)
     rows.extend(parse_rows(response))
     while "NextToken" in response:
-        response = ts_query.query(QueryString=query, NextToken=response["NextToken"])
+        response = get_ts_query().query(QueryString=query, NextToken=response["NextToken"])
         rows.extend(parse_rows(response))
     return rows
 
@@ -171,6 +217,6 @@ def build_item(pk, sk, value, config):
 
 
 def write_items(items):
-    with agg_table.batch_writer() as batch:
+    with get_agg_table().batch_writer() as batch:
         for item in items:
             batch.put_item(Item=item)
