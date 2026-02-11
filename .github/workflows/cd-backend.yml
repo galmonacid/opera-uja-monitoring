@@ -140,6 +140,9 @@ jobs:
           python scripts/load_gateway_map.py \
             --file seeds/gateway_variable_map_gw_endesa_linares.csv \
             --table gateway_variable_map
+          python scripts/load_aggregation_configs.py \
+            --file seeds/aggregation_configs.csv \
+            --table aggregation_configs
 
       - name: Smoke test (invoke lambda)
         run: |

@@ -47,7 +47,7 @@ Respuesta:
 ### GET /v1/aggregates/yearly
 Query params:
 - campus
-- metric (energia_consumo, agua_consumo, fv_energia, co2_evitar, etc.)
+- metric (energia_consumo, agua_consumo, fv_energia, fv_endesa, fv_auto, co2_evitar, etc.)
 - asset=total|edificio_a1|inv01|...
 
 Respuesta:

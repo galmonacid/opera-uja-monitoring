@@ -1,0 +1,8 @@
+config_id,gateway_id,rt_id_prefix,campus,domain,system,metric,unit,enabled,notes
+jaen_energia_consumo,gw_jaen_energia,uja.jaen.energia.consumo.,jaen,energia,consumo,energia_consumo,kWh,true,"Consumo energia edificios"
+jaen_fv_auto,gw_jaen_energia,uja.jaen.fv.auto.,jaen,fv,auto,fv_auto,kWh,true,"Autoconsumo FV (gateway energia)"
+jaen_agua_consumo,gw_jaen_agua,uja.jaen.agua.consumo.,jaen,agua,consumo,agua_consumo,m3,true,"Consumo agua edificios"
+linares_energia_consumo,gw_linares_mix,uja.linares.energia.consumo.,linares,energia,consumo,energia_consumo,kWh,true,"Consumo energia Linares"
+linares_agua_consumo,gw_linares_mix,uja.linares.agua.consumo.,linares,agua,consumo,agua_consumo,m3,true,"Consumo agua Linares"
+jaen_fv_endesa,gw_endesa_jaen,uja.jaen.fv.endesa.,jaen,fv,endesa,fv_endesa,kWh,true,"FV Endesa Jaen"
+linares_fv_endesa,gw_endesa_linares,uja.linares.fv.endesa.,linares,fv,endesa,fv_endesa,kWh,true,"FV Endesa Linares"

@@ -23,7 +23,9 @@ jobs:
           pip install boto3 pytest cfn-lint
 
       - name: Validate CSV mappings
-        run: python scripts/validate_gateway_map.py seeds/gateway_variable_map_gw_jaen_energia.csv
+        run: |
+          python scripts/validate_gateway_map.py seeds/gateway_variable_map_gw_jaen_energia.csv
+          python scripts/validate_aggregation_configs.py seeds/aggregation_configs.csv
 
       - name: Lint CloudFormation
         run: cfn-lint infra/*.yaml

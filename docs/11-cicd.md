@@ -23,7 +23,7 @@ Garantizar calidad, trazabilidad y despliegues repetibles para software (backend
 Checks automáticos:
 - Lint/format (Python y frontend si aplica).
 - Tests unitarios (lambda y utilidades).
-- Validación de artefactos de datos (CSV de `gateway_variable_map`).
+- Validación de artefactos de datos (CSV de `gateway_variable_map` y `aggregation_configs`).
 - Validación IaC (plantillas CloudFormation).
 
 Workflow: `.github/workflows/ci.yml`

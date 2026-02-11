@@ -382,9 +382,17 @@
   font-size: 1.4rem;
 }
 
+.gateway-topic {
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  margin-top: 0.25rem;
+}
+
 .gateway-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1rem;
 }
 

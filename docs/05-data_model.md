@@ -83,6 +83,21 @@ Propósito: traducir `meter.name::data.var` → `rt_id`.
   - `enabled` (bool)
   - `notes`
 
+### 3.5 Tabla: `aggregation_configs`
+Propósito: parametrizar agregaciones (daily/monthly/yearly) por gateway/metric.
+
+- PK: `config_id`
+- Atributos:
+  - `gateway_id`
+  - `rt_id_prefix`
+  - `campus`
+  - `domain`
+  - `system`
+  - `metric`
+  - `unit`
+  - `enabled` (bool)
+  - `notes`
+
 ---
 
 ## 4) Consideraciones

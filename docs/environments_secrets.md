@@ -18,7 +18,7 @@ Documentar configuracion requerida para CI/CD y trabajo local sin exponer secret
 ## Parametros de stacks (no secretos)
 - DynamoDB/Timestream: nombres por defecto en `infra/dynamodb.yaml` y `infra/timestream.yaml`.
 - Lambda ingest: `DDB_LATEST_TABLE`, `DDB_MAPPING_TABLE`, `TS_DATABASE`, `TS_TABLE`, `LOG_LEVEL`.
-- Aggregations: `DDB_AGG_TABLE`, `DDB_MAPPING_TABLE`, `TS_DATABASE`, `TS_TABLE`, `GATEWAY_ID`, `RT_ID_PREFIX`, `CALC_VERSION`.
+- Aggregations: `DDB_AGG_TABLE`, `DDB_MAPPING_TABLE`, `DDB_CONFIG_TABLE`, `TS_DATABASE`, `TS_TABLE`, `CALC_VERSION`.
 - API: `DDB_LATEST_TABLE`, `DDB_AGG_TABLE`, `ALLOWED_ORIGIN`.
 
 ## Higiene

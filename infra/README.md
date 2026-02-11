@@ -63,6 +63,13 @@ python3 scripts/load_gateway_map.py \
   --table gateway_variable_map
 ```
 
+### Load aggregation_configs
+```bash
+python3 scripts/load_aggregation_configs.py \
+  --file seeds/aggregation_configs.csv \
+  --table aggregation_configs
+```
+
 ## Aggregations (daily/monthly/yearly)
 Template: `infra/lambda-aggregations.yaml`
 

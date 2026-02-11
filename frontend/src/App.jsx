@@ -52,16 +52,18 @@ const MAP_POINTS = [
 const GATEWAYS = [
   {
     id: "gw_jaen_energia",
-    label: "Gateway Jaén Consumo Energía",
+    label: "gw_jaen_energia",
+    topic: "uja/jaen/consumo/energia/gw_jaen_energia",
     campus: "jaen",
-    domain: "energia",
-    rtPrefixes: ["uja.jaen.energia."],
+    domain: null,
+    rtPrefixes: ["uja.jaen.energia.", "uja.jaen.fv.auto."],
     seriesCampus: "jaen",
     aggregateMetric: "energia_consumo",
   },
   {
     id: "gw_jaen_agua",
-    label: "Gateway Jaén Consumo Agua",
+    label: "gw_jaen_agua",
+    topic: "uja/jaen/consumo/agua/gw_jaen_agua",
     campus: "jaen",
     domain: "agua",
     rtPrefixes: ["uja.jaen.agua."],
@@ -70,7 +72,8 @@ const GATEWAYS = [
   },
   {
     id: "gw_linares_mix",
-    label: "Gateway Linares Mixto",
+    label: "gw_linares_mix",
+    topic: "uja/linares/consumo/mix/gw_linares_mix",
     campus: "linares",
     domain: null,
     rtPrefixes: ["uja.linares.agua.", "uja.linares.energia."],
@@ -79,30 +82,23 @@ const GATEWAYS = [
   },
   {
     id: "gw_endesa_jaen",
-    label: "Gateway FV Endesa Jaén",
+    label: "gw_endesa_jaen",
+    topic: "uja/jaen/produccion/fv_endesa/gw_endesa_jaen",
     campus: "jaen",
     domain: "fv",
     rtPrefixes: ["uja.jaen.fv.endesa."],
     seriesCampus: null,
-    aggregateMetric: "fv_energia",
+    aggregateMetric: "fv_endesa",
   },
   {
     id: "gw_endesa_linares",
-    label: "Gateway FV Endesa Linares",
+    label: "gw_endesa_linares",
+    topic: "uja/linares/produccion/fv_endesa/gw_endesa_linares",
     campus: "linares",
     domain: "fv",
     rtPrefixes: ["uja.linares.fv.endesa."],
     seriesCampus: null,
-    aggregateMetric: "fv_energia",
-  },
-  {
-    id: "gw_autoconsumo_jaen",
-    label: "Gateway FV Autoconsumo Jaén",
-    campus: "jaen",
-    domain: "fv",
-    rtPrefixes: ["uja.jaen.fv.auto."],
-    seriesCampus: null,
-    aggregateMetric: "fv_energia",
+    aggregateMetric: "fv_endesa",
   },
 ];
 
@@ -664,7 +660,10 @@ function App() {
     return (
       <div key={gateway.id} className="gateway-card">
         <div className="gateway-header">
-          <h2 className="gateway-title">{gateway.label}</h2>
+          <div>
+            <h2 className="gateway-title">{gateway.label}</h2>
+            <div className="gateway-topic">{gateway.topic}</div>
+          </div>
           <button
             className="api-refresh"
             type="button"

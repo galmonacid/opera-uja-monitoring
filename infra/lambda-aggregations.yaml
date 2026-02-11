@@ -16,18 +16,15 @@ Parameters:
   DdbMappingTable:
     Type: String
     Default: gateway_variable_map
+  DdbConfigTable:
+    Type: String
+    Default: aggregation_configs
   TsDatabase:
     Type: String
     Default: uja_monitoring
   TsTable:
     Type: String
     Default: telemetry_rt
-  GatewayId:
-    Type: String
-    Default: gw_jaen_energia
-  RtIdPrefix:
-    Type: String
-    Default: uja.jaen.energia.consumo.
   MemorySize:
     Type: Number
     Default: 256
@@ -63,6 +60,11 @@ Resources:
                 Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbMappingTable}"
               - Effect: Allow
                 Action:
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbConfigTable}"
+              - Effect: Allow
+                Action:
                   - dynamodb:Query
                   - dynamodb:BatchWriteItem
                   - dynamodb:PutItem
@@ -89,10 +91,9 @@ Resources:
         Variables:
           DDB_AGG_TABLE: !Ref DdbAggregatesTable
           DDB_MAPPING_TABLE: !Ref DdbMappingTable
+          DDB_CONFIG_TABLE: !Ref DdbConfigTable
           TS_DATABASE: !Ref TsDatabase
           TS_TABLE: !Ref TsTable
-          GATEWAY_ID: !Ref GatewayId
-          RT_ID_PREFIX: !Ref RtIdPrefix
           CALC_VERSION: !Ref CalcVersion
 
   CalcMonthlyLambda:
@@ -110,6 +111,7 @@ Resources:
       Environment:
         Variables:
           DDB_AGG_TABLE: !Ref DdbAggregatesTable
+          DDB_CONFIG_TABLE: !Ref DdbConfigTable
           CALC_VERSION: !Ref CalcVersion
 
   CalcYearlyLambda:
@@ -127,6 +129,7 @@ Resources:
       Environment:
         Variables:
           DDB_AGG_TABLE: !Ref DdbAggregatesTable
+          DDB_CONFIG_TABLE: !Ref DdbConfigTable
           CALC_VERSION: !Ref CalcVersion
 
   DailyRule:

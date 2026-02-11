@@ -161,6 +161,8 @@ def metric_to_scope(metric):
         "energia_consumo": ("energia", "consumo"),
         "agua_consumo": ("agua", "consumo"),
         "fv_energia": ("fv", "total"),
+        "fv_endesa": ("fv", "endesa"),
+        "fv_auto": ("fv", "auto"),
         "co2_evitar": ("co2", "evitar"),
     }
     return mapping.get(metric, (None, None))

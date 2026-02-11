@@ -56,3 +56,10 @@ def test_handler_series_24h_route():
     response = api.handler(event, None)
     assert response["statusCode"] == 200
     assert "ok" in response["body"]
+
+
+def test_metric_to_scope_supports_new_metrics():
+    api = load_lambda_module()
+    assert api.metric_to_scope("agua_consumo") == ("agua", "consumo")
+    assert api.metric_to_scope("fv_endesa") == ("fv", "endesa")
+    assert api.metric_to_scope("fv_auto") == ("fv", "auto")

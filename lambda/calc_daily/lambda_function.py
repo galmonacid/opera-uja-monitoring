@@ -9,10 +9,9 @@ from boto3.dynamodb.conditions import Key
 
 DDB_AGG_TABLE = os.getenv("DDB_AGG_TABLE", "aggregates")
 DDB_MAPPING_TABLE = os.getenv("DDB_MAPPING_TABLE", "gateway_variable_map")
+DDB_CONFIG_TABLE = os.getenv("DDB_CONFIG_TABLE", "aggregation_configs")
 TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
-GATEWAY_ID = os.getenv("GATEWAY_ID", "gw_jaen_energia")
-RT_ID_PREFIX = os.getenv("RT_ID_PREFIX", "uja.jaen.energia.consumo.")
 CALC_VERSION = os.getenv("CALC_VERSION", "v1")
 
 dynamodb = boto3.resource("dynamodb")
@@ -20,6 +19,7 @@ ts_query = boto3.client("timestream-query")
 
 agg_table = dynamodb.Table(DDB_AGG_TABLE)
 mapping_table = dynamodb.Table(DDB_MAPPING_TABLE)
+config_table = dynamodb.Table(DDB_CONFIG_TABLE)
 
 
 def handler(event, context):
@@ -30,40 +30,81 @@ def handler(event, context):
     start = f"{target_date}T00:00:00Z"
     end = f"{target_date}T23:59:59Z"
 
-    rt_ids = fetch_rt_ids()
-    if not rt_ids:
-        return {"status": "ignored", "reason": "no_rt_ids"}
-
-    campus = "jaen"
-    pk = f"{campus}#energia#consumo#daily"
     items = []
-    total = 0.0
+    configs = fetch_configs()
+    if not configs:
+        return {"status": "ignored", "reason": "no_configs"}
 
-    for rt_id in rt_ids:
-        energy_kwh = integrate_energy(rt_id, start, end)
-        if energy_kwh is None:
+    for config in configs:
+        rt_ids = fetch_rt_ids(config)
+        if not rt_ids:
             continue
-        asset = rt_id.split(".")[4]
-        items.append(build_item(pk, f"{target_date}#{asset}", energy_kwh))
-        total += energy_kwh
+        pk = build_pk(config, "daily")
+        total = 0.0
+        for rt_id in rt_ids:
+            energy_kwh = integrate_energy(rt_id, start, end)
+            if energy_kwh is None:
+                continue
+            asset = rt_id.split(".")[4]
+            items.append(build_item(pk, f"{target_date}#{asset}", energy_kwh, config))
+            total += energy_kwh
+        items.append(build_item(pk, f"{target_date}#total", total, config))
 
-    items.append(build_item(pk, f"{target_date}#total", total))
+    if not items:
+        return {"status": "ignored", "reason": "no_items"}
+
     write_items(items)
-
     return {"status": "ok", "count": len(items)}
 
 
-def fetch_rt_ids():
+def fetch_configs():
+    items = []
+    last_key = None
+    while True:
+        kwargs = {}
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        response = config_table.scan(**kwargs)
+        for item in response.get("Items", []):
+            if item.get("enabled") is False:
+                continue
+            if item.get("enabled") is None:
+                continue
+            items.append(normalize_config(item))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    return items
+
+
+def normalize_config(item):
+    return {
+        "config_id": item.get("config_id"),
+        "gateway_id": item.get("gateway_id"),
+        "rt_id_prefix": item.get("rt_id_prefix"),
+        "campus": item.get("campus"),
+        "domain": item.get("domain"),
+        "system": item.get("system"),
+        "metric": item.get("metric"),
+        "unit": item.get("unit", "kWh"),
+    }
+
+
+def build_pk(config, period):
+    return f"{config['campus']}#{config['domain']}#{config['system']}#{period}"
+
+
+def fetch_rt_ids(config):
     rt_ids = []
     last_key = None
     while True:
-        kwargs = {"KeyConditionExpression": Key("gateway_id").eq(GATEWAY_ID)}
+        kwargs = {"KeyConditionExpression": Key("gateway_id").eq(config["gateway_id"])}
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
         response = mapping_table.query(**kwargs)
         for item in response.get("Items", []):
             rt_id = item.get("rt_id")
-            if rt_id and rt_id.startswith(RT_ID_PREFIX):
+            if rt_id and rt_id.startswith(config["rt_id_prefix"]):
                 rt_ids.append(rt_id)
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
@@ -117,14 +158,15 @@ def parse_time(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
-def build_item(pk, sk, value):
+def build_item(pk, sk, value, config):
     return {
         "pk": pk,
         "sk": sk,
         "value": Decimal(f"{value:.6f}"),
-        "unit": "kWh",
+        "unit": config.get("unit", "kWh"),
         "ts_calculated": int(time.time()),
         "calc_version": CALC_VERSION,
+        "gateway_id": config.get("gateway_id"),
     }
 
 
