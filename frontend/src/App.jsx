@@ -49,6 +49,63 @@ const MAP_POINTS = [
   { label: "Magisterio", rtId: "uja.jaen.energia.consumo.ae_magisterio.p_kw", x: 60, y: 95 },
 ];
 
+const GATEWAYS = [
+  {
+    id: "gw_jaen_energia",
+    label: "Gateway Jaén Consumo Energía",
+    campus: "jaen",
+    domain: "energia",
+    rtPrefixes: ["uja.jaen.energia."],
+    seriesCampus: "jaen",
+    aggregateMetric: "energia_consumo",
+  },
+  {
+    id: "gw_jaen_agua",
+    label: "Gateway Jaén Consumo Agua",
+    campus: "jaen",
+    domain: "agua",
+    rtPrefixes: ["uja.jaen.agua."],
+    seriesCampus: null,
+    aggregateMetric: "agua_consumo",
+  },
+  {
+    id: "gw_linares_mix",
+    label: "Gateway Linares Mixto",
+    campus: "linares",
+    domain: null,
+    rtPrefixes: ["uja.linares.agua.", "uja.linares.energia."],
+    seriesCampus: null,
+    aggregateMetric: "energia_consumo",
+  },
+  {
+    id: "gw_endesa_jaen",
+    label: "Gateway FV Endesa Jaén",
+    campus: "jaen",
+    domain: "fv",
+    rtPrefixes: ["uja.jaen.fv.endesa."],
+    seriesCampus: null,
+    aggregateMetric: "fv_energia",
+  },
+  {
+    id: "gw_endesa_linares",
+    label: "Gateway FV Endesa Linares",
+    campus: "linares",
+    domain: "fv",
+    rtPrefixes: ["uja.linares.fv.endesa."],
+    seriesCampus: null,
+    aggregateMetric: "fv_energia",
+  },
+  {
+    id: "gw_autoconsumo_jaen",
+    label: "Gateway FV Autoconsumo Jaén",
+    campus: "jaen",
+    domain: "fv",
+    rtPrefixes: ["uja.jaen.fv.auto."],
+    seriesCampus: null,
+    aggregateMetric: "fv_energia",
+  },
+];
+
 const calcTotals = (items) => {
   let demand = 0;
   let pv = 0;
@@ -72,6 +129,33 @@ const calcTotals = (items) => {
     grid: demand - pv,
   };
 };
+
+const formatTs = (ts) => {
+  if (!ts && ts !== 0) return "--";
+  const value = Number(ts);
+  if (!Number.isFinite(value)) return "--";
+  return new Date(value * 1000).toLocaleString("es-ES");
+};
+
+const formatDate = (value) => {
+  if (!value) return "--";
+  if (typeof value === "string" && value.includes("-")) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString("es-ES");
+    }
+    return value;
+  }
+  if (typeof value === "number") {
+    return new Date(value * 1000).toLocaleString("es-ES");
+  }
+  return value;
+};
+
+const filterByPrefixes = (items, prefixes) =>
+  items.filter((item) =>
+    prefixes.some((prefix) => item.rt_id?.startsWith(prefix))
+  );
 
 const AreaChart = ({ series }) => {
   const chartSeries = useMemo(() => {
@@ -203,6 +287,7 @@ const IconGrid = () => (
 );
 
 function App() {
+  const [route, setRoute] = useState(() => window.location.hash || "#/");
   const [realtime, setRealtime] = useState({
     status: "idle",
     data: null,
@@ -212,6 +297,22 @@ function App() {
     status: "idle",
     data: null,
     error: null,
+  });
+  const [aggregates, setAggregates] = useState({
+    daily: { status: "idle", data: null, error: null },
+    monthly: { status: "idle", data: null, error: null },
+  });
+  const [validation, setValidation] = useState(() => {
+    const initial = {};
+    GATEWAYS.forEach((gateway) => {
+      initial[gateway.id] = {
+        latest: { status: "idle", data: null, error: null },
+        series: { status: "idle", data: null, error: null },
+        daily: { status: "idle", data: null, error: null },
+        monthly: { status: "idle", data: null, error: null },
+      };
+    });
+    return initial;
   });
 
   const fetchWithFallback = async (path) => {
@@ -251,6 +352,143 @@ function App() {
     }
   };
 
+  const fetchAggregates = async (period) => {
+    try {
+      setAggregates((prev) => ({
+        ...prev,
+        [period]: { ...prev[period], status: "loading", error: null },
+      }));
+      const payload = await fetchWithFallback(
+        `/aggregates/${period}?campus=jaen&metric=energia_consumo&asset=total`
+      );
+      setAggregates((prev) => ({
+        ...prev,
+        [period]: { status: "ready", data: payload, error: null },
+      }));
+    } catch (error) {
+      setAggregates((prev) => ({
+        ...prev,
+        [period]: { status: "error", data: null, error: error.message },
+      }));
+    }
+  };
+
+  const fetchGatewayLatest = async (gateway) => {
+    try {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          latest: { ...prev[gateway.id].latest, status: "loading", error: null },
+        },
+      }));
+      const query = gateway.domain
+        ? `/realtime?campus=${gateway.campus}&domain=${gateway.domain}`
+        : `/realtime?campus=${gateway.campus}`;
+      const payload = await fetchWithFallback(query);
+      const items = filterByPrefixes(payload.items || [], gateway.rtPrefixes);
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          latest: {
+            status: "ready",
+            data: { ...payload, items },
+            error: null,
+          },
+        },
+      }));
+    } catch (error) {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          latest: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
+  const fetchGatewaySeries = async (gateway) => {
+    if (!gateway.seriesCampus) {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          series: { status: "na", data: null, error: null },
+        },
+      }));
+      return;
+    }
+    try {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          series: { ...prev[gateway.id].series, status: "loading", error: null },
+        },
+      }));
+      const payload = await fetchWithFallback(
+        `/series/24h?campus=${gateway.seriesCampus}`
+      );
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          series: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          series: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
+  const fetchGatewayAggregates = async (gateway, period) => {
+    if (!gateway.aggregateMetric) {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { status: "na", data: null, error: null },
+        },
+      }));
+      return;
+    }
+    try {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { ...prev[gateway.id][period], status: "loading", error: null },
+        },
+      }));
+      const payload = await fetchWithFallback(
+        `/aggregates/${period}?campus=${gateway.campus}&metric=${gateway.aggregateMetric}&asset=total`
+      );
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setValidation((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
   useEffect(() => {
     fetchRealtime();
     const interval = setInterval(fetchRealtime, 60000);
@@ -262,6 +500,48 @@ function App() {
     const interval = setInterval(fetchSeries24h, 300000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    fetchAggregates("daily");
+    fetchAggregates("monthly");
+    const interval = setInterval(() => {
+      fetchAggregates("daily");
+      fetchAggregates("monthly");
+    }, 600000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleHash = () => setRoute(window.location.hash || "#/");
+    window.addEventListener("hashchange", handleHash);
+    return () => window.removeEventListener("hashchange", handleHash);
+  }, []);
+
+  useEffect(() => {
+    if (route !== "#/validacion") return;
+    GATEWAYS.forEach((gateway) => {
+      fetchGatewayLatest(gateway);
+      fetchGatewaySeries(gateway);
+      fetchGatewayAggregates(gateway, "daily");
+      fetchGatewayAggregates(gateway, "monthly");
+    });
+  }, [route]);
+
+  const refreshAll = () => {
+    fetchRealtime();
+    fetchSeries24h();
+    fetchAggregates("daily");
+    fetchAggregates("monthly");
+  };
+
+  const refreshValidation = () => {
+    GATEWAYS.forEach((gateway) => {
+      fetchGatewayLatest(gateway);
+      fetchGatewaySeries(gateway);
+      fetchGatewayAggregates(gateway, "daily");
+      fetchGatewayAggregates(gateway, "monthly");
+    });
+  };
 
   const realtimeItems = realtime.data?.items || [];
   const { demand, pv, grid } = useMemo(
@@ -291,78 +571,265 @@ function App() {
     return { value: item.value, unit: item.unit || "kW" };
   };
 
+  const renderStatus = (state) => {
+    if (state.status === "na") return "No disponible";
+    if (state.status === "loading") return "Cargando...";
+    if (state.status === "error") return `Error: ${state.error}`;
+    if (state.status === "ready") return "OK";
+    return "Sin datos";
+  };
+
+  const renderTable = (columns, rows) => {
+    if (!rows.length) {
+      return <div className="api-empty">No hay registros</div>;
+    }
+    return (
+      <div className="api-table">
+        <table>
+          <thead>
+            <tr>
+              {columns.map((col) => (
+                <th key={col}>{col}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, idx) => (
+              <tr key={`${row[0]}-${idx}`}>
+                {row.map((cell, cellIdx) => (
+                  <td key={`${idx}-${cellIdx}`}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const realtimeRows = realtimeItems.map((item) => [
+    item.rt_id,
+    number.format(item.value),
+    item.unit || "kW",
+    formatTs(item.ts_event),
+  ]);
+
+
+  const seriesRows = (series24h.data?.series || []).map((item) => [
+    formatTs(item.ts),
+    number.format(item.demand),
+    "kW",
+    number.format(item.pv),
+    "kW",
+  ]);
+
+  const aggregateRows = (period) =>
+    (aggregates[period].data?.series || []).map((item) => [
+      formatDate(item.date || item.ts || "--"),
+      number.format(item.value),
+      aggregates[period].data?.unit || "--",
+    ]);
+
+  const buildGatewayTables = (gateway) => {
+    const state = validation[gateway.id] || {};
+    const latestItems = state.latest?.data?.items || [];
+    const latestRows = latestItems.map((item) => [
+      item.rt_id,
+      number.format(item.value),
+      item.unit || "kW",
+      formatTs(item.ts_event),
+    ]);
+
+    const seriesItems = state.series?.data?.series || [];
+    const seriesRowsLocal = seriesItems.map((item) => [
+      formatTs(item.ts),
+      number.format(item.demand),
+      "kW",
+      number.format(item.pv),
+      "kW",
+    ]);
+
+    const dailyRows = (state.daily?.data?.series || []).map((item) => [
+      formatDate(item.date || item.ts || "--"),
+      number.format(item.value),
+      state.daily?.data?.unit || "--",
+    ]);
+
+    const monthlyRows = (state.monthly?.data?.series || []).map((item) => [
+      formatDate(item.date || item.ts || "--"),
+      number.format(item.value),
+      state.monthly?.data?.unit || "--",
+    ]);
+
+    return (
+      <div key={gateway.id} className="gateway-card">
+        <div className="gateway-header">
+          <h2 className="gateway-title">{gateway.label}</h2>
+          <button
+            className="api-refresh"
+            type="button"
+            onClick={() => {
+              fetchGatewayLatest(gateway);
+              fetchGatewaySeries(gateway);
+              fetchGatewayAggregates(gateway, "daily");
+              fetchGatewayAggregates(gateway, "monthly");
+            }}
+          >
+            Actualizar
+          </button>
+        </div>
+        <div className="gateway-grid">
+          <div className="api-card">
+            <div className="api-card-title">Último valor disponible</div>
+            <div className={`api-status status-${state.latest?.status}`}>
+              {renderStatus(state.latest || {})}
+            </div>
+            {renderTable(["rt_id", "value", "unit", "ts_event"], latestRows)}
+          </div>
+          <div className="api-card">
+            <div className="api-card-title">Últimas 24 horas</div>
+            <div className={`api-status status-${state.series?.status}`}>
+              {renderStatus(state.series || {})}
+            </div>
+            {renderTable(["ts", "demand", "unit", "pv", "unit"], seriesRowsLocal)}
+          </div>
+          <div className="api-card">
+            <div className="api-card-title">Energía diaria</div>
+            <div className={`api-status status-${state.daily?.status}`}>
+              {renderStatus(state.daily || {})}
+            </div>
+            {renderTable(["date", "value", "unit"], dailyRows)}
+          </div>
+          <div className="api-card">
+            <div className="api-card-title">Energía mensual</div>
+            <div className={`api-status status-${state.monthly?.status}`}>
+              {renderStatus(state.monthly || {})}
+            </div>
+            {renderTable(["date", "value", "unit"], monthlyRows)}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const isValidation = route === "#/validacion";
+
   return (
     <div className="app">
+      <header className="topbar">
+        <div className="container topbar-inner">
+          <div className="topbar-brand">UJA Monitoring</div>
+          <nav className="topbar-nav">
+            <a
+              className={`topbar-link ${!isValidation ? "active" : ""}`}
+              href="#/"
+            >
+              Dashboard
+            </a>
+            <a
+              className={`topbar-link ${isValidation ? "active" : ""}`}
+              href="#/validacion"
+            >
+              Validación de datos
+            </a>
+          </nav>
+        </div>
+      </header>
       <main>
-        <section className="section">
-          <div className="container">
-            <h1 className="section-title">Balance de energia en tiempo real</h1>
-            <div className="balance-grid">
-              <div className="infographic">
-                <div className="metric-card demand">
-                  <div className="metric-icon">
-                    <IconDemand />
-                  </div>
-                  <div className="metric-label">Demanda campus</div>
-                  <div className="metric-value">
-                    {number.format(demand)} kW
-                  </div>
-                </div>
-                <div className="metric-card pv">
-                  <div className="metric-icon">
-                    <IconSolar />
-                  </div>
-                  <div className="metric-label">FV campus</div>
-                  <div className="metric-value">
-                    {number.format(pv)} kW
-                  </div>
-                </div>
-                <div className="metric-card grid">
-                  <div className="metric-icon">
-                    <IconGrid />
-                  </div>
-                  <div className="metric-label">Red</div>
-                  <div className="metric-value">
-                    {number.format(grid)} kW
-                  </div>
-                </div>
+        {isValidation ? (
+          <section className="section">
+            <div className="container">
+              <div className="api-header">
+                <h1 className="section-title">Validación de datos</h1>
+                <button
+                  className="api-refresh"
+                  type="button"
+                  onClick={refreshValidation}
+                >
+                  Actualizar todo
+                </button>
               </div>
-              <div className="chart-card">
-                <div className="chart-legend">
-                  <span className="legend-item demand">Curva Demanda kW</span>
-                  <span className="legend-item pv">Curva Generación kW</span>
-                </div>
-                <AreaChart series={chartSeries} />
+              <p className="api-subtitle">
+                Vista técnica por gateway para validar ingestión, series y agregados.
+              </p>
+              <div className="gateway-stack">
+                {GATEWAYS.map((gateway) => buildGatewayTables(gateway))}
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        ) : (
+          <>
+            <section className="section">
+              <div className="container">
+                <h1 className="section-title">Balance de energia en tiempo real</h1>
+                <div className="balance-grid">
+                  <div className="infographic">
+                    <div className="metric-card demand">
+                      <div className="metric-icon">
+                        <IconDemand />
+                      </div>
+                      <div className="metric-label">Demanda campus</div>
+                      <div className="metric-value">
+                        {number.format(demand)} kW
+                      </div>
+                    </div>
+                    <div className="metric-card pv">
+                      <div className="metric-icon">
+                        <IconSolar />
+                      </div>
+                      <div className="metric-label">FV campus</div>
+                      <div className="metric-value">
+                        {number.format(pv)} kW
+                      </div>
+                    </div>
+                    <div className="metric-card grid">
+                      <div className="metric-icon">
+                        <IconGrid />
+                      </div>
+                      <div className="metric-label">Red</div>
+                      <div className="metric-value">
+                        {number.format(grid)} kW
+                      </div>
+                    </div>
+                  </div>
+                  <div className="chart-card">
+                    <div className="chart-legend">
+                      <span className="legend-item demand">Curva Demanda kW</span>
+                      <span className="legend-item pv">Curva Generación kW</span>
+                    </div>
+                    <AreaChart series={chartSeries} />
+                  </div>
+                </div>
+              </div>
+            </section>
 
-        <section className="section">
-          <div className="container">
-            <h2 className="section-title">Mapa del campus</h2>
-            <div className="map-frame">
-              <img src={campus} alt="Mapa campus" />
-              {MAP_POINTS.map((point) => {
-                const reading = readValue(point.rtId);
-                const valueText = reading
-                  ? `${number.format(reading.value)} ${reading.unit}`
-                  : "--";
-                return (
-                  <div
-                    key={point.label}
-                    className="map-pin"
-                    style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                    aria-label={`${point.label} ${valueText}`}
-                  >
-                    <div className="map-pin-label">{point.label}</div>
-                    <div className="map-pin-value">{valueText}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </section>
+            <section className="section">
+              <div className="container">
+                <h2 className="section-title">Mapa del campus</h2>
+                <div className="map-frame">
+                  <img src={campus} alt="Mapa campus" />
+                  {MAP_POINTS.map((point) => {
+                    const reading = readValue(point.rtId);
+                    const valueText = reading
+                      ? `${number.format(reading.value)} ${reading.unit}`
+                      : "--";
+                    return (
+                      <div
+                        key={point.label}
+                        className="map-pin"
+                        style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                        aria-label={`${point.label} ${valueText}`}
+                      >
+                        <div className="map-pin-label">{point.label}</div>
+                        <div className="map-pin-value">{valueText}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </section>
+          </>
+        )}
       </main>
     </div>
   );

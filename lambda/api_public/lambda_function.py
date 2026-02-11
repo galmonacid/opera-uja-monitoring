@@ -159,6 +159,9 @@ def get_aggregates(params, period):
 def metric_to_scope(metric):
     mapping = {
         "energia_consumo": ("energia", "consumo"),
+        "agua_consumo": ("agua", "consumo"),
+        "fv_energia": ("fv", "total"),
+        "co2_evitar": ("co2", "evitar"),
     }
     return mapping.get(metric, (None, None))
 
