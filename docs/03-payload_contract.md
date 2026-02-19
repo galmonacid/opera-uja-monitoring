@@ -57,6 +57,7 @@ Este umbral es configurable vía `MAX_VALID_VALUE`.
   - meter.name
   - data.var
   - unit
+  - FV Endesa Jaén observado: `meter.name = "Jaén-OPERA-Endesa--FV.UJA"` (var `Tot_FV_kW sys`, `Tot_FV_kWh`, `P3_Inv1_kW sys`, `P3_Radiación`, etc.)
 - Frecuencia de envío por gateway.
 - Agua: contador acumulado vs incremental.
 - Identificación exacta de:

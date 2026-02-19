@@ -38,7 +38,7 @@ Ejemplos:
 
 ---
 
-## 1) VARIABLES MAPEADAS (directas desde gateways) — TOTAL: 99
+## 1) VARIABLES MAPEADAS (directas desde gateways) — TOTAL: 100
 
 ### 1.1 Jaén — Consumo energía (25)
 Gateway: `gw_jaen_energia`
@@ -151,7 +151,7 @@ Energía (4) — placeholders hasta confirmar meter.name:
 | 65 | uja.linares.energia.consumo.linea_03.p_kw | kW | `<LINEA_03>::kW sys` |
 | 66 | uja.linares.energia.consumo.linea_04.p_kw | kW | `<LINEA_04>::kW sys` |
 
-### 1.4 FV Endesa Jaén (18)
+### 1.4 FV Endesa Jaén (20)
 Gateway: `gw_endesa_jaen`
 - 12 inversores (kW AC)
 - CT total (kW)
@@ -160,54 +160,56 @@ Gateway: `gw_endesa_jaen`
 Inversores (12):
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 67 | uja.jaen.fv.endesa.inv01.p_ac_kw | kW | `<INV01_METER>::kW sys` |
-| 68 | uja.jaen.fv.endesa.inv02.p_ac_kw | kW | `<INV02_METER>::kW sys` |
-| 69 | uja.jaen.fv.endesa.inv03.p_ac_kw | kW | `<INV03_METER>::kW sys` |
-| 70 | uja.jaen.fv.endesa.inv04.p_ac_kw | kW | `<INV04_METER>::kW sys` |
-| 71 | uja.jaen.fv.endesa.inv05.p_ac_kw | kW | `<INV05_METER>::kW sys` |
-| 72 | uja.jaen.fv.endesa.inv06.p_ac_kw | kW | `<INV06_METER>::kW sys` |
-| 73 | uja.jaen.fv.endesa.inv07.p_ac_kw | kW | `<INV07_METER>::kW sys` |
-| 74 | uja.jaen.fv.endesa.inv08.p_ac_kw | kW | `<INV08_METER>::kW sys` |
-| 75 | uja.jaen.fv.endesa.inv09.p_ac_kw | kW | `<INV09_METER>::kW sys` |
-| 76 | uja.jaen.fv.endesa.inv10.p_ac_kw | kW | `<INV10_METER>::kW sys` |
-| 77 | uja.jaen.fv.endesa.inv11.p_ac_kw | kW | `<INV11_METER>::kW sys` |
-| 78 | uja.jaen.fv.endesa.inv12.p_ac_kw | kW | `<INV12_METER>::kW sys` |
+| 67 | uja.jaen.fv.endesa.inv01.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::P3_Inv1_KW sys` |
+| 68 | uja.jaen.fv.endesa.inv02.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::P3_Inv2_KW sys` |
+| 69 | uja.jaen.fv.endesa.inv03.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::P3_Inv3_KW sys` |
+| 70 | uja.jaen.fv.endesa.inv04.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::P3_Inv4_KW sys` |
+| 71 | uja.jaen.fv.endesa.inv05.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::P4_Inv5_KW sys` |
+| 72 | uja.jaen.fv.endesa.inv06.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::P4_Inv6_KW sys` |
+| 73 | uja.jaen.fv.endesa.inv07.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::B4_Inv7_KW sys` |
+| 74 | uja.jaen.fv.endesa.inv08.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::B4_Inv8_KW sys` |
+| 75 | uja.jaen.fv.endesa.inv09.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::C3_Inv9_KW sys` |
+| 76 | uja.jaen.fv.endesa.inv10.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::D3_Inv10_KW sys` |
+| 77 | uja.jaen.fv.endesa.inv11.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::D3_Inv11_KW sys` |
+| 78 | uja.jaen.fv.endesa.inv12.p_ac_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::D3_Inv12_KW sys` |
 
-CT total (1) + Radiación (5):
+CT total (1) + Energía (1) + Radiación (5) + Temperatura (1):
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 79 | uja.jaen.fv.endesa.ct_total.p_kw | kW | `<CT_METER>::kW sys` |
-| 80 | uja.jaen.fv.endesa.rad01.g_wm2 | W/m² | `<RAD01_METER>::Irradiación transitoria` |
-| 81 | uja.jaen.fv.endesa.rad02.g_wm2 | W/m² | `<RAD02_METER>::Irradiación transitoria` |
-| 82 | uja.jaen.fv.endesa.rad03.g_wm2 | W/m² | `<RAD03_METER>::Irradiación transitoria` |
-| 83 | uja.jaen.fv.endesa.rad04.g_wm2 | W/m² | `<RAD04_METER>::Irradiación transitoria` |
-| 84 | uja.jaen.fv.endesa.rad05.g_wm2 | W/m² | `<RAD05_METER>::Irradiación transitoria` |
+| 79 | uja.jaen.fv.endesa.ct_total.p_kw | kW | `Jaén-OPERA-Endesa--FV.UJA::Tot_FV_KW sys` |
+| 80 | uja.jaen.fv.endesa.ct_total.e_kwh | kWh | `Jaén-OPERA-Endesa--FV.UJA::Tot_FV_kWh` |
+| 81 | uja.jaen.fv.endesa.rad01.g_wm2 | W/m² | `Jaén-OPERA-Endesa--FV.UJA::P3_Radiación` |
+| 82 | uja.jaen.fv.endesa.rad02.g_wm2 | W/m² | `Jaén-OPERA-Endesa--FV.UJA::P4_Radiación` |
+| 83 | uja.jaen.fv.endesa.rad03.g_wm2 | W/m² | `Jaén-OPERA-Endesa--FV.UJA::B4_Radiación` |
+| 84 | uja.jaen.fv.endesa.rad04.g_wm2 | W/m² | `Jaén-OPERA-Endesa--FV.UJA::C3_Radiación` |
+| 85 | uja.jaen.fv.endesa.rad05.g_wm2 | W/m² | `Jaén-OPERA-Endesa--FV.UJA::D3_Radiación` |
+| 86 | uja.jaen.fv.endesa.temp01.t_c | °C | `Jaén-OPERA-Endesa--FV.UJA::Temperatura` |
 
 ### 1.5 FV Endesa Linares (4)
 Gateway: `gw_endesa_linares`
 
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 85 | uja.linares.fv.endesa.ct_total.p_kw | kW | `LIN_OPERA_FV.Lin::FV_KW sys` |
-| 86 | uja.linares.fv.endesa.ct_total.e_kwh | kWh | `LIN_OPERA_FV.Lin::FV_kWh` |
-| 87 | uja.linares.fv.endesa.rad01.g_wm2 | W/m² | `LIN_OPERA_FV.Lin::Radiación` |
-| 88 | uja.linares.fv.endesa.temp01.t_c | °C | `LIN_OPERA_FV.Lin::Temperatura` |
+| 87 | uja.linares.fv.endesa.ct_total.p_kw | kW | `LIN_OPERA_FV.Lin::FV_KW sys` |
+| 88 | uja.linares.fv.endesa.ct_total.e_kwh | kWh | `LIN_OPERA_FV.Lin::FV_kWh` |
+| 89 | uja.linares.fv.endesa.rad01.g_wm2 | W/m² | `LIN_OPERA_FV.Lin::Radiación` |
+| 90 | uja.linares.fv.endesa.temp01.t_c | °C | `LIN_OPERA_FV.Lin::Temperatura` |
 
 ### 1.6 FV Autoconsumo Jaén (10)
 Gateway: `gw_autoconsumo_jaen`
 
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 90 | uja.jaen.fv.auto.inv01.p_ac_kw | kW | `<INV01_METER>::kW sys` |
-| 91 | uja.jaen.fv.auto.inv02.p_ac_kw | kW | `<INV02_METER>::kW sys` |
-| 92 | uja.jaen.fv.auto.inv03.p_ac_kw | kW | `<INV03_METER>::kW sys` |
-| 93 | uja.jaen.fv.auto.inv04.p_ac_kw | kW | `<INV04_METER>::kW sys` |
-| 94 | uja.jaen.fv.auto.inv05.p_ac_kw | kW | `<INV05_METER>::kW sys` |
-| 95 | uja.jaen.fv.auto.ct_total.p_kw | kW | `<CT_METER>::kW sys` |
-| 96 | uja.jaen.fv.auto.rad01.g_wm2 | W/m² | `<RAD01_METER>::Irradiación transitoria` |
-| 97 | uja.jaen.fv.auto.rad02.g_wm2 | W/m² | `<RAD02_METER>::Irradiación transitoria` |
-| 98 | uja.jaen.fv.auto.rad03.g_wm2 | W/m² | `<RAD03_METER>::Irradiación transitoria` |
-| 99 | uja.jaen.fv.auto.rad04.g_wm2 | W/m² | `<RAD04_METER>::Irradiación transitoria` |
+| 91 | uja.jaen.fv.auto.inv01.p_ac_kw | kW | `<INV01_METER>::kW sys` |
+| 92 | uja.jaen.fv.auto.inv02.p_ac_kw | kW | `<INV02_METER>::kW sys` |
+| 93 | uja.jaen.fv.auto.inv03.p_ac_kw | kW | `<INV03_METER>::kW sys` |
+| 94 | uja.jaen.fv.auto.inv04.p_ac_kw | kW | `<INV04_METER>::kW sys` |
+| 95 | uja.jaen.fv.auto.inv05.p_ac_kw | kW | `<INV05_METER>::kW sys` |
+| 96 | uja.jaen.fv.auto.ct_total.p_kw | kW | `<CT_METER>::kW sys` |
+| 97 | uja.jaen.fv.auto.rad01.g_wm2 | W/m² | `<RAD01_METER>::Irradiación transitoria` |
+| 98 | uja.jaen.fv.auto.rad02.g_wm2 | W/m² | `<RAD02_METER>::Irradiación transitoria` |
+| 99 | uja.jaen.fv.auto.rad03.g_wm2 | W/m² | `<RAD03_METER>::Irradiación transitoria` |
+| 100 | uja.jaen.fv.auto.rad04.g_wm2 | W/m² | `<RAD04_METER>::Irradiación transitoria` |
 
 ---
 ## 2) VARIABLES CALCULADAS — definiciones y fórmulas exactas

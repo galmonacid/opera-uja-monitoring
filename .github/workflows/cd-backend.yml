@@ -138,6 +138,9 @@ jobs:
             --file seeds/gateway_variable_map_gw_jaen_energia.csv \
             --table gateway_variable_map
           python scripts/load_gateway_map.py \
+            --file seeds/gateway_variable_map_gw_endesa_jaen.csv \
+            --table gateway_variable_map
+          python scripts/load_gateway_map.py \
             --file seeds/gateway_variable_map_gw_endesa_linares.csv \
             --table gateway_variable_map
           python scripts/load_aggregation_configs.py \

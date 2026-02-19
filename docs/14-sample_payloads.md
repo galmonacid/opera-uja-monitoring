@@ -85,3 +85,29 @@ Notas observadas:
   ]
 }
 ```
+
+### 14.2 FV Endesa Jaén (gw_endesa_jaen)
+
+```json
+{
+  "ver": "3.0.1",
+  "sn": "<REDACTED>",
+  "mac": "<REDACTED>",
+  "ip": "<REDACTED>",
+  "tz": "Europe/Paris",
+  "opt": "insert_data",
+  "meter": [
+    {
+      "name": "Jaén-OPERA-Endesa--FV.UJA",
+      "time": 1771527600,
+      "data": [
+        { "var": "Temperatura", "unit": "°C", "value": 10.6 },
+        { "var": "Tot_FV_kW sys", "unit": "kW", "value": 0.125242 },
+        { "var": "Tot_FV_kWh", "unit": "kWh", "value": 6198112.73 },
+        { "var": "P3_Radiación", "unit": "W", "value": 0.0 },
+        { "var": "P3_Inv1_kW sys", "unit": "kW", "value": 0.0 }
+      ]
+    }
+  ]
+}
+```
