@@ -10,6 +10,7 @@ on:
       - infra/api-gateway.yaml
       - infra/iot-rule-gw-jaen-energia.yaml
       - infra/iot-rule-gw-endesa-linares.yaml
+      - infra/iot-rule-gw-endesa-jaen.yaml
       - lambda/**
       - scripts/**
       - seeds/**
@@ -130,6 +131,10 @@ jobs:
           aws cloudformation deploy \
             --stack-name "${STACK_PREFIX}-iot-rule-gw-endesa-linares" \
             --template-file infra/iot-rule-gw-endesa-linares.yaml \
+            --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
+          aws cloudformation deploy \
+            --stack-name "${STACK_PREFIX}-iot-rule-gw-endesa-jaen" \
+            --template-file infra/iot-rule-gw-endesa-jaen.yaml \
             --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
 
       - name: Load gateway_variable_map

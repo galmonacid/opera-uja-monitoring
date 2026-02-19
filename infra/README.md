@@ -7,6 +7,7 @@ IoT Things and certificates are managed manually and intentionally excluded from
 Templates:
 - `infra/iot-rule-gw-jaen-energia.yaml`
 - `infra/iot-rule-gw-endesa-linares.yaml`
+- `infra/iot-rule-gw-endesa-jaen.yaml`
 
 ### Deploy
 ```bash
@@ -18,6 +19,11 @@ aws cloudformation deploy \
 aws cloudformation deploy \
   --stack-name uja-iot-rule-gw-endesa-linares \
   --template-file infra/iot-rule-gw-endesa-linares.yaml \
+  --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
+
+aws cloudformation deploy \
+  --stack-name uja-iot-rule-gw-endesa-jaen \
+  --template-file infra/iot-rule-gw-endesa-jaen.yaml \
   --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
 ```
 
