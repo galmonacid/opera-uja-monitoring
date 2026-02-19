@@ -88,6 +88,7 @@ const GATEWAYS = [
     domain: "fv",
     rtPrefixes: ["uja.jaen.fv.endesa."],
     seriesCampus: null,
+    seriesPrefix: "uja.jaen.fv.endesa.",
     aggregateMetric: "fv_endesa",
   },
   {
@@ -98,6 +99,7 @@ const GATEWAYS = [
     domain: "fv",
     rtPrefixes: ["uja.linares.fv.endesa."],
     seriesCampus: null,
+    seriesPrefix: "uja.linares.fv.endesa.",
     aggregateMetric: "fv_endesa",
   },
 ];
@@ -406,7 +408,7 @@ function App() {
   };
 
   const fetchGatewaySeries = async (gateway) => {
-    if (!gateway.seriesCampus) {
+    if (!gateway.seriesCampus && !gateway.seriesPrefix) {
       setValidation((prev) => ({
         ...prev,
         [gateway.id]: {
@@ -424,9 +426,9 @@ function App() {
           series: { ...prev[gateway.id].series, status: "loading", error: null },
         },
       }));
-      const payload = await fetchWithFallback(
-        `/series/24h?campus=${gateway.seriesCampus}`
-      );
+      const payload = gateway.seriesPrefix
+        ? await fetchWithFallback(`/series/24h?rt_prefix=${gateway.seriesPrefix}`)
+        : await fetchWithFallback(`/series/24h?campus=${gateway.seriesCampus}`);
       setValidation((prev) => ({
         ...prev,
         [gateway.id]: {
@@ -637,13 +639,19 @@ function App() {
     ]);
 
     const seriesItems = state.series?.data?.series || [];
-    const seriesRowsLocal = seriesItems.map((item) => [
-      formatTs(item.ts),
-      number.format(item.demand),
-      "kW",
-      number.format(item.pv),
-      "kW",
-    ]);
+    const seriesRowsLocal = state.series?.data?.rt_prefix
+      ? seriesItems.map((item) => [
+          formatTs(item.ts),
+          number.format(item.value),
+          "kW",
+        ])
+      : seriesItems.map((item) => [
+          formatTs(item.ts),
+          number.format(item.demand),
+          "kW",
+          number.format(item.pv),
+          "kW",
+        ]);
 
     const dailyRows = (state.daily?.data?.series || []).map((item) => [
       formatDate(item.date || item.ts || "--"),
@@ -690,7 +698,12 @@ function App() {
             <div className={`api-status status-${state.series?.status}`}>
               {renderStatus(state.series || {})}
             </div>
-            {renderTable(["ts", "demand", "unit", "pv", "unit"], seriesRowsLocal)}
+            {renderTable(
+              state.series?.data?.rt_prefix
+                ? ["ts", "value", "unit"]
+                : ["ts", "demand", "unit", "pv", "unit"],
+              seriesRowsLocal
+            )}
           </div>
           <div className="api-card">
             <div className="api-card-title">Energía diaria</div>

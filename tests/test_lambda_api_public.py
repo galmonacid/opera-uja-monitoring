@@ -63,3 +63,19 @@ def test_metric_to_scope_supports_new_metrics():
     assert api.metric_to_scope("agua_consumo") == ("agua", "consumo")
     assert api.metric_to_scope("fv_endesa") == ("fv", "endesa")
     assert api.metric_to_scope("fv_auto") == ("fv", "auto")
+
+
+def test_series_by_prefix():
+    api = load_lambda_module()
+    rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "5"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:15:00.000000000"}, {"ScalarValue": "7"}]},
+    ]
+
+    api.query_timestream = lambda _query: rows
+    result = api.get_series_24h_by_prefix({"rt_prefix": "uja.jaen.fv.endesa."})
+
+    assert result["rt_prefix"] == "uja.jaen.fv.endesa."
+    assert result["unit"] == "kW"
+    assert len(result["series"]) == 2
+    assert result["series"][0]["value"] == 5.0

@@ -66,6 +66,8 @@ def handler(event, context):
     if path.endswith("/aggregates/yearly"):
         return response(get_aggregates(params, "yearly"))
     if path.endswith("/series/24h"):
+        if params.get("rt_prefix"):
+            return response(get_series_24h_by_prefix(params))
         return response(get_series_24h(params))
 
     return response({"error": "not_found"}, status=404)
@@ -219,6 +221,25 @@ def get_series_24h(params):
     }
 
 
+def get_series_24h_by_prefix(params):
+    rt_prefix = params.get("rt_prefix")
+    if not rt_prefix:
+        return {"error": "missing_params"}
+
+    series = query_timeseries_by_prefix(rt_prefix)
+    rows = [
+        {"ts": ts, "value": float(value)}
+        for ts, value in sorted(series.items())
+    ]
+
+    return {
+        "rt_prefix": rt_prefix,
+        "interval_minutes": SERIES_INTERVAL_MINUTES,
+        "unit": "kW",
+        "series": rows,
+    }
+
+
 def query_timeseries(rt_ids):
     if not rt_ids:
         return {}
@@ -234,6 +255,43 @@ FROM (
   WHERE time > ago(24h)
     AND measure_name = 'value'
     AND rt_id IN ({in_clause})
+    AND measure_value::double <= {MAX_VALID_VALUE}
+    AND measure_value::double >= {-MAX_VALID_VALUE}
+  GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)
+)
+GROUP BY ts
+ORDER BY ts
+"""
+    rows = query_timestream(query)
+    result = {}
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 2:
+            continue
+        ts_value = data[0].get("ScalarValue")
+        value = data[1].get("ScalarValue")
+        if ts_value is None or value is None:
+            continue
+        ts_epoch = parse_ts(ts_value)
+        if ts_epoch == 0:
+            continue
+        result[ts_epoch] = float(value)
+    return result
+
+
+def query_timeseries_by_prefix(rt_prefix):
+    query = f"""
+SELECT ts, sum(value) AS value
+FROM (
+  SELECT
+    bin(time, {SERIES_INTERVAL_MINUTES}m) AS ts,
+    rt_id,
+    max_by(measure_value::double, time) AS value
+  FROM "{TS_DATABASE}"."{TS_TABLE}"
+  WHERE time > ago(24h)
+    AND measure_name = 'value'
+    AND rt_id LIKE '{rt_prefix}%'
+    AND rt_id LIKE '%.p_%'
     AND measure_value::double <= {MAX_VALID_VALUE}
     AND measure_value::double >= {-MAX_VALID_VALUE}
   GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)

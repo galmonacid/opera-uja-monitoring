@@ -150,12 +150,16 @@ def fetch_rt_ids(config):
         response = get_mapping_table().query(**kwargs)
         for item in response.get("Items", []):
             rt_id = item.get("rt_id")
-            if rt_id and rt_id.startswith(config["rt_id_prefix"]):
+            if rt_id and rt_id.startswith(config["rt_id_prefix"]) and is_power_rt_id(rt_id):
                 rt_ids.append(rt_id)
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
             break
     return sorted(set(rt_ids))
+
+
+def is_power_rt_id(rt_id: str) -> bool:
+    return rt_id.endswith(".p_kw") or rt_id.endswith(".p_ac_kw")
 
 
 def integrate_energy(rt_id, start, end):
