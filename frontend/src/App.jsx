@@ -155,6 +155,16 @@ const filterByPrefixes = (items, prefixes) =>
     prefixes.some((prefix) => item.rt_id?.startsWith(prefix))
   );
 
+const aggregateLabels = (metric) => {
+  if (metric === "agua_consumo") {
+    return { daily: "Agua diaria", monthly: "Agua mensual" };
+  }
+  if (metric === "fv_endesa" || metric === "fv_auto") {
+    return { daily: "Producción diaria", monthly: "Producción mensual" };
+  }
+  return { daily: "Energía diaria", monthly: "Energía mensual" };
+};
+
 const AreaChart = ({ series }) => {
   const chartSeries = useMemo(() => {
     const sorted = [...series].sort((a, b) => a.ts - b.ts);
@@ -629,6 +639,7 @@ function App() {
     ]);
 
   const buildGatewayTables = (gateway) => {
+    const labels = aggregateLabels(gateway.aggregateMetric);
     const state = validation[gateway.id] || {};
     const latestItems = state.latest?.data?.items || [];
     const latestRows = latestItems.map((item) => [
@@ -706,14 +717,14 @@ function App() {
             )}
           </div>
           <div className="api-card">
-            <div className="api-card-title">Energía diaria</div>
+            <div className="api-card-title">{labels.daily}</div>
             <div className={`api-status status-${state.daily?.status}`}>
               {renderStatus(state.daily || {})}
             </div>
             {renderTable(["date", "value", "unit"], dailyRows)}
           </div>
           <div className="api-card">
-            <div className="api-card-title">Energía mensual</div>
+            <div className="api-card-title">{labels.monthly}</div>
             <div className={`api-status status-${state.monthly?.status}`}>
               {renderStatus(state.monthly || {})}
             </div>
