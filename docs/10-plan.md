@@ -67,18 +67,47 @@ Tareas:
 
 ## Fase 3A — Backend ampliado (resto gateways) (2-3 semanas)
 Tareas:
-- [] Confirmar catálogo `meter.name`/`data.var` del resto de gateways
-- [] Completar `gateway_variable_map` para agua, FV Endesa y FV autoconsumo
-- [] Extender `lambda_ingest_telemetry` a nuevos gateways
-- [] Habilitar reglas IoT para el resto de topics
-- [] Validar agregados y KPIs para agua y FV
+- [EN CURSO] Confirmar catálogo `meter.name`/`data.var` del resto de gateways (por gateway)
+- [EN CURSO] Completar `gateway_variable_map` para agua, FV Endesa y FV autoconsumo (por gateway)
+- [COMPLETO] Extender `lambda_ingest_telemetry` a nuevos gateways (mapeo + validación)
+- [EN CURSO] Habilitar reglas IoT para el resto de topics (por gateway)
+- [EN CURSO] Validar agregados y KPIs para agua y FV
+
+Detalle por gateway:
+- gw_jaen_agua:
+  - [PENDIENTE] Confirmar catálogo `meter.name`/`data.var`
+  - [PENDIENTE] `gateway_variable_map` completo
+  - [PENDIENTE] IoT Rule desplegada
+  - [PENDIENTE] Datos en DynamoDB/Timestream
+- gw_linares_mix:
+  - [COMPLETO] Catálogo observado (agua + energía `CCTL-TOTAL.*`, payload real)
+  - [COMPLETO] `gateway_variable_map` completo (13 filas, agua + energía)
+  - [COMPLETO] IoT Rule preparada (template + CD)
+  - [EN CURSO] Datos en DynamoDB/Timestream (pendiente validar escritura estable tras despliegue)
+- gw_endesa_jaen:
+  - [COMPLETO] Catálogo observado (payload real)
+  - [COMPLETO] `gateway_variable_map` cargado (20 filas)
+  - [EN CURSO] IoT Rule desplegada (template + CD)
+  - [EN CURSO] Datos en DynamoDB/Timestream (pendiente entrada real)
+- gw_endesa_linares:
+  - [COMPLETO] Catálogo observado (payload real)
+  - [COMPLETO] `gateway_variable_map` cargado (4 filas)
+  - [COMPLETO] IoT Rule desplegada
+  - [EN CURSO] Datos en DynamoDB/Timestream (ya hay datos, validar estabilidad)
+- gw_autoconsumo_jaen:
+  - [PENDIENTE] Confirmar catálogo `meter.name`/`data.var`
+  - [PENDIENTE] `gateway_variable_map` completo
+  - [PENDIENTE] IoT Rule desplegada
+  - [PENDIENTE] Datos en DynamoDB/Timestream
 
 ## Fase 3B — Frontend ampliado (resto secciones) (1-2 semanas)
 Tareas:
-- [] Añadir secciones agua, FV e indicadores
-- [] Integración con endpoints adicionales
-- [] Ajustes de UI/UX y performance
+- [EN CURSO] Añadir secciones agua, FV e indicadores (validación técnica creada)
+- [EN CURSO] Integración con endpoints adicionales (realtime/series/agregados por gateway)
+- [PENDIENTE] Ajustes de UI/UX y performance
 
 ## Pendientes externos (bloqueantes suaves)
-- [] Catálogo meter.name/data.var por gateway para cerrar mapeo al 100% (ver `03-payload_contract.md` y `04-variables.md`)
-- [] Confirmación de conectividad/red del gateway (puertos salientes a AWS IoT)
+- [EN CURSO] Catálogo meter.name/data.var por gateway para cerrar mapeo al 100% (ver `03-payload_contract.md` y `04-variables.md`)
+  - Pendientes: `gw_jaen_agua`, `gw_autoconsumo_jaen`
+- [EN CURSO] Confirmación de conectividad/red del gateway (puertos salientes a AWS IoT)
+  - Pendientes: `gw_jaen_agua`, `gw_autoconsumo_jaen`

@@ -127,29 +127,29 @@ Gateway: `gw_jaen_agua`
 | 52 | uja.jaen.agua.consumo.c_futbol.v_m3 | m³ | `C.futbol::m3` |
 | 53 | uja.jaen.agua.consumo.ae_magisterio.v_m3 | m³ | `A.E. Magisterio::m3` |
 
-### 1.3 Linares — Agua (9) + Energía (4) = 13
+### 1.3 Linares — Agua (8) + Energía (5) = 13
 Gateway: `gw_linares_mix`
 
-Agua (9):
+Agua (8):
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 54 | uja.linares.agua.consumo.pabellon_polideportivo.v_m3 | m³ | `Pabellon polideportivo::m3` |
-| 55 | uja.linares.agua.consumo.servicios_generales.v_m3 | m³ | `Servicios Generales::m3` |
-| 56 | uja.linares.agua.consumo.cafeteria.v_m3 | m³ | `Cafeteria::m3` |
-| 57 | uja.linares.agua.consumo.cocina_comedor.v_m3 | m³ | `Cocina-Comedor::m3` |
-| 58 | uja.linares.agua.consumo.laboratorios.v_m3 | m³ | `Laboratorios::m3` |
-| 59 | uja.linares.agua.consumo.aularios.v_m3 | m³ | `Aularios::m3` |
-| 60 | uja.linares.agua.consumo.departamental.v_m3 | m³ | `Departamental::m3` |
-| 61 | uja.linares.agua.consumo.riego_aularios.v_m3 | m³ | `Riego Aularios::m3` |
-| 62 | uja.linares.agua.consumo.reciclada_general.v_m3 | m³ | `Reciclada general::m3` |
+| 54 | uja.linares.agua.consumo.pabellon_polideportivo.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_Polideportivo::m3` |
+| 55 | uja.linares.agua.consumo.servicios_generales.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_S_Generales::m3` |
+| 56 | uja.linares.agua.consumo.cafeteria.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_Cafeteria::m3` |
+| 57 | uja.linares.agua.consumo.comedor.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_Comedor::m3` |
+| 58 | uja.linares.agua.consumo.laboratorios.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_Laboratorios::m3` |
+| 59 | uja.linares.agua.consumo.departamental.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_Departamental::m3` |
+| 60 | uja.linares.agua.consumo.riego_aulario.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_Riego_Aulario::m3` |
+| 61 | uja.linares.agua.consumo.reciclada_lluvia.v_m3 | m³ | `CCTL-TOTAL.Cons_Agua_Reciclada::m3` |
 
-Energía (4) — placeholders hasta confirmar meter.name:
+Energía (5) — catálogo observado:
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 63 | uja.linares.energia.consumo.linea_01.p_kw | kW | `<LINEA_01>::kW sys` |
-| 64 | uja.linares.energia.consumo.linea_02.p_kw | kW | `<LINEA_02>::kW sys` |
-| 65 | uja.linares.energia.consumo.linea_03.p_kw | kW | `<LINEA_03>::kW sys` |
-| 66 | uja.linares.energia.consumo.linea_04.p_kw | kW | `<LINEA_04>::kW sys` |
+| 62 | uja.linares.energia.consumo.lab_sg_t1.p_kw | kW | `CCTL-TOTAL.Cons_Elec_Lab_SG_T1::KW sys` |
+| 63 | uja.linares.energia.consumo.lab_sg_t2.p_kw | kW | `CCTL-TOTAL.Cons_Elec_Lab_SG_T2::KW sys` |
+| 64 | uja.linares.energia.consumo.urbanizacion.p_kw | kW | `CCTL-TOTAL.Cons_Elec_Urbanización::KW sys` |
+| 65 | uja.linares.energia.consumo.aulario_departamental.p_kw | kW | `CCTL-TOTAL.Cons_Elec_Aulario::KW sys` |
+| 66 | uja.linares.energia.consumo.polideportivo.p_kw | kW | `CCTL-TOTAL.Cons_Elec_Polideportivo::KW sys` |
 
 ### 1.4 FV Endesa Jaén (20)
 Gateway: `gw_endesa_jaen`
@@ -218,7 +218,7 @@ Gateway: `gw_autoconsumo_jaen`
 | RT_ID | Unidad | Fórmula exacta |
 |---|---|---|
 | uja.jaen.energia.consumo.total.p_kw | kW | Σ de las 25 potencias `uja.jaen.energia.consumo.*.p_kw` |
-| uja.linares.energia.consumo.total.p_kw | kW | `linea_01 + linea_02 + linea_03 + linea_04` |
+| uja.linares.energia.consumo.total.p_kw | kW | `lab_sg_t1 + lab_sg_t2 + urbanizacion + aulario_departamental + polideportivo` |
 | uja.jaen.fv.endesa.total.p_kw | kW | Σ `uja.jaen.fv.endesa.inv01..inv12.p_ac_kw` |
 | uja.linares.fv.endesa.total.p_kw | kW | Σ `uja.linares.fv.endesa.inv01..inv03.p_ac_kw` |
 | uja.jaen.fv.auto.total.p_kw | kW | Σ `uja.jaen.fv.auto.inv01..inv05.p_ac_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw` + `uja.jaen.fv.auto.edificio_c4.p_kw` + `uja.jaen.fv.auto.magisterio.p_kw` |

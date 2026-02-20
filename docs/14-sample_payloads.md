@@ -111,3 +111,33 @@ Notas observadas:
   ]
 }
 ```
+
+### 14.3 Linares consumo mixto (gw_linares_mix)
+
+Notas observadas:
+- `meter.name` llega como `CCTL-TOTAL.<...>`.
+- `data.var` llega como `m3` (agua) y `kW sys` (energía, normalizado a `KW sys` en ingestión).
+- Se observan sentinelas/valores corruptos en agua (ej. `8.33e+14`), descartados por el filtro (`abs(value) > 1e6`).
+
+```json
+{
+  "ver": "3.0.1",
+  "sn": "<REDACTED>",
+  "mac": "<REDACTED>",
+  "ip": "<REDACTED>",
+  "tz": "Europe/Paris",
+  "opt": "insert_data",
+  "meter": [
+    {
+      "name": "CCTL-TOTAL.Cons_Agua_S_Generales",
+      "time": 1770351480,
+      "data": [{ "var": "m3", "unit": "m3", "value": 1017.6 }]
+    },
+    {
+      "name": "CCTL-TOTAL.Cons_Elec_Polideportivo",
+      "time": 1770351480,
+      "data": [{ "var": "kW sys", "unit": "kW", "value": 6.357821 }]
+    }
+  ]
+}
+```

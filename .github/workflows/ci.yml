@@ -25,6 +25,7 @@ jobs:
       - name: Validate CSV mappings
         run: |
           python scripts/validate_gateway_map.py seeds/gateway_variable_map_gw_jaen_energia.csv
+          python scripts/validate_gateway_map.py seeds/gateway_variable_map_gw_linares_mix.csv
           python scripts/validate_gateway_map.py seeds/gateway_variable_map_gw_endesa_jaen.csv
           python scripts/validate_gateway_map.py seeds/gateway_variable_map_gw_endesa_linares.csv
           python scripts/validate_aggregation_configs.py seeds/aggregation_configs.csv
