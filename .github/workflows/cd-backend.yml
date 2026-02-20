@@ -9,6 +9,7 @@ on:
       - infra/lambda-api.yaml
       - infra/api-gateway.yaml
       - infra/iot-rule-gw-jaen-energia.yaml
+      - infra/iot-rule-gw-jaen-agua.yaml
       - infra/iot-rule-gw-linares-mix.yaml
       - infra/iot-rule-gw-endesa-linares.yaml
       - infra/iot-rule-gw-endesa-jaen.yaml
@@ -130,6 +131,10 @@ jobs:
             --template-file infra/iot-rule-gw-jaen-energia.yaml \
             --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
           aws cloudformation deploy \
+            --stack-name "${STACK_PREFIX}-iot-rule-gw-jaen-agua" \
+            --template-file infra/iot-rule-gw-jaen-agua.yaml \
+            --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
+          aws cloudformation deploy \
             --stack-name "${STACK_PREFIX}-iot-rule-gw-linares-mix" \
             --template-file infra/iot-rule-gw-linares-mix.yaml \
             --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
@@ -146,6 +151,9 @@ jobs:
         run: |
           python scripts/load_gateway_map.py \
             --file seeds/gateway_variable_map_gw_jaen_energia.csv \
+            --table gateway_variable_map
+          python scripts/load_gateway_map.py \
+            --file seeds/gateway_variable_map_gw_jaen_agua.csv \
             --table gateway_variable_map
           python scripts/load_gateway_map.py \
             --file seeds/gateway_variable_map_gw_linares_mix.csv \

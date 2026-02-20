@@ -57,6 +57,7 @@ Este umbral es configurable vía `MAX_VALID_VALUE`.
   - meter.name
   - data.var
   - unit
+  - Jaén agua observado: `meter.name = "UJA-Agua-Opera--m3.Edif_*"` y `data.var = "m3"`
   - Linares mix observado: `meter.name = "CCTL-TOTAL.<...>"`, `data.var = "m3"` y `data.var = "kW sys"` (normalizado a `KW sys`)
   - FV Endesa Jaén observado: `meter.name = "Jaén-OPERA-Endesa--FV.UJA"` (var `Tot_FV_kW sys`, `Tot_FV_kWh`, `P3_Inv1_kW sys`, `P3_Radiación`, etc.)
 - Frecuencia de envío por gateway.

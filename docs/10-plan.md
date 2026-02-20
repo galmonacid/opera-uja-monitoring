@@ -75,10 +75,10 @@ Tareas:
 
 Detalle por gateway:
 - gw_jaen_agua:
-  - [PENDIENTE] Confirmar catálogo `meter.name`/`data.var`
-  - [PENDIENTE] `gateway_variable_map` completo
-  - [PENDIENTE] IoT Rule desplegada
-  - [PENDIENTE] Datos en DynamoDB/Timestream
+  - [COMPLETO] Catálogo observado (`UJA-Agua-Opera--m3.*`, payload operador)
+  - [COMPLETO] `gateway_variable_map` completo (26 filas)
+  - [COMPLETO] IoT Rule preparada (template + CD)
+  - [EN CURSO] Datos en DynamoDB/Timestream (pendiente validar escritura estable tras despliegue)
 - gw_linares_mix:
   - [COMPLETO] Catálogo observado (agua + energía `CCTL-TOTAL.*`, payload real)
   - [COMPLETO] `gateway_variable_map` completo (13 filas, agua + energía)
@@ -108,6 +108,6 @@ Tareas:
 
 ## Pendientes externos (bloqueantes suaves)
 - [EN CURSO] Catálogo meter.name/data.var por gateway para cerrar mapeo al 100% (ver `03-payload_contract.md` y `04-variables.md`)
-  - Pendientes: `gw_jaen_agua`, `gw_autoconsumo_jaen`
+  - Pendientes: `gw_autoconsumo_jaen`
 - [EN CURSO] Confirmación de conectividad/red del gateway (puertos salientes a AWS IoT)
-  - Pendientes: `gw_jaen_agua`, `gw_autoconsumo_jaen`
+  - Pendientes: `gw_autoconsumo_jaen`

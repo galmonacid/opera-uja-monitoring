@@ -1,4 +1,4 @@
-# 04 — Inventario de variables (96 mapeadas) + variables calculadas y fórmulas
+# 04 — Inventario de variables (101 mapeadas) + variables calculadas y fórmulas
 
 ## 0) Convenciones
 
@@ -38,7 +38,7 @@ Ejemplos:
 
 ---
 
-## 1) VARIABLES MAPEADAS (directas desde gateways) — TOTAL: 100
+## 1) VARIABLES MAPEADAS (directas desde gateways) — TOTAL: 101
 
 ### 1.1 Jaén — Consumo energía (25)
 Gateway: `gw_jaen_energia`
@@ -95,37 +95,38 @@ Notas (operador):
   - Si el resultado A0 es negativo, indica exportación a red.
 - B3 sin datos hasta sustitución del medidor.
 
-### 1.2 Jaén — Consumo agua (25)
+### 1.2 Jaén — Consumo agua (26)
 Gateway: `gw_jaen_agua`
-`data.var` esperado: `m3` (confirmar)
+`data.var` esperado: `m3` (catálogo observado)
 
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 29 | uja.jaen.agua.consumo.edificio_a0.v_m3 | m³ | `Edificio A0::m3` |
-| 30 | uja.jaen.agua.consumo.edificio_a1.v_m3 | m³ | `Edificio A1::m3` |
-| 31 | uja.jaen.agua.consumo.edificio_a2.v_m3 | m³ | `Edificio A2::m3` |
-| 32 | uja.jaen.agua.consumo.edificio_a3.v_m3 | m³ | `Edificio A3::m3` |
-| 33 | uja.jaen.agua.consumo.edificio_a4.v_m3 | m³ | `Edificio A4::m3` |
-| 34 | uja.jaen.agua.consumo.edificio_b1.v_m3 | m³ | `Edificio B1::m3` |
-| 35 | uja.jaen.agua.consumo.edificio_b2.v_m3 | m³ | `Edificio B2::m3` |
-| 36 | uja.jaen.agua.consumo.edificio_b3.v_m3 | m³ | `Edificio B3::m3` |
-| 37 | uja.jaen.agua.consumo.edificio_b4.v_m3 | m³ | `Edificio B4::m3` |
-| 38 | uja.jaen.agua.consumo.edificio_b5.v_m3 | m³ | `Edificio B5::m3` |
-| 39 | uja.jaen.agua.consumo.edificio_c1.v_m3 | m³ | `Edificio C1::m3` |
-| 40 | uja.jaen.agua.consumo.edificio_c2.v_m3 | m³ | `Edificio C2::m3` |
-| 41 | uja.jaen.agua.consumo.edificio_c3.v_m3 | m³ | `Edificio C3::m3` |
-| 42 | uja.jaen.agua.consumo.edificio_c5.v_m3 | m³ | `Edificio C5::m3` |
-| 43 | uja.jaen.agua.consumo.edificio_c6.v_m3 | m³ | `Edificio C6::m3` |
-| 44 | uja.jaen.agua.consumo.edificio_d1.v_m3 | m³ | `Edificio D1::m3` |
-| 45 | uja.jaen.agua.consumo.d1_caf.v_m3 | m³ | `D1 Cafeteria::m3` |
-| 46 | uja.jaen.agua.consumo.edificio_d2.v_m3 | m³ | `Edificio D2::m3` |
-| 47 | uja.jaen.agua.consumo.edificio_d3.v_m3 | m³ | `Edificio D3::m3` |
-| 48 | uja.jaen.agua.consumo.edificio_d4.v_m3 | m³ | `Edificio D4::m3` |
-| 49 | uja.jaen.agua.consumo.plaz_pueblos.v_m3 | m³ | `Plaz. Pueblos::m3` |
-| 50 | uja.jaen.agua.consumo.um_c4.v_m3 | m³ | `Edificio U.M. C4::m3` |
-| 51 | uja.jaen.agua.consumo.polideportivo.v_m3 | m³ | `P. Polideportivo::m3` |
-| 52 | uja.jaen.agua.consumo.c_futbol.v_m3 | m³ | `C.futbol::m3` |
-| 53 | uja.jaen.agua.consumo.ae_magisterio.v_m3 | m³ | `A.E. Magisterio::m3` |
+| 29 | uja.jaen.agua.consumo.edificio_a0.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_A0::m3` |
+| 30 | uja.jaen.agua.consumo.edificio_a1.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_A1::m3` |
+| 31 | uja.jaen.agua.consumo.edificio_a2.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_A2::m3` |
+| 32 | uja.jaen.agua.consumo.edificio_a3.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_A3::m3` |
+| 33 | uja.jaen.agua.consumo.edificio_a4.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_A4::m3` |
+| 34 | uja.jaen.agua.consumo.edificio_b1.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_B1::m3` |
+| 35 | uja.jaen.agua.consumo.edificio_b2.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_B2::m3` |
+| 36 | uja.jaen.agua.consumo.edificio_b3.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_B3::m3` |
+| 37 | uja.jaen.agua.consumo.edificio_b4.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_B4::m3` |
+| 38 | uja.jaen.agua.consumo.edificio_b5.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_B5::m3` |
+| 39 | uja.jaen.agua.consumo.edificio_c1.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_C1::m3` |
+| 39b | uja.jaen.agua.consumo.edificio_c1_garaje.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_C1_Garaje::m3` |
+| 40 | uja.jaen.agua.consumo.edificio_c2.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_C2::m3` |
+| 41 | uja.jaen.agua.consumo.edificio_c3.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_C3::m3` |
+| 42 | uja.jaen.agua.consumo.edificio_c5.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_C5::m3` |
+| 43 | uja.jaen.agua.consumo.edificio_c6.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_C6::m3` |
+| 44 | uja.jaen.agua.consumo.edificio_d1.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_D1::m3` |
+| 45 | uja.jaen.agua.consumo.d1_caf.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_D1_Cafeteria::m3` |
+| 46 | uja.jaen.agua.consumo.edificio_d2.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_D2::m3` |
+| 47 | uja.jaen.agua.consumo.edificio_d3.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_D3::m3` |
+| 48 | uja.jaen.agua.consumo.edificio_d4.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_D4::m3` |
+| 49 | uja.jaen.agua.consumo.plaz_pueblos.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_Plaza_pueblos::m3` |
+| 50 | uja.jaen.agua.consumo.um_c4.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_C4::m3` |
+| 51 | uja.jaen.agua.consumo.polideportivo.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_Polideportivo::m3` |
+| 52 | uja.jaen.agua.consumo.c_futbol.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_Campo_Futbol::m3` |
+| 53 | uja.jaen.agua.consumo.ae_magisterio.v_m3 | m³ | `UJA-Agua-Opera--m3.Edif_Magisterio::m3` |
 
 ### 1.3 Linares — Agua (8) + Energía (5) = 13
 Gateway: `gw_linares_mix`

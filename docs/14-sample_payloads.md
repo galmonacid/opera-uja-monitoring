@@ -141,3 +141,33 @@ Notas observadas:
   ]
 }
 ```
+
+### 14.4 Jaén consumo agua (gw_jaen_agua)
+
+Notas observadas:
+- `meter.name` llega como `UJA-Agua-Opera--m3.Edif_<asset>`.
+- `data.var` llega como `m3`.
+- Son contadores incremental totalizador (consumo diario por diferencia fin-inicio).
+
+```json
+{
+  "ver": "3.0.1",
+  "sn": "<REDACTED>",
+  "mac": "<REDACTED>",
+  "ip": "<REDACTED>",
+  "tz": "Europe/Paris",
+  "opt": "insert_data",
+  "meter": [
+    {
+      "name": "UJA-Agua-Opera--m3.Edif_A0",
+      "time": 1770351480,
+      "data": [{ "var": "m3", "unit": "m3", "value": 1234.5 }]
+    },
+    {
+      "name": "UJA-Agua-Opera--m3.Edif_D1_Cafeteria",
+      "time": 1770351480,
+      "data": [{ "var": "m3", "unit": "m3", "value": 234.1 }]
+    }
+  ]
+}
+```
