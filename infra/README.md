@@ -8,6 +8,7 @@ Templates:
 - `infra/iot-rule-gw-jaen-energia.yaml`
 - `infra/iot-rule-gw-jaen-agua.yaml`
 - `infra/iot-rule-gw-linares-mix.yaml`
+- `infra/iot-rule-gw-autoconsumo-jaen.yaml`
 - `infra/iot-rule-gw-endesa-linares.yaml`
 - `infra/iot-rule-gw-endesa-jaen.yaml`
 
@@ -26,6 +27,11 @@ aws cloudformation deploy \
 aws cloudformation deploy \
   --stack-name uja-iot-rule-gw-linares-mix \
   --template-file infra/iot-rule-gw-linares-mix.yaml \
+  --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
+
+aws cloudformation deploy \
+  --stack-name uja-iot-rule-gw-autoconsumo-jaen \
+  --template-file infra/iot-rule-gw-autoconsumo-jaen.yaml \
   --parameter-overrides IngestLambdaName=lambda_ingest_telemetry
 
 aws cloudformation deploy \
@@ -84,6 +90,9 @@ python3 scripts/load_gateway_map.py \
   --table gateway_variable_map
 python3 scripts/load_gateway_map.py \
   --file seeds/gateway_variable_map_gw_linares_mix.csv \
+  --table gateway_variable_map
+python3 scripts/load_gateway_map.py \
+  --file seeds/gateway_variable_map_gw_autoconsumo_jaen.csv \
   --table gateway_variable_map
 ```
 

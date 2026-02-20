@@ -1,0 +1,41 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: IoT Rule for gw_autoconsumo_jaen to forward telemetry to Lambda.
+
+Parameters:
+  IngestLambdaName:
+    Type: String
+    Default: lambda_ingest_telemetry
+    Description: Lambda function name for lambda_ingest_telemetry.
+  RuleName:
+    Type: String
+    Default: uja_ingest_gw_autoconsumo_jaen
+    Description: IoT Rule name.
+  Topic:
+    Type: String
+    Default: uja/jaen/produccion/fv_autoconsumo/gw_autoconsumo_jaen
+    Description: MQTT topic for Jaen self-consumption PV gateway.
+
+Resources:
+  IngestTopicRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      RuleName: !Ref RuleName
+      TopicRulePayload:
+        AwsIotSqlVersion: "2016-03-23"
+        RuleDisabled: false
+        Sql: !Sub "SELECT *, topic() AS topic FROM '${Topic}'"
+        Actions:
+          - Lambda:
+              FunctionArn: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${IngestLambdaName}"
+
+  IngestLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref IngestLambdaName
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt IngestTopicRule.Arn
+
+Outputs:
+  RuleNameOutput:
+    Value: !Ref RuleName

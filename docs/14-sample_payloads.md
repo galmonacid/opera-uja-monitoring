@@ -171,3 +171,34 @@ Notas observadas:
   ]
 }
 ```
+
+### 14.5 Jaén FV autoconsumo UNIVER (gw_autoconsumo_jaen)
+
+Notas observadas:
+- `meter.name` observado: `OPERA-UNIVER--Autocon--FV.UJA`.
+- `data.var` observado incluye `UJA.Tot_FV_kW sys`, `UJA.Tot_FV_kWh`, `UJA.Pérgola_kW sys`, `UJA.B5_Radiación`, etc.
+- La potencia en CT (`UJA.Tot_FV_kW sys`) no tiene por qué coincidir exactamente con la suma de inversores.
+
+```json
+{
+  "ver": "3.0.1",
+  "sn": "<REDACTED>",
+  "mac": "<REDACTED>",
+  "ip": "<REDACTED>",
+  "tz": "Europe/Paris",
+  "opt": "insert_data",
+  "meter": [
+    {
+      "name": "OPERA-UNIVER--Autocon--FV.UJA",
+      "time": 1770351480,
+      "data": [
+        { "var": "UJA.Temperatura", "unit": "°C", "value": 19.4 },
+        { "var": "UJA.Tot_FV_kW sys", "unit": "kW", "value": 72.8 },
+        { "var": "UJA.Tot_FV_kWh", "unit": "kWh", "value": 418922.4 },
+        { "var": "UJA.Pérgola_kW sys", "unit": "kW", "value": 11.2 },
+        { "var": "UJA.B5_Radiación", "unit": "W/m²", "value": 612.5 }
+      ]
+    }
+  ]
+}
+```

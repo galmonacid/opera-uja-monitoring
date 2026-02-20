@@ -95,10 +95,10 @@ Detalle por gateway:
   - [COMPLETO] IoT Rule desplegada
   - [EN CURSO] Datos en DynamoDB/Timestream (ya hay datos, validar estabilidad)
 - gw_autoconsumo_jaen:
-  - [PENDIENTE] Confirmar catálogo `meter.name`/`data.var`
-  - [PENDIENTE] `gateway_variable_map` completo
-  - [PENDIENTE] IoT Rule desplegada
-  - [PENDIENTE] Datos en DynamoDB/Timestream
+  - [COMPLETO] Catálogo observado (`OPERA-UNIVER--Autocon--FV.UJA`, payload operador)
+  - [COMPLETO] `gateway_variable_map` completo (15 filas con variantes acentuadas/no acentuadas)
+  - [COMPLETO] IoT Rule preparada (template + CD)
+  - [EN CURSO] Datos en DynamoDB/Timestream (pendiente validar escritura estable tras despliegue)
 
 ## Fase 3B — Frontend ampliado (resto secciones) (1-2 semanas)
 Tareas:
@@ -108,6 +108,6 @@ Tareas:
 
 ## Pendientes externos (bloqueantes suaves)
 - [EN CURSO] Catálogo meter.name/data.var por gateway para cerrar mapeo al 100% (ver `03-payload_contract.md` y `04-variables.md`)
-  - Pendientes: `gw_autoconsumo_jaen`
+  - Pendientes: ninguno
 - [EN CURSO] Confirmación de conectividad/red del gateway (puertos salientes a AWS IoT)
-  - Pendientes: `gw_autoconsumo_jaen`
+  - Pendientes: ninguno

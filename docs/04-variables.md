@@ -1,4 +1,4 @@
-# 04 — Inventario de variables (101 mapeadas) + variables calculadas y fórmulas
+# 04 — Inventario de variables (102 mapeadas) + variables calculadas y fórmulas
 
 ## 0) Convenciones
 
@@ -38,7 +38,7 @@ Ejemplos:
 
 ---
 
-## 1) VARIABLES MAPEADAS (directas desde gateways) — TOTAL: 101
+## 1) VARIABLES MAPEADAS (directas desde gateways) — TOTAL: 102
 
 ### 1.1 Jaén — Consumo energía (25)
 Gateway: `gw_jaen_energia`
@@ -196,21 +196,22 @@ Gateway: `gw_endesa_linares`
 | 89 | uja.linares.fv.endesa.rad01.g_wm2 | W/m² | `LIN_OPERA_FV.Lin::Radiación` |
 | 90 | uja.linares.fv.endesa.temp01.t_c | °C | `LIN_OPERA_FV.Lin::Temperatura` |
 
-### 1.6 FV Autoconsumo Jaén (10)
+### 1.6 FV Autoconsumo Jaén (11)
 Gateway: `gw_autoconsumo_jaen`
 
 | # | RT_ID | Unidad | Mapeo (source_key) |
 |---:|---|---|---|
-| 91 | uja.jaen.fv.auto.inv01.p_ac_kw | kW | `<INV01_METER>::kW sys` |
-| 92 | uja.jaen.fv.auto.inv02.p_ac_kw | kW | `<INV02_METER>::kW sys` |
-| 93 | uja.jaen.fv.auto.inv03.p_ac_kw | kW | `<INV03_METER>::kW sys` |
-| 94 | uja.jaen.fv.auto.inv04.p_ac_kw | kW | `<INV04_METER>::kW sys` |
-| 95 | uja.jaen.fv.auto.inv05.p_ac_kw | kW | `<INV05_METER>::kW sys` |
-| 96 | uja.jaen.fv.auto.ct_total.p_kw | kW | `<CT_METER>::kW sys` |
-| 97 | uja.jaen.fv.auto.rad01.g_wm2 | W/m² | `<RAD01_METER>::Irradiación transitoria` |
-| 98 | uja.jaen.fv.auto.rad02.g_wm2 | W/m² | `<RAD02_METER>::Irradiación transitoria` |
-| 99 | uja.jaen.fv.auto.rad03.g_wm2 | W/m² | `<RAD03_METER>::Irradiación transitoria` |
-| 100 | uja.jaen.fv.auto.rad04.g_wm2 | W/m² | `<RAD04_METER>::Irradiación transitoria` |
+| 91 | uja.jaen.fv.auto.temp01.t_c | °C | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Temperatura` |
+| 92 | uja.jaen.fv.auto.ct_total.p_kw | kW | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Tot_FV_KW sys` |
+| 93 | uja.jaen.fv.auto.ct_total.e_kwh | kWh | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Tot_FV_kWh` |
+| 94 | uja.jaen.fv.auto.pergola.p_ac_kw | kW | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Pérgola_KW sys` |
+| 95 | uja.jaen.fv.auto.pergola_rad.g_wm2 | W/m² | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Perg_Radiación` |
+| 96 | uja.jaen.fv.auto.parking_p4.p_ac_kw | kW | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Parking_KW sys` |
+| 97 | uja.jaen.fv.auto.b5_inv1.p_ac_kw | kW | `OPERA-UNIVER--Autocon--FV.UJA::UJA.B5_Inv1_KW sys` |
+| 98 | uja.jaen.fv.auto.b5_inv2.p_ac_kw | kW | `OPERA-UNIVER--Autocon--FV.UJA::UJA.B5_Inv2_KW sys` |
+| 99 | uja.jaen.fv.auto.b5_rad.g_wm2 | W/m² | `OPERA-UNIVER--Autocon--FV.UJA::UJA.B5_Radiación` |
+| 100 | uja.jaen.fv.auto.fachada.p_ac_kw | kW | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Fachada_KW sys` |
+| 101 | uja.jaen.fv.auto.fachada_rad.g_wm2 | W/m² | `OPERA-UNIVER--Autocon--FV.UJA::UJA.Fachada_Radiación` |
 
 ---
 ## 2) VARIABLES CALCULADAS — definiciones y fórmulas exactas
@@ -222,7 +223,7 @@ Gateway: `gw_autoconsumo_jaen`
 | uja.linares.energia.consumo.total.p_kw | kW | `lab_sg_t1 + lab_sg_t2 + urbanizacion + aulario_departamental + polideportivo` |
 | uja.jaen.fv.endesa.total.p_kw | kW | Σ `uja.jaen.fv.endesa.inv01..inv12.p_ac_kw` |
 | uja.linares.fv.endesa.total.p_kw | kW | Σ `uja.linares.fv.endesa.inv01..inv03.p_ac_kw` |
-| uja.jaen.fv.auto.total.p_kw | kW | Σ `uja.jaen.fv.auto.inv01..inv05.p_ac_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw` + `uja.jaen.fv.auto.edificio_c4.p_kw` + `uja.jaen.fv.auto.magisterio.p_kw` |
+| uja.jaen.fv.auto.total.p_kw | kW | `uja.jaen.fv.auto.ct_total.p_kw` |
 | uja.jaen.fv.total.p_kw | kW | `uja.jaen.fv.endesa.total.p_kw + uja.jaen.fv.auto.total.p_kw` |
 
 ### 2.2 Energía (kWh) por integración
