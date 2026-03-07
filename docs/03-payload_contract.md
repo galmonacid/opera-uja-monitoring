@@ -46,10 +46,10 @@ Requisitos del payload para que la solución funcione:
 - `meter.time` presente.
 - `data.var`, `data.unit`, `data.value` presentes.
 - `meter.name` estable en el tiempo.
- - Valores inválidos (sentinelas) se descartan en ingestión.
+- Valores inválidos (sentinelas) se normalizan a `0` en ingestión.
 
 ### 5.1 Filtro de valores inválidos (sentinelas)
-Se descartan valores no finitos o fuera de rango razonable (`abs(value) > 1e6` por defecto).
+Se normalizan a `0` los valores no finitos o fuera de rango razonable (`abs(value) > 1e6` por defecto).
 Este umbral es configurable vía `MAX_VALID_VALUE`.
 
 ## 6) Lista de datos a solicitar al operador (para cerrar mapeo)

@@ -117,7 +117,7 @@ Respuesta con `metric`:
 }
 
 Notas:
-- Se filtran valores inválidos/sentinela en Timestream (por defecto `abs(value) > 1e6`).
+- En ingestión, los valores inválidos/sentinela se normalizan a `0`; las consultas históricas mantienen límites de seguridad sobre Timestream (por defecto `abs(value) > 1e6`).
 - `gateway_id` permite aislar gateways que comparten prefijo de RT_ID, como `gw_jaen_energia` y `gw_autoconsumo_jaen`.
 - En Jaén, el balance por defecto usa demanda total campus, FV Endesa por suma de inversores y FV autoconsumo por `ct_total`.
 - En modo `scope`, `las_lagunillas` usa solo A0-A4, B1-B5, C1-C3/C5/C6, D1-D4 y `carga_vhe`; excluye `um_c4`, `ae_magisterio`, `apartamentos_universitarios`, `residencia_domingo_savio` y `polideportivo`.

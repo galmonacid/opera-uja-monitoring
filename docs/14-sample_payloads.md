@@ -117,7 +117,7 @@ Notas observadas:
 Notas observadas:
 - `meter.name` llega como `CCTL-TOTAL.<...>`.
 - `data.var` llega como `m3` (agua) y `kW sys` (energía, normalizado a `KW sys` en ingestión).
-- Se observan sentinelas/valores corruptos en agua (ej. `8.33e+14`), descartados por el filtro (`abs(value) > 1e6`).
+- Se observan sentinelas/valores corruptos en agua (ej. `8.33e+14`), normalizados a `0` en ingestión (`abs(value) > 1e6`).
 
 ```json
 {

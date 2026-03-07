@@ -209,12 +209,18 @@ def extract_measurements(payload):
                 value_f = float(value)
             except (TypeError, ValueError):
                 continue
+            source_key = f"{meter_name}::{var}"
             unit_norm = unit.lower() if isinstance(unit, str) else ""
             max_value = MAX_VALID_VALUE_KWH if unit_norm == "kwh" else MAX_VALID_VALUE
             if not math.isfinite(value_f) or abs(value_f) > max_value:
-                continue
+                logger.warning(
+                    "out-of-range measurement normalized to 0: source_key=%s value=%s unit=%s",
+                    source_key,
+                    value,
+                    unit,
+                )
+                value_f = 0.0
 
-            source_key = f"{meter_name}::{var}"
             measurements.append(
                 {
                     "source_key": source_key,
