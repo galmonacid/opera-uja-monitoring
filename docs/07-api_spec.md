@@ -27,18 +27,24 @@ Respuesta (ejemplo):
 }
 
 ### GET /v1/kpis
-KPIs de balance (por campus).
+KPIs de balance para los paneles del dashboard principal.
 
 Query params:
-- campus=jaen|linares
+- scope=las_lagunillas|ctl_linares
 
 Respuesta:
 {
+  "scope":"las_lagunillas",
   "campus":"jaen",
+  "label":"Campus Las Lagunillas",
+  "status":"complete",
+  "missing_sources":[],
   "ts_event":...,
   "kpis":[
-    {"kpi":"autoconsumo_kw","value":...,"unit":"kW"},
+    {"kpi":"demanda_kw","value":...,"unit":"kW"},
+    {"kpi":"fv_kw","value":...,"unit":"kW"},
     {"kpi":"red_kw","value":...,"unit":"kW"},
+    {"kpi":"autoconsumo_kw","value":...,"unit":"kW"},
     {"kpi":"autoconsumo_pct","value":...,"unit":"%"}
   ]
 }
@@ -67,11 +73,27 @@ Respuesta:
 Serie temporal (24h) para grafica de balance energetico.
 
 Query params:
+- scope=las_lagunillas|ctl_linares (opcional, modo dashboard)
 - campus=jaen|linares
 - metric=energia_consumo|agua_consumo|fv_endesa|fv_auto (opcional)
 - rt_prefix=uja.... (opcional, modo tecnico)
 
-Respuesta por defecto (sin `metric`, balance campus):
+Respuesta por scope (modo dashboard principal):
+{
+  "scope":"las_lagunillas",
+  "campus":"jaen",
+  "label":"Campus Las Lagunillas",
+  "status":"complete",
+  "missing_sources":[],
+  "interval_minutes":5,
+  "unit":"kW",
+  "series":[
+    {"ts":173...,"demand":123.4,"pv":45.6},
+    ...
+  ]
+}
+
+Respuesta por defecto (sin `metric` ni `scope`, balance campus):
 {
   "campus":"jaen",
   "interval_minutes":5,
@@ -98,6 +120,10 @@ Notas:
 - Se filtran valores inválidos/sentinela en Timestream (por defecto `abs(value) > 1e6`).
 - `gateway_id` permite aislar gateways que comparten prefijo de RT_ID, como `gw_jaen_energia` y `gw_autoconsumo_jaen`.
 - En Jaén, el balance por defecto usa demanda total campus, FV Endesa por suma de inversores y FV autoconsumo por `ct_total`.
+- En modo `scope`, `las_lagunillas` usa solo A0-A4, B1-B5, C1-C3/C5/C6, D1-D4 y `carga_vhe`; excluye `um_c4`, `ae_magisterio`, `apartamentos_universitarios`, `residencia_domingo_savio` y `polideportivo`.
+- En modo `scope`, la FV de `las_lagunillas` = suma de inversores Endesa Jaen + `uja.jaen.fv.auto.ct_total.p_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw`.
+- En modo `scope`, `ctl_linares` usa `lab_sg_t1`, `lab_sg_t2`, `urbanizacion`, `aulario_departamental`, `polideportivo` y FV desde `uja.linares.fv.endesa.ct_total.p_kw`.
+- `status` puede ser `complete`, `partial` o `empty`. Si faltan fuentes obligatorias, `missing_sources` lista los identificadores afectados y la serie agregada se devuelve vacía.
 - Para `agua_consumo`, la serie 24h devuelve consumo por intervalo a partir de contadores acumulados (unidad `m3`).
 - Si `monthly` no está materializado todavía en DynamoDB, la API puede reconstruirlo a partir de `daily`.
 

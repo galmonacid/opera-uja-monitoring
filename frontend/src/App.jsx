@@ -13,10 +13,7 @@ const number = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
 });
 
-const CAMPUS_DEMAND_PREFIX = "uja.jaen.energia.consumo.";
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
-const CAMPUS_PV_ENDESA_PREFIX = "uja.jaen.fv.endesa.";
-const CAMPUS_PV_AUTO_TOTAL_RT_ID = "uja.jaen.fv.auto.ct_total.p_kw";
 
 const MAP_POINTS = [
   { label: "A0", rtId: "uja.jaen.energia.consumo.edificio_a0.p_kw", x: 79, y: 15 },
@@ -32,7 +29,6 @@ const MAP_POINTS = [
   { label: "C1", rtId: "uja.jaen.energia.consumo.edificio_c1.p_kw", x: 68, y: 55 },
   { label: "C2", rtId: "uja.jaen.energia.consumo.edificio_c2.p_kw", x: 61, y: 63 },
   { label: "C3", rtId: "uja.jaen.energia.consumo.edificio_c3.p_kw", x: 49, y: 70 },
-  { label: "C4", rtId: "uja.jaen.energia.consumo.um_c4.p_kw", x: 45, y: 78 },
   { label: "C5", rtId: "uja.jaen.energia.consumo.edificio_c5.p_kw", x: 36, y: 79 },
   { label: "C6", rtId: "uja.jaen.energia.consumo.edificio_c6.p_kw", x: 27, y: 85 },
   { label: "D1", rtId: "uja.jaen.energia.consumo.edificio_d1.p_kw", x: 90, y: 54 },
@@ -40,11 +36,19 @@ const MAP_POINTS = [
   { label: "D3", rtId: "uja.jaen.energia.consumo.edificio_d3.p_kw", x: 56, y: 74 },
   { label: "D4", rtId: "uja.jaen.energia.consumo.edificio_d4.p_kw", x: 31, y: 95 },
   { label: "Carga VHE", rtId: CAMPUS_VHE_RT_ID, x: 26, y: 67 },
-  { label: "Apartamentos", rtId: "uja.jaen.energia.consumo.apartamentos_universitarios.p_kw", x: 38, y: 6 },
-  { label: "Residencia", rtId: "uja.jaen.energia.consumo.residencia_domingo_savio.p_kw", x: 62, y: 6 },
-  { label: "Polideportivo", rtId: "uja.jaen.energia.consumo.polideportivo.p_kw", x: 48, y: 15 },
-  { label: "Magisterio", rtId: "uja.jaen.energia.consumo.ae_magisterio.p_kw", x: 60, y: 95 },
 ];
+const DASHBOARD_SCOPES = [
+  { id: "las_lagunillas", title: "Campus Las Lagunillas" },
+  { id: "ctl_linares", title: "Campus CTL Linares" },
+];
+const MISSING_SOURCE_LABELS = {
+  las_lagunillas_demand: "demanda Las Lagunillas",
+  jaen_fv_endesa_total: "FV Endesa Jaen",
+  jaen_fv_auto_univer: "FV autoconsumo UNIVER",
+  jaen_fv_auto_a0: "FV edificio A0",
+  ctl_linares_demand: "demanda CTL Linares",
+  linares_fv_endesa_total: "FV Endesa Linares",
+};
 
 const GATEWAYS = [
   {
@@ -115,33 +119,6 @@ const GATEWAYS = [
   },
 ];
 
-const calcTotals = (items) => {
-  let demand = 0;
-  let pv = 0;
-
-  items.forEach((item) => {
-    const value = Number(item.value) || 0;
-    if (item.rt_id?.startsWith(CAMPUS_DEMAND_PREFIX) && item.rt_id?.endsWith(".p_kw")) {
-      demand += value;
-    }
-    if (
-      item.rt_id?.startsWith(CAMPUS_PV_ENDESA_PREFIX) &&
-      item.rt_id?.endsWith(".p_ac_kw")
-    ) {
-      pv += value;
-    }
-    if (item.rt_id === CAMPUS_PV_AUTO_TOTAL_RT_ID) {
-      pv += value;
-    }
-  });
-
-  return {
-    demand,
-    pv,
-    grid: Math.max(demand - pv, 0),
-  };
-};
-
 const formatTs = (ts) => {
   if (!ts && ts !== 0) return "--";
   const value = Number(ts);
@@ -177,6 +154,44 @@ const aggregateLabels = (metric) => {
     return { daily: "Producción diaria", monthly: "Producción mensual" };
   }
   return { daily: "Energía diaria", monthly: "Energía mensual" };
+};
+
+const readKpiValue = (data, kpi) =>
+  data?.kpis?.find((item) => item.kpi === kpi)?.value ?? null;
+
+const uniq = (values) => Array.from(new Set(values));
+
+const resolveDashboardStatus = (kpisState, seriesState) => {
+  if (kpisState?.status === "error" || seriesState?.status === "error") {
+    return { kind: "error", label: "Error" };
+  }
+  if (kpisState?.status === "loading" || seriesState?.status === "loading") {
+    return { kind: "loading", label: "Cargando" };
+  }
+  const apiStatuses = [kpisState?.data?.status, seriesState?.data?.status].filter(Boolean);
+  if (!apiStatuses.length) {
+    return { kind: "idle", label: "Sin datos" };
+  }
+  if (apiStatuses.includes("partial")) {
+    return { kind: "partial", label: "Datos parciales" };
+  }
+  if (apiStatuses.every((status) => status === "empty")) {
+    return { kind: "empty", label: "Sin datos" };
+  }
+  if (apiStatuses.every((status) => status === "complete")) {
+    return { kind: "complete", label: "Datos completos" };
+  }
+  return { kind: "idle", label: "Sin datos" };
+};
+
+const buildMissingSourcesText = (kpisState, seriesState) => {
+  const ids = uniq([
+    ...(kpisState?.data?.missing_sources || []),
+    ...(seriesState?.data?.missing_sources || []),
+  ]);
+  if (!ids.length) return null;
+  const labels = ids.map((id) => MISSING_SOURCE_LABELS[id] || id);
+  return `Datos incompletos: faltan ${labels.join(", ")}.`;
 };
 
 const AreaChart = ({ series }) => {
@@ -308,22 +323,41 @@ const IconGrid = () => (
   </svg>
 );
 
+const IconAutoconsumo = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M12 3a9 9 0 1 0 9 9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+    <path
+      d="M12 12l5-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 function App() {
-  const [dashboardNow] = useState(() => Math.floor(Date.now() / 1000));
   const [route, setRoute] = useState(() => window.location.hash || "#/");
   const [realtime, setRealtime] = useState({
     status: "idle",
     data: null,
     error: null,
   });
-  const [series24h, setSeries24h] = useState({
-    status: "idle",
-    data: null,
-    error: null,
-  });
-  const [_aggregates, setAggregates] = useState({
-    daily: { status: "idle", data: null, error: null },
-    monthly: { status: "idle", data: null, error: null },
+  const [dashboard, setDashboard] = useState(() => {
+    const initial = {};
+    DASHBOARD_SCOPES.forEach((scope) => {
+      initial[scope.id] = {
+        kpis: { status: "idle", data: null, error: null },
+        series: { status: "idle", data: null, error: null },
+      };
+    });
+    return initial;
   });
   const [validation, setValidation] = useState(() => {
     const initial = {};
@@ -365,33 +399,58 @@ function App() {
     }
   };
 
-  const fetchSeries24h = async () => {
+  const fetchDashboardKpis = async (scope) => {
     try {
-      setSeries24h((prev) => ({ ...prev, status: "loading", error: null }));
-      const payload = await fetchWithFallback("/series/24h?campus=jaen");
-      setSeries24h({ status: "ready", data: payload, error: null });
+      setDashboard((prev) => ({
+        ...prev,
+        [scope.id]: {
+          ...prev[scope.id],
+          kpis: { ...prev[scope.id].kpis, status: "loading", error: null },
+        },
+      }));
+      const payload = await fetchWithFallback(`/kpis?scope=${scope.id}`);
+      setDashboard((prev) => ({
+        ...prev,
+        [scope.id]: {
+          ...prev[scope.id],
+          kpis: { status: "ready", data: payload, error: null },
+        },
+      }));
     } catch (error) {
-      setSeries24h({ status: "error", data: null, error: error.message });
+      setDashboard((prev) => ({
+        ...prev,
+        [scope.id]: {
+          ...prev[scope.id],
+          kpis: { status: "error", data: null, error: error.message },
+        },
+      }));
     }
   };
 
-  const fetchAggregates = async (period) => {
+  const fetchDashboardSeries = async (scope) => {
     try {
-      setAggregates((prev) => ({
+      setDashboard((prev) => ({
         ...prev,
-        [period]: { ...prev[period], status: "loading", error: null },
+        [scope.id]: {
+          ...prev[scope.id],
+          series: { ...prev[scope.id].series, status: "loading", error: null },
+        },
       }));
-      const payload = await fetchWithFallback(
-        `/aggregates/${period}?campus=jaen&metric=energia_consumo&asset=total`
-      );
-      setAggregates((prev) => ({
+      const payload = await fetchWithFallback(`/series/24h?scope=${scope.id}`);
+      setDashboard((prev) => ({
         ...prev,
-        [period]: { status: "ready", data: payload, error: null },
+        [scope.id]: {
+          ...prev[scope.id],
+          series: { status: "ready", data: payload, error: null },
+        },
       }));
     } catch (error) {
-      setAggregates((prev) => ({
+      setDashboard((prev) => ({
         ...prev,
-        [period]: { status: "error", data: null, error: error.message },
+        [scope.id]: {
+          ...prev[scope.id],
+          series: { status: "error", data: null, error: error.message },
+        },
       }));
     }
   };
@@ -520,18 +579,26 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetchSeries24h();
-    const interval = setInterval(fetchSeries24h, 300000);
+    DASHBOARD_SCOPES.forEach((scope) => {
+      fetchDashboardKpis(scope);
+    });
+    const interval = setInterval(() => {
+      DASHBOARD_SCOPES.forEach((scope) => {
+        fetchDashboardKpis(scope);
+      });
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    fetchAggregates("daily");
-    fetchAggregates("monthly");
+    DASHBOARD_SCOPES.forEach((scope) => {
+      fetchDashboardSeries(scope);
+    });
     const interval = setInterval(() => {
-      fetchAggregates("daily");
-      fetchAggregates("monthly");
-    }, 600000);
+      DASHBOARD_SCOPES.forEach((scope) => {
+        fetchDashboardSeries(scope);
+      });
+    }, 300000);
     return () => clearInterval(interval);
   }, []);
 
@@ -551,6 +618,13 @@ function App() {
     });
   }, [route]);
 
+  const refreshDashboard = () => {
+    DASHBOARD_SCOPES.forEach((scope) => {
+      fetchDashboardKpis(scope);
+      fetchDashboardSeries(scope);
+    });
+  };
+
   const refreshValidation = () => {
     GATEWAYS.forEach((gateway) => {
       fetchGatewayLatest(gateway);
@@ -560,20 +634,7 @@ function App() {
     });
   };
 
-  const realtimeItems = realtime.data?.items || [];
-  const { demand, pv, grid } = useMemo(
-    () => calcTotals(realtimeItems),
-    [realtimeItems]
-  );
-
-  const chartSeries = useMemo(() => {
-    const fromApi = series24h.data?.series || [];
-    if (fromApi.length) return fromApi;
-    return [
-      { ts: dashboardNow - 86400, demand, pv },
-      { ts: dashboardNow, demand, pv },
-    ];
-  }, [dashboardNow, series24h.data, demand, pv]);
+  const realtimeItems = useMemo(() => realtime.data?.items || [], [realtime.data]);
 
   const realtimeMap = useMemo(() => {
     const map = new Map();
@@ -722,6 +783,106 @@ function App() {
     );
   };
 
+  const buildDashboardPanel = (scope) => {
+    const state = dashboard[scope.id] || {};
+    const panelStatus = resolveDashboardStatus(state.kpis || {}, state.series || {});
+    const isComplete = panelStatus.kind === "complete";
+    const warningText = buildMissingSourcesText(state.kpis || {}, state.series || {});
+    const errorText = state.kpis?.error || state.series?.error || "api_error";
+    const title = state.kpis?.data?.label || state.series?.data?.label || scope.title;
+    const chartSeries = isComplete ? state.series?.data?.series || [] : [];
+    const demand = isComplete ? readKpiValue(state.kpis?.data, "demanda_kw") : null;
+    const pv = isComplete ? readKpiValue(state.kpis?.data, "fv_kw") : null;
+    const grid = isComplete ? readKpiValue(state.kpis?.data, "red_kw") : null;
+    const autoconsumoPct = isComplete
+      ? readKpiValue(state.kpis?.data, "autoconsumo_pct")
+      : null;
+
+    let chartEmptyText = "Sin datos para las últimas 24 horas.";
+    if (panelStatus.kind === "loading") {
+      chartEmptyText = "Cargando serie de las últimas 24 horas...";
+    } else if (panelStatus.kind === "partial") {
+      chartEmptyText = warningText || "Faltan fuentes requeridas para reconstruir la curva.";
+    } else if (panelStatus.kind === "error") {
+      chartEmptyText = `Error: ${errorText}`;
+    }
+
+    const formatValue = (value, unit) =>
+      value == null ? "--" : `${number.format(value)} ${unit}`;
+
+    return (
+      <article key={scope.id} className={`dashboard-panel panel-${panelStatus.kind}`}>
+        <div className="dashboard-panel-header">
+          <div>
+            <h2 className="dashboard-panel-title">{title}</h2>
+            <div className={`dashboard-status status-${panelStatus.kind}`}>
+              {panelStatus.label}
+            </div>
+          </div>
+          <button
+            className="api-refresh"
+            type="button"
+            onClick={() => {
+              fetchDashboardKpis(scope);
+              fetchDashboardSeries(scope);
+            }}
+          >
+            Actualizar
+          </button>
+        </div>
+        {warningText && panelStatus.kind === "partial" ? (
+          <div className="dashboard-warning">{warningText}</div>
+        ) : null}
+        {panelStatus.kind === "error" ? (
+          <div className="dashboard-warning warning-error">Error: {errorText}</div>
+        ) : null}
+        <div className="balance-grid">
+          <div className="infographic">
+            <div className="metric-card demand">
+              <div className="metric-icon">
+                <IconDemand />
+              </div>
+              <div className="metric-label">Demanda</div>
+              <div className="metric-value">{formatValue(demand, "kW")}</div>
+            </div>
+            <div className="metric-card pv">
+              <div className="metric-icon">
+                <IconSolar />
+              </div>
+              <div className="metric-label">Generación FV</div>
+              <div className="metric-value">{formatValue(pv, "kW")}</div>
+            </div>
+            <div className="metric-card grid">
+              <div className="metric-icon">
+                <IconGrid />
+              </div>
+              <div className="metric-label">Red</div>
+              <div className="metric-value">{formatValue(grid, "kW")}</div>
+            </div>
+            <div className="metric-card autoconsumo">
+              <div className="metric-icon">
+                <IconAutoconsumo />
+              </div>
+              <div className="metric-label">Autoconsumo</div>
+              <div className="metric-value">{formatValue(autoconsumoPct, "%")}</div>
+            </div>
+          </div>
+          <div className="chart-card">
+            <div className="chart-legend">
+              <span className="legend-item demand">Curva Demanda kW</span>
+              <span className="legend-item pv">Curva Generación kW</span>
+            </div>
+            {isComplete && chartSeries.length ? (
+              <AreaChart series={chartSeries} />
+            ) : (
+              <div className="chart-empty">{chartEmptyText}</div>
+            )}
+          </div>
+        </div>
+      </article>
+    );
+  };
+
   const isValidation = route === "#/validacion";
 
   return (
@@ -771,51 +932,28 @@ function App() {
           <>
             <section className="section">
               <div className="container">
-                <h1 className="section-title">Balance de energia en tiempo real</h1>
-                <div className="balance-grid">
-                  <div className="infographic">
-                    <div className="metric-card demand">
-                      <div className="metric-icon">
-                        <IconDemand />
-                      </div>
-                      <div className="metric-label">Demanda campus</div>
-                      <div className="metric-value">
-                        {number.format(demand)} kW
-                      </div>
-                    </div>
-                    <div className="metric-card pv">
-                      <div className="metric-icon">
-                        <IconSolar />
-                      </div>
-                      <div className="metric-label">FV campus</div>
-                      <div className="metric-value">
-                        {number.format(pv)} kW
-                      </div>
-                    </div>
-                    <div className="metric-card grid">
-                      <div className="metric-icon">
-                        <IconGrid />
-                      </div>
-                      <div className="metric-label">Red</div>
-                      <div className="metric-value">
-                        {number.format(grid)} kW
-                      </div>
-                    </div>
-                  </div>
-                  <div className="chart-card">
-                    <div className="chart-legend">
-                      <span className="legend-item demand">Curva Demanda kW</span>
-                      <span className="legend-item pv">Curva Generación kW</span>
-                    </div>
-                    <AreaChart series={chartSeries} />
-                  </div>
+                <div className="api-header">
+                  <h1 className="section-title">Balance de energia en tiempo real</h1>
+                  <button
+                    className="api-refresh"
+                    type="button"
+                    onClick={refreshDashboard}
+                  >
+                    Actualizar paneles
+                  </button>
+                </div>
+                <p className="api-subtitle">
+                  Balance operativo separado para Las Lagunillas y CTL Linares.
+                </p>
+                <div className="dashboard-panels">
+                  {DASHBOARD_SCOPES.map((scope) => buildDashboardPanel(scope))}
                 </div>
               </div>
             </section>
 
             <section className="section">
               <div className="container">
-                <h2 className="section-title">Mapa del campus</h2>
+                <h2 className="section-title">Mapa de Las Lagunillas</h2>
                 <div className="map-frame">
                   <img src={campus} alt="Mapa campus" />
                   {MAP_POINTS.map((point) => {

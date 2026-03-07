@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 
 def load_lambda_module():
     module_path = Path("lambda/api_public/lambda_function.py")
@@ -59,6 +61,24 @@ def test_handler_series_24h_route():
     event = {
         "path": "/v1/series/24h",
         "queryStringParameters": {"campus": "jaen"},
+        "multiValueQueryStringParameters": None,
+    }
+    response = api.handler(event, None)
+    assert response["statusCode"] == 200
+    assert "ok" in response["body"]
+
+
+def test_handler_kpis_route():
+    api = load_lambda_module()
+
+    def fake_kpis(params):
+        return {"ok": True, "params": params}
+
+    api.get_kpis = fake_kpis
+
+    event = {
+        "path": "/v1/kpis",
+        "queryStringParameters": {"scope": "las_lagunillas"},
         "multiValueQueryStringParameters": None,
     }
     response = api.handler(event, None)
@@ -229,3 +249,232 @@ def test_series_by_prefix():
     assert result["unit"] == "kW"
     assert len(result["series"]) == 2
     assert result["series"][0]["value"] == 5.0
+
+
+def test_scope_series_for_las_lagunillas_is_complete_and_excludes_jaen_resto():
+    api = load_lambda_module()
+    demand_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "10"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "12"}]},
+    ]
+    endesa_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "4"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "5"}]},
+    ]
+    univer_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "3"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "1"}]},
+    ]
+    a0_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "1"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "2"}]},
+    ]
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.LAS_LAGUNILLAS_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
+                for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
+            ]
+        if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
+                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
+            ]
+        if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 3.0, "unit": "kW", "ts_event": 1000}]
+        if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 1.0, "unit": "kW", "ts_event": 1000}]
+        return []
+
+    def fake_query(query):
+        assert "uja.jaen.energia.consumo.um_c4.p_kw" not in query
+        assert "uja.jaen.energia.consumo.ae_magisterio.p_kw" not in query
+        assert "uja.jaen.fv.auto.edificio_c4.p_kw" not in query
+        assert "uja.jaen.fv.auto.magisterio.p_kw" not in query
+        if "uja.jaen.fv.auto.ct_total.p_kw" in query:
+            return univer_rows
+        if "uja.jaen.fv.auto.edificio_a0.p_kw" in query:
+            return a0_rows
+        if "uja.jaen.fv.endesa.inv01.p_ac_kw" in query:
+            return endesa_rows
+        if "uja.jaen.energia.consumo.edificio_a0.p_kw" in query:
+            return demand_rows
+        return []
+
+    api.batch_get_latest = fake_batch_get
+    api.query_timestream = fake_query
+
+    result = api.get_series_24h({"scope": "las_lagunillas"})
+
+    assert result["scope"] == "las_lagunillas"
+    assert result["status"] == "complete"
+    assert result["missing_sources"] == []
+    assert result["series"] == [
+        {"ts": 1735689600, "demand": 10.0, "pv": 8.0},
+        {"ts": 1735689900, "demand": 12.0, "pv": 8.0},
+    ]
+
+
+def test_scope_series_returns_partial_when_univer_is_missing():
+    api = load_lambda_module()
+    demand_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "10"}]},
+    ]
+    endesa_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "4"}]},
+    ]
+    a0_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "1"}]},
+    ]
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.LAS_LAGUNILLAS_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
+                for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
+            ]
+        if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
+                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
+            ]
+        if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
+            return []
+        if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 1.0, "unit": "kW", "ts_event": 1000}]
+        return []
+
+    def fake_query(query):
+        if "uja.jaen.fv.auto.edificio_a0.p_kw" in query:
+            return a0_rows
+        if "uja.jaen.fv.endesa.inv01.p_ac_kw" in query:
+            return endesa_rows
+        if "uja.jaen.energia.consumo.edificio_a0.p_kw" in query:
+            return demand_rows
+        return []
+
+    api.batch_get_latest = fake_batch_get
+    api.query_timestream = fake_query
+
+    result = api.get_series_24h({"scope": "las_lagunillas"})
+
+    assert result["status"] == "partial"
+    assert result["missing_sources"] == ["jaen_fv_auto_univer"]
+    assert result["series"] == []
+
+
+def test_scope_kpis_for_las_lagunillas_uses_exact_functional_definition():
+    api = load_lambda_module()
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.LAS_LAGUNILLAS_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 10.0, "unit": "kW", "ts_event": 1200}
+                for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
+            ]
+        if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 5.0, "unit": "kW", "ts_event": 1200}
+                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
+            ]
+        if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 40.0, "unit": "kW", "ts_event": 1200}]
+        if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 15.0, "unit": "kW", "ts_event": 1200}]
+        return []
+
+    api.batch_get_latest = fake_batch_get
+
+    result = api.get_kpis({"scope": "las_lagunillas"})
+    values = {item["kpi"]: item["value"] for item in result["kpis"]}
+
+    assert result["status"] == "complete"
+    assert result["missing_sources"] == []
+    assert values["demanda_kw"] == 200.0
+    assert values["fv_kw"] == 115.0
+    assert values["red_kw"] == 85.0
+    assert values["autoconsumo_kw"] == 115.0
+    assert values["autoconsumo_pct"] == pytest.approx(57.5)
+
+
+def test_scope_kpis_return_partial_when_univer_is_missing():
+    api = load_lambda_module()
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.LAS_LAGUNILLAS_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 10.0, "unit": "kW", "ts_event": 1200}
+                for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
+            ]
+        if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 5.0, "unit": "kW", "ts_event": 1200}
+                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
+            ]
+        if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
+            return []
+        if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 15.0, "unit": "kW", "ts_event": 1200}]
+        return []
+
+    api.batch_get_latest = fake_batch_get
+
+    result = api.get_kpis({"scope": "las_lagunillas"})
+    values = {item["kpi"]: item["value"] for item in result["kpis"]}
+
+    assert result["status"] == "partial"
+    assert result["missing_sources"] == ["jaen_fv_auto_univer"]
+    assert values["demanda_kw"] is None
+    assert values["fv_kw"] is None
+
+
+def test_scope_series_for_ctl_linares_uses_ct_total_pv():
+    api = load_lambda_module()
+    demand_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "30"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "28"}]},
+    ]
+    pv_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "6"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "7"}]},
+    ]
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.CTL_LINARES_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 2.0, "unit": "kW", "ts_event": 1100}
+                for rt_id in api.CTL_LINARES_DEMAND_RT_IDS
+            ]
+        if rt_ids == ["uja.linares.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 6.0, "unit": "kW", "ts_event": 1100}]
+        return []
+
+    def fake_query(query):
+        if "uja.linares.fv.endesa.ct_total.p_kw" in query:
+            return pv_rows
+        if "uja.linares.energia.consumo.lab_sg_t1.p_kw" in query:
+            return demand_rows
+        return []
+
+    api.batch_get_latest = fake_batch_get
+    api.query_timestream = fake_query
+
+    result = api.get_series_24h({"scope": "ctl_linares"})
+
+    assert result["scope"] == "ctl_linares"
+    assert result["status"] == "complete"
+    assert result["series"] == [
+        {"ts": 1735689600, "demand": 30.0, "pv": 6.0},
+        {"ts": 1735689900, "demand": 28.0, "pv": 7.0},
+    ]

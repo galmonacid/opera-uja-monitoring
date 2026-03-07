@@ -122,6 +122,79 @@
   font-weight: 700;
 }
 
+.dashboard-panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.8rem;
+}
+
+.dashboard-panel {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 28px;
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dashboard-panel-title {
+  margin: 0;
+  font-size: 1.45rem;
+}
+
+.dashboard-status {
+  display: inline-flex;
+  margin-top: 0.45rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fffdf7;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-status.status-complete {
+  color: var(--accent-3);
+  border-color: rgba(0, 109, 56, 0.24);
+}
+
+.dashboard-status.status-partial,
+.dashboard-status.status-loading {
+  color: #9a6b00;
+  border-color: rgba(221, 177, 10, 0.35);
+}
+
+.dashboard-status.status-error {
+  color: var(--alert);
+  border-color: rgba(239, 64, 68, 0.3);
+}
+
+.dashboard-warning {
+  padding: 0.85rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(221, 177, 10, 0.35);
+  background: rgba(221, 177, 10, 0.08);
+  color: #765400;
+  font-size: 0.85rem;
+}
+
+.dashboard-warning.warning-error {
+  border-color: rgba(239, 64, 68, 0.25);
+  background: rgba(239, 64, 68, 0.08);
+  color: #9f2023;
+}
+
 .balance-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -154,6 +227,10 @@
 
 .metric-card.grid {
   border-left: 4px solid var(--accent);
+}
+
+.metric-card.autoconsumo {
+  border-left: 4px solid #b47b00;
 }
 
 .metric-icon {
@@ -226,6 +303,19 @@
   width: 100%;
   height: 220px;
   overflow: visible;
+}
+
+.chart-empty {
+  min-height: 220px;
+  border: 1px dashed rgba(35, 31, 32, 0.16);
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+  color: var(--muted);
+  text-align: center;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.68);
 }
 
 .area {
@@ -469,6 +559,10 @@
 }
 
 @media (max-width: 900px) {
+  .dashboard-panel-header {
+    flex-direction: column;
+  }
+
   .map-pin {
     min-width: 60px;
     padding: 0.3rem 0.45rem;

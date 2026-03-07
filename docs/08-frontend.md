@@ -23,18 +23,27 @@ Motivos:
 
 ## MVP (2 secciones)
 1. Balance de energia en tiempo real
-   - Infografia: demanda campus, FV campus, energia de red
-   - Grafica de areas 24h desde `/series/24h`
+   - Dos paneles: `Campus Las Lagunillas` y `Campus CTL Linares`
+   - KPIs por panel desde `/kpis?scope=...`
+   - Grafica de areas 24h por panel desde `/series/24h?scope=...`
 2. Mapa del campus
    - `campus.png` con overlays por edificio
    - Valores instantaneos desde `/realtime` segun `gateway_variable_map_gw_jaen_energia`
    - Labels de valor colocados a la derecha del identificador de edificio en la imagen
 
 ## Estado actual implementado
-- Dashboard principal Jaen:
-  - Demanda = suma `uja.jaen.energia.consumo.*.p_kw`
-  - FV = suma de inversores `uja.jaen.fv.endesa.*.p_ac_kw` + `uja.jaen.fv.auto.ct_total.p_kw`
-  - Red = `max(demanda - fv, 0)`
+- Dashboard principal por scope:
+  - `las_lagunillas`:
+    - Demanda = A0-A4, B1-B5, C1-C3/C5/C6, D1-D4 y `carga_vhe`
+    - FV = suma de inversores Endesa Jaen + `uja.jaen.fv.auto.ct_total.p_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw`
+  - `ctl_linares`:
+    - Demanda = `lab_sg_t1 + lab_sg_t2 + urbanizacion + aulario_departamental + polideportivo`
+    - FV = `uja.linares.fv.endesa.ct_total.p_kw`
+  - Cada panel muestra `demanda`, `FV`, `red` y `autoconsumo %`
+  - Si backend marca `partial`, el panel muestra aviso visible y placeholders en lugar de curva agregada
+- Mapa principal:
+  - mantiene el `campus.png`
+  - se usa como vista operativa de Las Lagunillas
 - Pantalla `#/validacion`:
   - 6 tarjetas, una por gateway requerido
   - `realtime` por `campus/domain/gateway_id`
@@ -44,7 +53,8 @@ Motivos:
 
 ## Actualizacion de datos (MVP)
 - `/realtime`: cada 60s
-- `/series/24h`: cada 5 min
+- `/kpis?scope=...`: cada 60s
+- `/series/24h?scope=...`: cada 5 min
 
 ## Runbook rapido (local)
 ```bash

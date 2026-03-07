@@ -176,21 +176,44 @@ jobs:
             --file seeds/aggregation_configs.csv \
             --table aggregation_configs
 
-      - name: Smoke test (invoke lambda)
+      - name: Smoke test (invoke lambda + autoconsumo checks)
         run: |
           python - <<'PY'
           import json
           import time
           from pathlib import Path
 
-          payload = json.loads(Path("lambda/ingest_telemetry/test_event.json").read_text(encoding="utf-8"))
           now = int(time.time())
-          for meter in payload.get("meter", []):
-            meter["time"] = now
-          Path("/tmp/ingest_event.json").write_text(json.dumps(payload), encoding="utf-8")
+          fixtures = {
+            "/tmp/ingest_event.json": "lambda/ingest_telemetry/test_event.json",
+            "/tmp/ingest_autoconsumo_event.json": "lambda/ingest_telemetry/test_event_gw_autoconsumo_jaen.json",
+          }
+          for output_path, fixture_path in fixtures.items():
+            payload = json.loads(Path(fixture_path).read_text(encoding="utf-8"))
+            for meter in payload.get("meter", []):
+              meter["time"] = now
+            Path(output_path).write_text(json.dumps(payload), encoding="utf-8")
           PY
           aws lambda invoke \
             --function-name lambda_ingest_telemetry \
             --payload fileb:///tmp/ingest_event.json \
             /tmp/lambda_ingest_response.json
           python -c "import json; payload=json.load(open('/tmp/lambda_ingest_response.json','r',encoding='utf-8')); assert payload.get('status')=='ok'"
+          aws lambda invoke \
+            --function-name lambda_ingest_telemetry \
+            --payload fileb:///tmp/ingest_autoconsumo_event.json \
+            /tmp/lambda_ingest_autoconsumo_response.json
+          python -c "import json; payload=json.load(open('/tmp/lambda_ingest_autoconsumo_response.json','r',encoding='utf-8')); assert payload.get('status')=='ok'"
+          aws iot get-topic-rule \
+            --rule-name uja_ingest_gw_autoconsumo_jaen \
+            > /tmp/iot_rule_autoconsumo.json
+          python -c "import json; payload=json.load(open('/tmp/iot_rule_autoconsumo.json','r',encoding='utf-8')); assert payload.get('rule', {}).get('ruleName')=='uja_ingest_gw_autoconsumo_jaen'"
+          aws dynamodb get-item \
+            --table-name latest_readings \
+            --key '{"rt_id":{"S":"uja.jaen.fv.auto.ct_total.p_kw"}}' \
+            > /tmp/latest_autoconsumo.json
+          python -c "import json; payload=json.load(open('/tmp/latest_autoconsumo.json','r',encoding='utf-8')); assert 'Item' in payload"
+          aws timestream-query query \
+            --query-string "SELECT measure_value::double AS value FROM \"uja_monitoring\".\"telemetry_rt\" WHERE measure_name = 'value' AND rt_id = 'uja.jaen.fv.auto.ct_total.p_kw' AND time > ago(15m) LIMIT 1" \
+            > /tmp/ts_autoconsumo.json
+          python -c "import json; payload=json.load(open('/tmp/ts_autoconsumo.json','r',encoding='utf-8')); assert payload.get('Rows')"

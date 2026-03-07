@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from fnmatch import fnmatchcase
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
@@ -19,6 +20,39 @@ _agg_table = None
 _ts_query = None
 
 SERIES_INTERVAL_MINUTES = 5
+LAS_LAGUNILLAS_DEMAND_RT_IDS = [
+    "uja.jaen.energia.consumo.edificio_a0.p_kw",
+    "uja.jaen.energia.consumo.edificio_a1.p_kw",
+    "uja.jaen.energia.consumo.edificio_a2.p_kw",
+    "uja.jaen.energia.consumo.edificio_a3.p_kw",
+    "uja.jaen.energia.consumo.edificio_a4.p_kw",
+    "uja.jaen.energia.consumo.edificio_b1.p_kw",
+    "uja.jaen.energia.consumo.edificio_b2.p_kw",
+    "uja.jaen.energia.consumo.edificio_b3.p_kw",
+    "uja.jaen.energia.consumo.edificio_b4.p_kw",
+    "uja.jaen.energia.consumo.edificio_b5.p_kw",
+    "uja.jaen.energia.consumo.edificio_c1.p_kw",
+    "uja.jaen.energia.consumo.edificio_c2.p_kw",
+    "uja.jaen.energia.consumo.edificio_c3.p_kw",
+    "uja.jaen.energia.consumo.edificio_c5.p_kw",
+    "uja.jaen.energia.consumo.edificio_c6.p_kw",
+    "uja.jaen.energia.consumo.edificio_d1.p_kw",
+    "uja.jaen.energia.consumo.edificio_d2.p_kw",
+    "uja.jaen.energia.consumo.edificio_d3.p_kw",
+    "uja.jaen.energia.consumo.edificio_d4.p_kw",
+    "uja.jaen.energia.consumo.carga_vhe.p_kw",
+]
+JAEN_ENDESA_INVERTER_RT_IDS = [
+    f"uja.jaen.fv.endesa.inv{idx:02d}.p_ac_kw"
+    for idx in range(1, 13)
+]
+CTL_LINARES_DEMAND_RT_IDS = [
+    "uja.linares.energia.consumo.lab_sg_t1.p_kw",
+    "uja.linares.energia.consumo.lab_sg_t2.p_kw",
+    "uja.linares.energia.consumo.urbanizacion.p_kw",
+    "uja.linares.energia.consumo.aulario_departamental.p_kw",
+    "uja.linares.energia.consumo.polideportivo.p_kw",
+]
 METRIC_SERIES_CONFIG = {
     ("jaen", "energia_consumo"): {
         "type": "power",
@@ -67,6 +101,60 @@ BALANCE_SERIES_CONFIG = {
         "pv_metrics": ["fv_endesa"],
     },
 }
+BALANCE_SCOPE_CONFIG = {
+    "las_lagunillas": {
+        "campus": "jaen",
+        "label": "Campus Las Lagunillas",
+        "demand_sources": [
+            {
+                "id": "las_lagunillas_demand",
+                "label": "Demanda Las Lagunillas",
+                "rt_ids": LAS_LAGUNILLAS_DEMAND_RT_IDS,
+                "min_items": len(LAS_LAGUNILLAS_DEMAND_RT_IDS),
+            },
+        ],
+        "pv_sources": [
+            {
+                "id": "jaen_fv_endesa_total",
+                "label": "FV Endesa Jaen",
+                "rt_ids": JAEN_ENDESA_INVERTER_RT_IDS,
+                "min_items": len(JAEN_ENDESA_INVERTER_RT_IDS),
+            },
+            {
+                "id": "jaen_fv_auto_univer",
+                "label": "FV autoconsumo UNIVER",
+                "rt_ids": ["uja.jaen.fv.auto.ct_total.p_kw"],
+                "min_items": 1,
+            },
+            {
+                "id": "jaen_fv_auto_a0",
+                "label": "FV edificio A0",
+                "rt_ids": ["uja.jaen.fv.auto.edificio_a0.p_kw"],
+                "min_items": 1,
+            },
+        ],
+    },
+    "ctl_linares": {
+        "campus": "linares",
+        "label": "Campus CTL Linares",
+        "demand_sources": [
+            {
+                "id": "ctl_linares_demand",
+                "label": "Demanda CTL Linares",
+                "rt_ids": CTL_LINARES_DEMAND_RT_IDS,
+                "min_items": len(CTL_LINARES_DEMAND_RT_IDS),
+            },
+        ],
+        "pv_sources": [
+            {
+                "id": "linares_fv_endesa_total",
+                "label": "FV Endesa Linares",
+                "rt_ids": ["uja.linares.fv.endesa.ct_total.p_kw"],
+                "min_items": 1,
+            },
+        ],
+    },
+}
 
 
 def handler(event, context):
@@ -78,6 +166,8 @@ def handler(event, context):
 
     if path.endswith("/realtime"):
         return response(get_realtime(params, multi_params))
+    if path.endswith("/kpis"):
+        return response(get_kpis(params))
     if path.endswith("/aggregates/daily"):
         return response(get_aggregates(params, "daily"))
     if path.endswith("/aggregates/monthly"):
@@ -234,7 +324,41 @@ def normalize_item(item):
     }
 
 
+def get_kpis(params):
+    scope = params.get("scope")
+    if not scope:
+        return {"error": "missing_params"}
+    state = get_balance_scope_state(scope)
+    if not state:
+        return {"error": "unsupported_scope"}
+    return {
+        "scope": scope,
+        "campus": state["campus"],
+        "label": state["label"],
+        "status": state["status"],
+        "missing_sources": state["missing_sources"],
+        "ts_event": state["ts_event"],
+        "kpis": build_scope_kpis(state),
+    }
+
+
 def get_series_24h(params):
+    scope = params.get("scope")
+    if scope:
+        state = get_balance_scope_state(scope, include_series=True)
+        if not state:
+            return {"error": "unsupported_scope"}
+        return {
+            "scope": scope,
+            "campus": state["campus"],
+            "label": state["label"],
+            "status": state["status"],
+            "missing_sources": state["missing_sources"],
+            "interval_minutes": SERIES_INTERVAL_MINUTES,
+            "unit": "kW",
+            "series": build_scope_series_rows(state),
+        }
+
     campus = params.get("campus", "jaen")
     config = BALANCE_SERIES_CONFIG.get(campus)
     if not config:
@@ -261,6 +385,181 @@ def get_series_24h(params):
         "unit": "kW",
         "series": series,
     }
+
+
+def get_balance_scope_state(scope, include_series=False):
+    config = BALANCE_SCOPE_CONFIG.get(scope)
+    if not config:
+        return None
+
+    sources = []
+    for source_type in ("demand_sources", "pv_sources"):
+        for source in config.get(source_type, []):
+            source_state = get_balance_source_state(source, include_series=include_series)
+            source_state["type"] = source_type
+            sources.append(source_state)
+
+    missing_sources = [source["id"] for source in sources if not source["complete"]]
+    available_sources = [source for source in sources if source["has_any_data"]]
+    if not available_sources:
+        status = "empty"
+    elif missing_sources:
+        status = "partial"
+    else:
+        status = "complete"
+
+    demand_total = sum(
+        source["latest_total"]
+        for source in sources
+        if source["type"] == "demand_sources" and source["complete"]
+    )
+    pv_total = sum(
+        source["latest_total"]
+        for source in sources
+        if source["type"] == "pv_sources" and source["complete"]
+    )
+    ts_event = int(max([source["ts_event"] for source in sources] or [0]))
+
+    return {
+        "scope": scope,
+        "campus": config["campus"],
+        "label": config["label"],
+        "status": status,
+        "missing_sources": missing_sources,
+        "ts_event": ts_event,
+        "demand_total": demand_total,
+        "pv_total": pv_total,
+        "sources": sources,
+    }
+
+
+def build_scope_kpis(state):
+    if state["status"] != "complete":
+        return [
+            {"kpi": "demanda_kw", "value": None, "unit": "kW"},
+            {"kpi": "fv_kw", "value": None, "unit": "kW"},
+            {"kpi": "red_kw", "value": None, "unit": "kW"},
+            {"kpi": "autoconsumo_kw", "value": None, "unit": "kW"},
+            {"kpi": "autoconsumo_pct", "value": None, "unit": "%"},
+        ]
+
+    demand = state["demand_total"]
+    pv = state["pv_total"]
+    grid = max(demand - pv, 0.0)
+    autoconsumo_kw = min(demand, pv)
+    autoconsumo_pct = (autoconsumo_kw / demand * 100.0) if demand > 0 else 0.0
+    return [
+        {"kpi": "demanda_kw", "value": demand, "unit": "kW"},
+        {"kpi": "fv_kw", "value": pv, "unit": "kW"},
+        {"kpi": "red_kw", "value": grid, "unit": "kW"},
+        {"kpi": "autoconsumo_kw", "value": autoconsumo_kw, "unit": "kW"},
+        {"kpi": "autoconsumo_pct", "value": autoconsumo_pct, "unit": "%"},
+    ]
+
+
+def build_scope_series_rows(state):
+    if state["status"] != "complete":
+        return []
+
+    demand_series = sum_series_maps(
+        [
+            source["series_map"]
+            for source in state["sources"]
+            if source["type"] == "demand_sources"
+        ]
+    )
+    pv_series = sum_series_maps(
+        [
+            source["series_map"]
+            for source in state["sources"]
+            if source["type"] == "pv_sources"
+        ]
+    )
+    all_ts = sorted(set(demand_series) | set(pv_series))
+    return [
+        {
+            "ts": ts,
+            "demand": float(demand_series.get(ts, 0.0)),
+            "pv": float(pv_series.get(ts, 0.0)),
+        }
+        for ts in all_ts
+    ]
+
+
+def get_balance_source_state(source, include_series=False):
+    latest_items = get_balance_source_latest_items(source)
+    min_items = source.get("min_items") or source.get("expected_count") or 1
+    latest_complete = len(latest_items) >= min_items
+    latest_total = sum(float(item["value"]) for item in latest_items)
+    ts_event = int(max([item.get("ts_event", 0) for item in latest_items] or [0]))
+
+    series_map = {}
+    series_complete = True
+    if include_series and latest_complete:
+        series_map = get_balance_source_series_map(source)
+        series_complete = bool(series_map)
+
+    complete = latest_complete and series_complete
+    return {
+        "id": source["id"],
+        "label": source["label"],
+        "latest_total": latest_total,
+        "ts_event": ts_event,
+        "series_map": series_map,
+        "complete": complete,
+        "has_any_data": bool(latest_items) or bool(series_map),
+    }
+
+
+def get_balance_source_latest_items(source):
+    if source.get("rt_ids"):
+        return batch_get_latest(source["rt_ids"])
+    if source.get("metric") and source.get("campus"):
+        return get_metric_latest_items(source["campus"], source["metric"])
+    rt_prefix = source.get("rt_prefix")
+    if not rt_prefix:
+        return []
+    items = scan_latest(rt_prefix)
+    return filter_items_by_patterns(items, source.get("rt_like_patterns"))
+
+
+def get_balance_source_series_map(source):
+    if source.get("rt_ids"):
+        return query_timeseries(source["rt_ids"])
+    if source.get("metric") and source.get("campus"):
+        return get_metric_series(source["campus"], source["metric"]) or {}
+    rt_prefix = source.get("rt_prefix")
+    if not rt_prefix:
+        return {}
+    return query_timeseries_by_select(
+        rt_prefix=rt_prefix,
+        rt_like_patterns=source.get("rt_like_patterns"),
+    )
+
+
+def get_metric_latest_items(campus, metric):
+    config = METRIC_SERIES_CONFIG.get((campus, metric))
+    if not config:
+        return []
+    if config.get("rt_ids"):
+        return batch_get_latest(config["rt_ids"])
+    items = scan_latest(config["rt_prefix"])
+    return filter_items_by_patterns(items, config.get("rt_like_patterns"))
+
+
+def filter_items_by_patterns(items, rt_like_patterns):
+    if not rt_like_patterns:
+        return items
+    return [
+        item
+        for item in items
+        if any(matches_like_pattern(item.get("rt_id", ""), pattern) for pattern in rt_like_patterns)
+    ]
+
+
+def matches_like_pattern(value, pattern):
+    translated = pattern.replace("%", "*").replace("_", "?")
+    return fnmatchcase(value, translated)
 
 
 def get_series_24h_by_metric(params):
