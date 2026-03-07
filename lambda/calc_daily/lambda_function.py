@@ -88,13 +88,13 @@ def handler(event, context):
         pk = build_pk(config, "daily")
         total = 0.0
         for rt_id in rt_ids:
-            energy_kwh = integrate_energy(rt_id, start, end)
-            if energy_kwh is None:
+            value = calculate_daily_value(config, rt_id, start, end)
+            if value is None:
                 continue
             asset = get_asset_name(rt_id)
-            items.append(build_item(pk, f"{target_date}#{asset}", energy_kwh, config))
+            items.append(build_item(pk, f"{target_date}#{asset}", value, config))
             if should_include_in_total(config, rt_id):
-                total += energy_kwh
+                total += value
         items.append(build_item(pk, f"{target_date}#total", total, config))
 
     if not items:
@@ -151,7 +151,7 @@ def fetch_rt_ids(config):
         response = get_mapping_table().query(**kwargs)
         for item in response.get("Items", []):
             rt_id = item.get("rt_id")
-            if rt_id and rt_id.startswith(config["rt_id_prefix"]) and is_power_rt_id(rt_id):
+            if rt_id and rt_id.startswith(config["rt_id_prefix"]) and is_supported_rt_id(config, rt_id):
                 rt_ids.append(rt_id)
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
@@ -163,6 +163,16 @@ def is_power_rt_id(rt_id: str) -> bool:
     return rt_id.endswith(".p_kw") or rt_id.endswith(".p_ac_kw")
 
 
+def is_water_rt_id(rt_id: str) -> bool:
+    return rt_id.endswith(".v_m3")
+
+
+def is_supported_rt_id(config, rt_id: str) -> bool:
+    if config.get("metric") == "agua_consumo":
+        return is_water_rt_id(rt_id)
+    return is_power_rt_id(rt_id)
+
+
 def get_asset_name(rt_id: str) -> str:
     return rt_id.split(".")[4]
 
@@ -170,6 +180,8 @@ def get_asset_name(rt_id: str) -> str:
 def should_include_in_total(config, rt_id: str) -> bool:
     metric = config.get("metric")
     campus = config.get("campus")
+    if metric == "agua_consumo":
+        return is_water_rt_id(rt_id)
     if metric == "fv_auto" and campus == "jaen":
         return rt_id.endswith("ct_total.p_kw")
     if metric == "fv_endesa" and campus == "jaen":
@@ -177,6 +189,12 @@ def should_include_in_total(config, rt_id: str) -> bool:
     if metric == "fv_endesa" and campus == "linares":
         return rt_id.endswith("ct_total.p_kw")
     return is_power_rt_id(rt_id)
+
+
+def calculate_daily_value(config, rt_id, start, end):
+    if config.get("metric") == "agua_consumo":
+        return calculate_counter_consumption(rt_id, start, end)
+    return integrate_energy(rt_id, start, end)
 
 
 def integrate_energy(rt_id, start, end):
@@ -191,6 +209,15 @@ def integrate_energy(rt_id, start, end):
         dt_hours = (t1 - t0).total_seconds() / 3600.0
         total_kwh += (v0 + v1) / 2.0 * dt_hours
     return total_kwh
+
+
+def calculate_counter_consumption(rt_id, start, end):
+    rows = query_timestream(rt_id, start, end)
+    if len(rows) < 2:
+        return None
+    start_value = rows[0][1]
+    end_value = rows[-1][1]
+    return max(end_value - start_value, 0.0)
 
 
 def query_timestream(rt_id, start, end):

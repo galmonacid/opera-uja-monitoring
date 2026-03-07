@@ -39,7 +39,8 @@ Motivos:
   - 6 tarjetas, una por gateway requerido
   - `realtime` por `campus/domain/gateway_id`
   - series 24h por `campus + metric` para evitar mezclar `ct_total` con inversores
-  - agua se mantiene sin serie 24h dedicada
+  - agua muestra consumo por intervalo (`m3`) a partir de contadores
+  - monthly puede mostrarse reconstruido desde `daily` si aún no existe agregado materializado
 
 ## Actualizacion de datos (MVP)
 - `/realtime`: cada 60s

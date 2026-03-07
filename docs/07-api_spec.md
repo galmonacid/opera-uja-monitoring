@@ -67,8 +67,8 @@ Respuesta:
 Serie temporal (24h) para grafica de balance energetico.
 
 Query params:
-- campus=jaen
-- metric=energia_consumo|fv_endesa|fv_auto (opcional)
+- campus=jaen|linares
+- metric=energia_consumo|agua_consumo|fv_endesa|fv_auto (opcional)
 - rt_prefix=uja.... (opcional, modo tecnico)
 
 Respuesta por defecto (sin `metric`, balance campus):
@@ -98,6 +98,8 @@ Notas:
 - Se filtran valores inválidos/sentinela en Timestream (por defecto `abs(value) > 1e6`).
 - `gateway_id` permite aislar gateways que comparten prefijo de RT_ID, como `gw_jaen_energia` y `gw_autoconsumo_jaen`.
 - En Jaén, el balance por defecto usa demanda total campus, FV Endesa por suma de inversores y FV autoconsumo por `ct_total`.
+- Para `agua_consumo`, la serie 24h devuelve consumo por intervalo a partir de contadores acumulados (unidad `m3`).
+- Si `monthly` no está materializado todavía en DynamoDB, la API puede reconstruirlo a partir de `daily`.
 
 ## 3) Limits (desde API Gateway/WAF)
 - Rate limit por IP.

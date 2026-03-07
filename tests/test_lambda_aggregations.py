@@ -94,3 +94,33 @@ def test_daily_total_for_jaen_fv_endesa_uses_only_inverters():
     assert result["status"] == "ok"
     total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#total")
     assert float(total_item["value"]) == 115.0
+
+
+def test_daily_water_uses_counter_delta():
+    daily = load_daily_module()
+    config = daily.normalize_config({
+        "config_id": "jaen_agua_consumo",
+        "gateway_id": "gw_jaen_agua",
+        "rt_id_prefix": "uja.jaen.agua.consumo.",
+        "campus": "jaen",
+        "domain": "agua",
+        "system": "consumo",
+        "metric": "agua_consumo",
+        "unit": "m3",
+    })
+    values = {
+        "uja.jaen.agua.consumo.edificio_a0.v_m3": 5.5,
+        "uja.jaen.agua.consumo.edificio_a1.v_m3": 1.25,
+    }
+    captured = {}
+
+    daily.fetch_configs = lambda: [config]
+    daily.fetch_rt_ids = lambda _config: list(values)
+    daily.calculate_daily_value = lambda _config, rt_id, _start, _end: values[rt_id]
+    daily.write_items = lambda items: captured.setdefault("items", items)
+
+    result = daily.handler({"date": "2026-03-06"}, None)
+
+    assert result["status"] == "ok"
+    total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#total")
+    assert float(total_item["value"]) == 6.75

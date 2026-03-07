@@ -21,21 +21,38 @@ _ts_query = None
 SERIES_INTERVAL_MINUTES = 5
 METRIC_SERIES_CONFIG = {
     ("jaen", "energia_consumo"): {
+        "type": "power",
         "rt_prefix": "uja.jaen.energia.consumo.",
         "rt_like_patterns": ["%.p_kw"],
     },
     ("linares", "energia_consumo"): {
+        "type": "power",
         "rt_prefix": "uja.linares.energia.consumo.",
         "rt_like_patterns": ["%.p_kw"],
     },
+    ("jaen", "agua_consumo"): {
+        "type": "counter",
+        "rt_prefix": "uja.jaen.agua.consumo.",
+        "rt_like_patterns": ["%.v_m3"],
+        "unit": "m3",
+    },
+    ("linares", "agua_consumo"): {
+        "type": "counter",
+        "rt_prefix": "uja.linares.agua.consumo.",
+        "rt_like_patterns": ["%.v_m3"],
+        "unit": "m3",
+    },
     ("jaen", "fv_endesa"): {
+        "type": "power",
         "rt_prefix": "uja.jaen.fv.endesa.",
         "rt_like_patterns": ["%.p_ac_kw"],
     },
     ("linares", "fv_endesa"): {
+        "type": "power",
         "rt_ids": ["uja.linares.fv.endesa.ct_total.p_kw"],
     },
     ("jaen", "fv_auto"): {
+        "type": "power",
         "rt_ids": ["uja.jaen.fv.auto.ct_total.p_kw"],
     },
 }
@@ -152,14 +169,22 @@ def get_aggregates(params, period):
 
     pk = f"{campus}#{domain}#{system}#{period}"
     items = query_pk(pk)
+    if not items:
+        items = build_aggregate_fallback_items(campus, metric, period)
 
     series = []
     for item in items:
-        sk = item["sk"]
-        if not sk.endswith(f"#{asset}"):
+        if "sk" in item:
+            sk = item["sk"]
+            if not sk.endswith(f"#{asset}"):
+                continue
+            date = sk.split("#", 1)[0]
+            series.append({"date": date, "value": float(item["value"])})
             continue
-        date = sk.split("#", 1)[0]
-        series.append({"date": date, "value": float(item["value"])})
+
+        if item.get("asset") != asset:
+            continue
+        series.append({"date": item["date"], "value": float(item["value"])})
 
     series.sort(key=lambda x: x["date"])
     unit = items[0].get("unit") if items else "kWh"
@@ -252,11 +277,12 @@ def get_series_24h_by_metric(params):
         {"ts": ts, "value": float(value)}
         for ts, value in sorted(series_map.items())
     ]
+    unit = get_metric_unit(campus, metric)
     return {
         "campus": campus,
         "metric": metric,
         "interval_minutes": SERIES_INTERVAL_MINUTES,
-        "unit": "kW",
+        "unit": unit,
         "series": rows,
     }
 
@@ -284,6 +310,13 @@ def get_metric_series(campus, metric):
     config = METRIC_SERIES_CONFIG.get((campus, metric))
     if not config:
         return None
+    if config.get("type") == "counter":
+        return query_counter_deltas(
+            rt_prefix=config["rt_prefix"],
+            rt_like_patterns=config.get("rt_like_patterns"),
+            interval=f"{SERIES_INTERVAL_MINUTES}m",
+            lookback="24h",
+        )
     if config.get("rt_ids"):
         return query_timeseries(config["rt_ids"])
     return query_timeseries_by_select(
@@ -300,6 +333,11 @@ def sum_series_maps(series_maps):
         for ts, value in series_map.items():
             result[ts] = result.get(ts, 0.0) + value
     return result
+
+
+def get_metric_unit(campus, metric):
+    config = METRIC_SERIES_CONFIG.get((campus, metric), {})
+    return config.get("unit", "kW")
 
 
 def query_timeseries(rt_ids):
@@ -347,6 +385,188 @@ GROUP BY ts
 ORDER BY ts
 """
     return rows_to_series_map(query_timestream(query))
+
+
+def query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
+    rows = query_counter_bins(
+        rt_prefix=rt_prefix,
+        rt_like_patterns=rt_like_patterns,
+        interval=interval,
+        lookback=lookback,
+    )
+    by_rt = {}
+    totals = {}
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 3:
+            continue
+        ts_epoch = parse_ts(data[0].get("ScalarValue"))
+        rt_id = data[1].get("ScalarValue")
+        value_raw = data[2].get("ScalarValue")
+        if ts_epoch == 0 or not rt_id or value_raw is None:
+            continue
+        value = float(value_raw)
+        prev_value = by_rt.get(rt_id)
+        by_rt[rt_id] = value
+        if prev_value is None:
+            continue
+        delta = max(value - prev_value, 0.0)
+        totals[ts_epoch] = totals.get(ts_epoch, 0.0) + delta
+    return totals
+
+
+def query_counter_bins(rt_prefix, rt_like_patterns, interval, lookback):
+    where_clauses = [
+        f"time > ago({lookback})",
+        "measure_name = 'value'",
+        f"rt_id LIKE '{rt_prefix}%'",
+        f"measure_value::double <= {MAX_VALID_VALUE}",
+        "measure_value::double >= 0",
+    ]
+    if rt_like_patterns:
+        patterns = " OR ".join([f"rt_id LIKE '{pattern}'" for pattern in rt_like_patterns])
+        where_clauses.append(f"({patterns})")
+    query = f"""
+SELECT
+  bin(time, {interval}) AS ts,
+  rt_id,
+  max_by(measure_value::double, time) AS value
+FROM "{TS_DATABASE}"."{TS_TABLE}"
+WHERE {" AND ".join(where_clauses)}
+GROUP BY rt_id, bin(time, {interval})
+ORDER BY rt_id, ts
+"""
+    return query_timestream(query)
+
+
+def build_aggregate_fallback_items(campus, metric, period):
+    if period == "monthly":
+        return build_monthly_fallback_items(campus, metric)
+    if period == "daily" and metric == "agua_consumo":
+        return build_daily_water_fallback_items(campus)
+    return []
+
+
+def build_monthly_fallback_items(campus, metric):
+    daily_items = build_aggregate_fallback_items(campus, metric, "daily")
+    if not daily_items:
+        daily_items = query_pk_for_metric(campus, metric, "daily")
+    if not daily_items:
+        return []
+
+    totals = {}
+    for item in daily_items:
+        date = item.get("date")
+        if not date or len(date) < 7:
+            continue
+        month = date[:7]
+        asset = item.get("asset", "total")
+        key = (month, asset)
+        totals[key] = totals.get(key, 0.0) + float(item["value"])
+
+    return [
+        {"date": month, "asset": asset, "value": value, "unit": infer_aggregate_unit(metric)}
+        for (month, asset), value in sorted(totals.items())
+    ]
+
+
+def build_daily_water_fallback_items(campus):
+    config = METRIC_SERIES_CONFIG.get((campus, "agua_consumo"))
+    if not config:
+        return []
+    rows = query_daily_counter_consumption(
+        rt_prefix=config["rt_prefix"],
+        rt_like_patterns=config.get("rt_like_patterns"),
+        lookback="45d",
+    )
+    totals = {}
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 4:
+            continue
+        day = normalize_day_value(data[0].get("ScalarValue"))
+        rt_id = data[1].get("ScalarValue")
+        start_raw = data[2].get("ScalarValue")
+        end_raw = data[3].get("ScalarValue")
+        if not day or not rt_id or start_raw is None or end_raw is None:
+            continue
+        asset = extract_asset_from_rt_id(rt_id)
+        delta = max(float(end_raw) - float(start_raw), 0.0)
+        totals[(day, asset)] = totals.get((day, asset), 0.0) + delta
+        totals[(day, "total")] = totals.get((day, "total"), 0.0) + delta
+
+    return [
+        {"date": day, "asset": asset, "value": value, "unit": "m3"}
+        for (day, asset), value in sorted(totals.items())
+    ]
+
+
+def query_daily_counter_consumption(rt_prefix, rt_like_patterns, lookback):
+    where_clauses = [
+        f"time > ago({lookback})",
+        "measure_name = 'value'",
+        f"rt_id LIKE '{rt_prefix}%'",
+        f"measure_value::double <= {MAX_VALID_VALUE}",
+        "measure_value::double >= 0",
+    ]
+    if rt_like_patterns:
+        patterns = " OR ".join([f"rt_id LIKE '{pattern}'" for pattern in rt_like_patterns])
+        where_clauses.append(f"({patterns})")
+    query = f"""
+SELECT
+  bin(time, 1d) AS day,
+  rt_id,
+  min_by(measure_value::double, time) AS start_value,
+  max_by(measure_value::double, time) AS end_value
+FROM "{TS_DATABASE}"."{TS_TABLE}"
+WHERE {" AND ".join(where_clauses)}
+GROUP BY rt_id, bin(time, 1d)
+ORDER BY day, rt_id
+"""
+    return query_timestream(query)
+
+
+def query_pk_for_metric(campus, metric, period):
+    domain, system = metric_to_scope(metric)
+    if not domain:
+        return []
+    pk = f"{campus}#{domain}#{system}#{period}"
+    items = query_pk(pk)
+    normalized = []
+    for item in items:
+        sk = item.get("sk", "")
+        if "#" not in sk:
+            continue
+        date, asset = sk.split("#", 1)
+        normalized.append(
+            {
+                "date": date,
+                "asset": asset,
+                "value": float(item["value"]),
+                "unit": item.get("unit", infer_aggregate_unit(metric)),
+            }
+        )
+    return normalized
+
+
+def infer_aggregate_unit(metric):
+    if metric == "agua_consumo":
+        return "m3"
+    return "kWh"
+
+
+def normalize_day_value(value):
+    ts_epoch = parse_ts(value)
+    if ts_epoch == 0:
+        return None
+    return datetime.fromtimestamp(ts_epoch, tz=timezone.utc).strftime("%Y-%m-%d")
+
+
+def extract_asset_from_rt_id(rt_id):
+    parts = rt_id.split(".")
+    if len(parts) < 5:
+        return rt_id
+    return parts[4]
 
 
 def rows_to_series_map(rows):

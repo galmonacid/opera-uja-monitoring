@@ -66,6 +66,7 @@ const GATEWAYS = [
     campus: "jaen",
     domain: "agua",
     rtPrefixes: ["uja.jaen.agua."],
+    seriesMetric: "agua_consumo",
     aggregateMetric: "agua_consumo",
   },
   {
@@ -635,11 +636,12 @@ function App() {
 
     const seriesItems = state.series?.data?.series || [];
     const usesValueSeries = Boolean(state.series?.data?.metric || state.series?.data?.rt_prefix);
+    const seriesUnit = state.series?.data?.unit || "kW";
     const seriesRowsLocal = usesValueSeries
       ? seriesItems.map((item) => [
           formatTs(item.ts),
           number.format(item.value),
-          "kW",
+          seriesUnit,
         ])
       : seriesItems.map((item) => [
           formatTs(item.ts),

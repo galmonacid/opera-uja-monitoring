@@ -123,6 +123,98 @@ def test_series_by_metric_returns_metric_shape():
     assert result["series"][0]["value"] == 72.8
 
 
+def test_series_by_metric_water_uses_counter_deltas():
+    api = load_lambda_module()
+    rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+                {"ScalarValue": "100.0"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+                {"ScalarValue": "101.5"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:10:00.000000000"},
+                {"ScalarValue": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+                {"ScalarValue": "103.0"},
+            ]
+        },
+    ]
+
+    api.query_timestream = lambda _query: rows
+    result = api.get_series_24h_by_metric({"campus": "jaen", "metric": "agua_consumo"})
+
+    assert result["campus"] == "jaen"
+    assert result["metric"] == "agua_consumo"
+    assert result["unit"] == "m3"
+    assert [item["value"] for item in result["series"]] == [1.5, 1.5]
+
+
+def test_monthly_aggregates_fallback_to_daily():
+    api = load_lambda_module()
+
+    def fake_query_pk(pk):
+        if pk == "linares#energia#consumo#monthly":
+            return []
+        if pk == "linares#energia#consumo#daily":
+            return [
+                {"sk": "2026-02-20#total", "value": 10.0, "unit": "kWh"},
+                {"sk": "2026-02-21#total", "value": 12.5, "unit": "kWh"},
+                {"sk": "2026-03-01#total", "value": 7.0, "unit": "kWh"},
+            ]
+        return []
+
+    api.query_pk = fake_query_pk
+    result = api.get_aggregates({"campus": "linares", "metric": "energia_consumo", "asset": "total"}, "monthly")
+
+    assert result["period"] == "monthly"
+    assert result["unit"] == "kWh"
+    assert result["series"] == [
+        {"date": "2026-02", "value": 22.5},
+        {"date": "2026-03", "value": 7.0},
+    ]
+
+
+def test_daily_water_aggregates_fallback_from_counters():
+    api = load_lambda_module()
+    rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-02-19 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+                {"ScalarValue": "100.0"},
+                {"ScalarValue": "105.5"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-02-20 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+                {"ScalarValue": "105.5"},
+                {"ScalarValue": "107.0"},
+            ]
+        },
+    ]
+
+    api.query_pk = lambda _pk: []
+    api.query_timestream = lambda _query: rows
+    result = api.get_aggregates({"campus": "jaen", "metric": "agua_consumo", "asset": "total"}, "daily")
+
+    assert result["unit"] == "m3"
+    assert result["series"] == [
+        {"date": "2025-02-19", "value": 5.5},
+        {"date": "2025-02-20", "value": 1.5},
+    ]
+
+
 def test_series_by_prefix():
     api = load_lambda_module()
     rows = [
