@@ -34,3 +34,63 @@ def test_normalize_config_defaults():
     })
     assert config["unit"] == "kWh"
     assert config["gateway_id"] == "gw_jaen_energia"
+
+
+def test_daily_total_for_jaen_fv_auto_uses_only_ct_total():
+    daily = load_daily_module()
+    config = daily.normalize_config({
+        "config_id": "jaen_fv_auto",
+        "gateway_id": "gw_autoconsumo_jaen",
+        "rt_id_prefix": "uja.jaen.fv.auto.",
+        "campus": "jaen",
+        "domain": "fv",
+        "system": "auto",
+        "metric": "fv_auto",
+    })
+    values = {
+        "uja.jaen.fv.auto.ct_total.p_kw": 100.0,
+        "uja.jaen.fv.auto.pergola.p_ac_kw": 10.0,
+        "uja.jaen.fv.auto.parking_p4.p_ac_kw": 8.0,
+    }
+    captured = {}
+
+    daily.fetch_configs = lambda: [config]
+    daily.fetch_rt_ids = lambda _config: list(values)
+    daily.integrate_energy = lambda rt_id, _start, _end: values[rt_id]
+    daily.write_items = lambda items: captured.setdefault("items", items)
+
+    result = daily.handler({"date": "2026-03-06"}, None)
+
+    assert result["status"] == "ok"
+    total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#total")
+    assert float(total_item["value"]) == 100.0
+
+
+def test_daily_total_for_jaen_fv_endesa_uses_only_inverters():
+    daily = load_daily_module()
+    config = daily.normalize_config({
+        "config_id": "jaen_fv_endesa",
+        "gateway_id": "gw_endesa_jaen",
+        "rt_id_prefix": "uja.jaen.fv.endesa.",
+        "campus": "jaen",
+        "domain": "fv",
+        "system": "endesa",
+        "metric": "fv_endesa",
+    })
+    values = {
+        "uja.jaen.fv.endesa.ct_total.p_kw": 130.0,
+        "uja.jaen.fv.endesa.inv01.p_ac_kw": 60.0,
+        "uja.jaen.fv.endesa.inv02.p_ac_kw": 55.0,
+    }
+    captured = {}
+
+    daily.fetch_configs = lambda: [config]
+    daily.fetch_rt_ids = lambda _config: list(values)
+    daily.integrate_energy = lambda rt_id, _start, _end: values[rt_id]
+    daily.write_items = lambda items: captured.setdefault("items", items)
+
+    result = daily.handler({"date": "2026-03-06"}, None)
+
+    assert result["status"] == "ok"
+    total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#total")
+    assert float(total_item["value"]) == 115.0

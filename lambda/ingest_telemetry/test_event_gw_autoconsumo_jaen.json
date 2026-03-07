@@ -1,0 +1,22 @@
+{
+  "topic": "uja/jaen/produccion/fv_autoconsumo/gw_autoconsumo_jaen",
+  "meter": [
+    {
+      "name": "OPERA-UNIVER--Autocon--FV.UJA",
+      "time": 1770351480,
+      "data": [
+        { "var": "UJA.Temperatura", "unit": "°C", "value": 19.4 },
+        { "var": "UJA.Tot_FV_kW sys", "unit": "kW", "value": 72.8 },
+        { "var": "UJA.Tot_FV_kWh", "unit": "kWh", "value": 418922.4 },
+        { "var": "UJA.Pergola_kW sys", "unit": "kW", "value": 11.2 },
+        { "var": "UJA.Perg_Radiación", "unit": "W/m²", "value": 612.5 },
+        { "var": "UJA.Parking_kW sys", "unit": "kW", "value": 9.7 },
+        { "var": "UJA.B5_Inv1_kW sys", "unit": "kW", "value": 8.1 },
+        { "var": "UJA.B5_Inv2_KW sys", "unit": "kW", "value": 7.9 },
+        { "var": "UJA.B5_Radiacion", "unit": "W/m²", "value": 598.3 },
+        { "var": "UJA.Fachada_kW sys", "unit": "kW", "value": 6.4 },
+        { "var": "UJA.Fachada_Radiación", "unit": "W/m²", "value": 601.2 }
+      ]
+    }
+  ]
+}

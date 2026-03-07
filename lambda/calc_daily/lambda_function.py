@@ -91,9 +91,10 @@ def handler(event, context):
             energy_kwh = integrate_energy(rt_id, start, end)
             if energy_kwh is None:
                 continue
-            asset = rt_id.split(".")[4]
+            asset = get_asset_name(rt_id)
             items.append(build_item(pk, f"{target_date}#{asset}", energy_kwh, config))
-            total += energy_kwh
+            if should_include_in_total(config, rt_id):
+                total += energy_kwh
         items.append(build_item(pk, f"{target_date}#total", total, config))
 
     if not items:
@@ -160,6 +161,22 @@ def fetch_rt_ids(config):
 
 def is_power_rt_id(rt_id: str) -> bool:
     return rt_id.endswith(".p_kw") or rt_id.endswith(".p_ac_kw")
+
+
+def get_asset_name(rt_id: str) -> str:
+    return rt_id.split(".")[4]
+
+
+def should_include_in_total(config, rt_id: str) -> bool:
+    metric = config.get("metric")
+    campus = config.get("campus")
+    if metric == "fv_auto" and campus == "jaen":
+        return rt_id.endswith("ct_total.p_kw")
+    if metric == "fv_endesa" and campus == "jaen":
+        return rt_id.endswith(".p_ac_kw")
+    if metric == "fv_endesa" and campus == "linares":
+        return rt_id.endswith("ct_total.p_kw")
+    return is_power_rt_id(rt_id)
 
 
 def integrate_energy(rt_id, start, end):

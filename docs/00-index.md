@@ -22,10 +22,11 @@ en Campus de Jaén y Campus de Linares.
 12. `12-evidencias-gw-jaen-energia.md` — Evidencias backend (gateway consumo energia Jaen)
 13. `13-agentic-protocol.md` — Protocolo de desarrollo agentico
 14. `14-sample_payloads.md` — Samples de payload (redactados)
-15. `environments_secrets.md` — Configuracion y secretos por entorno
+15. `15-evidencias-gw-autoconsumo-jaen.md` — Evidencias backend/frontend (gateway FV autoconsumo Jaen)
+16. `environments_secrets.md` — Configuracion y secretos por entorno
 
 ## Estado de completitud
-- Variables mapeadas: ✅ 99 definidas (con placeholders donde falta meter.name exacto)
+- Variables mapeadas: ✅ 102 definidas
 - Variables calculadas: ✅ definidas con fórmula exacta
 - Tablas Timestream/DynamoDB: ✅ definidas y justificadas
 - Arquitectura AWS: ✅ definida (IoT Core + Timestream + Lambda + DynamoDB + API GW + Amplify + WAF)

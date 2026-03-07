@@ -14,13 +14,14 @@ Devuelve valores actuales (latest) para un conjunto de RT_ID o por campus/domini
 Query params (opcionales):
 - campus=jaen|linares
 - domain=energia|agua|fv
+- gateway_id=gw_jaen_energia|gw_jaen_agua|gw_linares_mix|gw_endesa_jaen|gw_endesa_linares|gw_autoconsumo_jaen
 - rt_id=... (repetible)
 
 Respuesta (ejemplo):
 {
   "ts": 173...,
   "items": [
-    {"rt_id":"uja.jaen.energia.consumo.edificio_a1.p_kw","value":123.4,"unit":"kW","ts_event":...},
+    {"rt_id":"uja.jaen.energia.consumo.edificio_a1.p_kw","value":123.4,"unit":"kW","ts_event":...,"gateway_id":"gw_jaen_energia"},
     ...
   ]
 }
@@ -67,8 +68,10 @@ Serie temporal (24h) para grafica de balance energetico.
 
 Query params:
 - campus=jaen
+- metric=energia_consumo|fv_endesa|fv_auto (opcional)
+- rt_prefix=uja.... (opcional, modo tecnico)
 
-Respuesta:
+Respuesta por defecto (sin `metric`, balance campus):
 {
   "campus":"jaen",
   "interval_minutes":5,
@@ -79,8 +82,22 @@ Respuesta:
   ]
 }
 
+Respuesta con `metric`:
+{
+  "campus":"jaen",
+  "metric":"fv_auto",
+  "interval_minutes":5,
+  "unit":"kW",
+  "series":[
+    {"ts":173...,"value":72.8},
+    ...
+  ]
+}
+
 Notas:
 - Se filtran valores inválidos/sentinela en Timestream (por defecto `abs(value) > 1e6`).
+- `gateway_id` permite aislar gateways que comparten prefijo de RT_ID, como `gw_jaen_energia` y `gw_autoconsumo_jaen`.
+- En Jaén, el balance por defecto usa demanda total campus, FV Endesa por suma de inversores y FV autoconsumo por `ct_total`.
 
 ## 3) Limits (desde API Gateway/WAF)
 - Rate limit por IP.

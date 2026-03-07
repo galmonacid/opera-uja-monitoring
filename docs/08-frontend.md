@@ -30,6 +30,17 @@ Motivos:
    - Valores instantaneos desde `/realtime` segun `gateway_variable_map_gw_jaen_energia`
    - Labels de valor colocados a la derecha del identificador de edificio en la imagen
 
+## Estado actual implementado
+- Dashboard principal Jaen:
+  - Demanda = suma `uja.jaen.energia.consumo.*.p_kw`
+  - FV = suma de inversores `uja.jaen.fv.endesa.*.p_ac_kw` + `uja.jaen.fv.auto.ct_total.p_kw`
+  - Red = `max(demanda - fv, 0)`
+- Pantalla `#/validacion`:
+  - 6 tarjetas, una por gateway requerido
+  - `realtime` por `campus/domain/gateway_id`
+  - series 24h por `campus + metric` para evitar mezclar `ct_total` con inversores
+  - agua se mantiene sin serie 24h dedicada
+
 ## Actualizacion de datos (MVP)
 - `/realtime`: cada 60s
 - `/series/24h`: cada 5 min

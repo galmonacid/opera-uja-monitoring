@@ -98,12 +98,13 @@ Detalle por gateway:
   - [COMPLETO] Catálogo observado (`OPERA-UNIVER--Autocon--FV.UJA`, payload operador)
   - [COMPLETO] `gateway_variable_map` completo (15 filas con variantes acentuadas/no acentuadas)
   - [COMPLETO] IoT Rule preparada (template + CD)
+  - [COMPLETO] Integración frontend en validación técnica (6 gateways visibles)
   - [EN CURSO] Datos en DynamoDB/Timestream (pendiente validar escritura estable tras despliegue)
 
 ## Fase 3B — Frontend ampliado (resto secciones) (1-2 semanas)
 Tareas:
-- [EN CURSO] Añadir secciones agua, FV e indicadores (validación técnica creada)
-- [EN CURSO] Integración con endpoints adicionales (realtime/series/agregados por gateway)
+- [COMPLETO] Añadir secciones agua, FV e indicadores en validación técnica (6 gateways)
+- [COMPLETO] Integración con endpoints adicionales (realtime por `gateway_id`, series por `metric`, agregados por gateway)
 - [PENDIENTE] Ajustes de UI/UX y performance
 
 ## Pendientes externos (bloqueantes suaves)

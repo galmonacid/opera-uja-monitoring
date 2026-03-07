@@ -13,13 +13,10 @@ const number = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
 });
 
-const CAMPUS_DEMAND_PREFIX = "uja.jaen.energia.consumo.edificio_";
+const CAMPUS_DEMAND_PREFIX = "uja.jaen.energia.consumo.";
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
-const CAMPUS_PV_RT_IDS = [
-  "uja.jaen.fv.auto.edificio_a0.p_kw",
-  "uja.jaen.fv.auto.edificio_c4.p_kw",
-  "uja.jaen.fv.auto.magisterio.p_kw",
-];
+const CAMPUS_PV_ENDESA_PREFIX = "uja.jaen.fv.endesa.";
+const CAMPUS_PV_AUTO_TOTAL_RT_ID = "uja.jaen.fv.auto.ct_total.p_kw";
 
 const MAP_POINTS = [
   { label: "A0", rtId: "uja.jaen.energia.consumo.edificio_a0.p_kw", x: 79, y: 15 },
@@ -54,53 +51,66 @@ const GATEWAYS = [
     id: "gw_jaen_energia",
     label: "gw_jaen_energia",
     topic: "uja/jaen/consumo/energia/gw_jaen_energia",
+    gatewayId: "gw_jaen_energia",
     campus: "jaen",
     domain: null,
     rtPrefixes: ["uja.jaen.energia.", "uja.jaen.fv.auto."],
-    seriesCampus: "jaen",
+    seriesMetric: "energia_consumo",
     aggregateMetric: "energia_consumo",
   },
   {
     id: "gw_jaen_agua",
     label: "gw_jaen_agua",
     topic: "uja/jaen/consumo/agua/gw_jaen_agua",
+    gatewayId: "gw_jaen_agua",
     campus: "jaen",
     domain: "agua",
     rtPrefixes: ["uja.jaen.agua."],
-    seriesCampus: null,
     aggregateMetric: "agua_consumo",
   },
   {
     id: "gw_linares_mix",
     label: "gw_linares_mix",
     topic: "uja/linares/consumo/mix/gw_linares_mix",
+    gatewayId: "gw_linares_mix",
     campus: "linares",
     domain: null,
     rtPrefixes: ["uja.linares.agua.", "uja.linares.energia."],
-    seriesCampus: null,
+    seriesMetric: "energia_consumo",
     aggregateMetric: "energia_consumo",
   },
   {
     id: "gw_endesa_jaen",
     label: "gw_endesa_jaen",
     topic: "uja/jaen/produccion/fv_endesa/gw_endesa_jaen",
+    gatewayId: "gw_endesa_jaen",
     campus: "jaen",
     domain: "fv",
     rtPrefixes: ["uja.jaen.fv.endesa."],
-    seriesCampus: null,
-    seriesPrefix: "uja.jaen.fv.endesa.",
+    seriesMetric: "fv_endesa",
     aggregateMetric: "fv_endesa",
   },
   {
     id: "gw_endesa_linares",
     label: "gw_endesa_linares",
     topic: "uja/linares/produccion/fv_endesa/gw_endesa_linares",
+    gatewayId: "gw_endesa_linares",
     campus: "linares",
     domain: "fv",
     rtPrefixes: ["uja.linares.fv.endesa."],
-    seriesCampus: null,
-    seriesPrefix: "uja.linares.fv.endesa.",
+    seriesMetric: "fv_endesa",
     aggregateMetric: "fv_endesa",
+  },
+  {
+    id: "gw_autoconsumo_jaen",
+    label: "gw_autoconsumo_jaen",
+    topic: "uja/jaen/produccion/fv_autoconsumo/gw_autoconsumo_jaen",
+    gatewayId: "gw_autoconsumo_jaen",
+    campus: "jaen",
+    domain: "fv",
+    rtPrefixes: ["uja.jaen.fv.auto."],
+    seriesMetric: "fv_auto",
+    aggregateMetric: "fv_auto",
   },
 ];
 
@@ -110,13 +120,16 @@ const calcTotals = (items) => {
 
   items.forEach((item) => {
     const value = Number(item.value) || 0;
-    if (
-      item.rt_id?.startsWith(CAMPUS_DEMAND_PREFIX) ||
-      item.rt_id === CAMPUS_VHE_RT_ID
-    ) {
+    if (item.rt_id?.startsWith(CAMPUS_DEMAND_PREFIX) && item.rt_id?.endsWith(".p_kw")) {
       demand += value;
     }
-    if (CAMPUS_PV_RT_IDS.includes(item.rt_id)) {
+    if (
+      item.rt_id?.startsWith(CAMPUS_PV_ENDESA_PREFIX) &&
+      item.rt_id?.endsWith(".p_ac_kw")
+    ) {
+      pv += value;
+    }
+    if (item.rt_id === CAMPUS_PV_AUTO_TOTAL_RT_ID) {
       pv += value;
     }
   });
@@ -124,7 +137,7 @@ const calcTotals = (items) => {
   return {
     demand,
     pv,
-    grid: demand - pv,
+    grid: Math.max(demand - pv, 0),
   };
 };
 
@@ -166,23 +179,23 @@ const aggregateLabels = (metric) => {
 };
 
 const AreaChart = ({ series }) => {
+  const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
   const chartSeries = useMemo(() => {
     const sorted = [...series].sort((a, b) => a.ts - b.ts);
     if (sorted.length >= 2) return sorted;
-    const now = Math.floor(Date.now() / 1000);
-    const seed = sorted[0] || { ts: now, demand: 0, pv: 0 };
+    const seed = sorted[0] || { ts: renderNow, demand: 0, pv: 0 };
     return [
-      { ...seed, ts: now - 86400 },
-      { ...seed, ts: now },
+      { ...seed, ts: renderNow - 86400 },
+      { ...seed, ts: renderNow },
     ];
-  }, [series]);
+  }, [renderNow, series]);
 
   const maxValue = Math.max(
     1,
     ...chartSeries.map((item) => Math.max(item.demand, item.pv))
   );
   const now = Math.max(
-    Math.floor(Date.now() / 1000),
+    renderNow,
     chartSeries[chartSeries.length - 1]?.ts || 0
   );
   const start = now - 86400;
@@ -295,6 +308,7 @@ const IconGrid = () => (
 );
 
 function App() {
+  const [dashboardNow] = useState(() => Math.floor(Date.now() / 1000));
   const [route, setRoute] = useState(() => window.location.hash || "#/");
   const [realtime, setRealtime] = useState({
     status: "idle",
@@ -306,7 +320,7 @@ function App() {
     data: null,
     error: null,
   });
-  const [aggregates, setAggregates] = useState({
+  const [_aggregates, setAggregates] = useState({
     daily: { status: "idle", data: null, error: null },
     monthly: { status: "idle", data: null, error: null },
   });
@@ -390,9 +404,10 @@ function App() {
           latest: { ...prev[gateway.id].latest, status: "loading", error: null },
         },
       }));
-      const query = gateway.domain
-        ? `/realtime?campus=${gateway.campus}&domain=${gateway.domain}`
-        : `/realtime?campus=${gateway.campus}`;
+      const params = new URLSearchParams({ campus: gateway.campus });
+      if (gateway.domain) params.set("domain", gateway.domain);
+      if (gateway.gatewayId) params.set("gateway_id", gateway.gatewayId);
+      const query = `/realtime?${params.toString()}`;
       const payload = await fetchWithFallback(query);
       const items = filterByPrefixes(payload.items || [], gateway.rtPrefixes);
       setValidation((prev) => ({
@@ -418,7 +433,7 @@ function App() {
   };
 
   const fetchGatewaySeries = async (gateway) => {
-    if (!gateway.seriesCampus && !gateway.seriesPrefix) {
+    if (!gateway.seriesMetric) {
       setValidation((prev) => ({
         ...prev,
         [gateway.id]: {
@@ -436,9 +451,9 @@ function App() {
           series: { ...prev[gateway.id].series, status: "loading", error: null },
         },
       }));
-      const payload = gateway.seriesPrefix
-        ? await fetchWithFallback(`/series/24h?rt_prefix=${gateway.seriesPrefix}`)
-        : await fetchWithFallback(`/series/24h?campus=${gateway.seriesCampus}`);
+      const payload = await fetchWithFallback(
+        `/series/24h?campus=${gateway.campus}&metric=${gateway.seriesMetric}`
+      );
       setValidation((prev) => ({
         ...prev,
         [gateway.id]: {
@@ -535,13 +550,6 @@ function App() {
     });
   }, [route]);
 
-  const refreshAll = () => {
-    fetchRealtime();
-    fetchSeries24h();
-    fetchAggregates("daily");
-    fetchAggregates("monthly");
-  };
-
   const refreshValidation = () => {
     GATEWAYS.forEach((gateway) => {
       fetchGatewayLatest(gateway);
@@ -560,12 +568,11 @@ function App() {
   const chartSeries = useMemo(() => {
     const fromApi = series24h.data?.series || [];
     if (fromApi.length) return fromApi;
-    const now = Math.floor(Date.now() / 1000);
     return [
-      { ts: now - 86400, demand, pv },
-      { ts: now, demand, pv },
+      { ts: dashboardNow - 86400, demand, pv },
+      { ts: dashboardNow, demand, pv },
     ];
-  }, [series24h.data, demand, pv]);
+  }, [dashboardNow, series24h.data, demand, pv]);
 
   const realtimeMap = useMemo(() => {
     const map = new Map();
@@ -615,29 +622,6 @@ function App() {
     );
   };
 
-  const realtimeRows = realtimeItems.map((item) => [
-    item.rt_id,
-    number.format(item.value),
-    item.unit || "kW",
-    formatTs(item.ts_event),
-  ]);
-
-
-  const seriesRows = (series24h.data?.series || []).map((item) => [
-    formatTs(item.ts),
-    number.format(item.demand),
-    "kW",
-    number.format(item.pv),
-    "kW",
-  ]);
-
-  const aggregateRows = (period) =>
-    (aggregates[period].data?.series || []).map((item) => [
-      formatDate(item.date || item.ts || "--"),
-      number.format(item.value),
-      aggregates[period].data?.unit || "--",
-    ]);
-
   const buildGatewayTables = (gateway) => {
     const labels = aggregateLabels(gateway.aggregateMetric);
     const state = validation[gateway.id] || {};
@@ -650,7 +634,8 @@ function App() {
     ]);
 
     const seriesItems = state.series?.data?.series || [];
-    const seriesRowsLocal = state.series?.data?.rt_prefix
+    const usesValueSeries = Boolean(state.series?.data?.metric || state.series?.data?.rt_prefix);
+    const seriesRowsLocal = usesValueSeries
       ? seriesItems.map((item) => [
           formatTs(item.ts),
           number.format(item.value),
@@ -710,7 +695,7 @@ function App() {
               {renderStatus(state.series || {})}
             </div>
             {renderTable(
-              state.series?.data?.rt_prefix
+              usesValueSeries
                 ? ["ts", "value", "unit"]
                 : ["ts", "demand", "unit", "pv", "unit"],
               seriesRowsLocal

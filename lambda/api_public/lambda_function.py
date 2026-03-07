@@ -19,34 +19,36 @@ _agg_table = None
 _ts_query = None
 
 SERIES_INTERVAL_MINUTES = 5
-SERIES_CONFIG = {
+METRIC_SERIES_CONFIG = {
+    ("jaen", "energia_consumo"): {
+        "rt_prefix": "uja.jaen.energia.consumo.",
+        "rt_like_patterns": ["%.p_kw"],
+    },
+    ("linares", "energia_consumo"): {
+        "rt_prefix": "uja.linares.energia.consumo.",
+        "rt_like_patterns": ["%.p_kw"],
+    },
+    ("jaen", "fv_endesa"): {
+        "rt_prefix": "uja.jaen.fv.endesa.",
+        "rt_like_patterns": ["%.p_ac_kw"],
+    },
+    ("linares", "fv_endesa"): {
+        "rt_ids": ["uja.linares.fv.endesa.ct_total.p_kw"],
+    },
+    ("jaen", "fv_auto"): {
+        "rt_ids": ["uja.jaen.fv.auto.ct_total.p_kw"],
+    },
+}
+
+BALANCE_SERIES_CONFIG = {
     "jaen": {
-        "demand_rt_ids": [
-            "uja.jaen.energia.consumo.edificio_a0.p_kw",
-            "uja.jaen.energia.consumo.edificio_a1.p_kw",
-            "uja.jaen.energia.consumo.edificio_a2.p_kw",
-            "uja.jaen.energia.consumo.edificio_a3.p_kw",
-            "uja.jaen.energia.consumo.edificio_a4.p_kw",
-            "uja.jaen.energia.consumo.edificio_b1.p_kw",
-            "uja.jaen.energia.consumo.edificio_b2.p_kw",
-            "uja.jaen.energia.consumo.edificio_b3.p_kw",
-            "uja.jaen.energia.consumo.edificio_b4.p_kw",
-            "uja.jaen.energia.consumo.edificio_b5.p_kw",
-            "uja.jaen.energia.consumo.edificio_c1.p_kw",
-            "uja.jaen.energia.consumo.edificio_c2.p_kw",
-            "uja.jaen.energia.consumo.edificio_c3.p_kw",
-            "uja.jaen.energia.consumo.edificio_c5.p_kw",
-            "uja.jaen.energia.consumo.edificio_c6.p_kw",
-            "uja.jaen.energia.consumo.edificio_d1.p_kw",
-            "uja.jaen.energia.consumo.edificio_d2.p_kw",
-            "uja.jaen.energia.consumo.edificio_d3.p_kw",
-            "uja.jaen.energia.consumo.edificio_d4.p_kw",
-            "uja.jaen.energia.consumo.carga_vhe.p_kw",
-        ],
-        "pv_rt_ids": [
-            "uja.jaen.fv.auto.edificio_a0.p_kw",
-        ],
-    }
+        "demand_metric": "energia_consumo",
+        "pv_metrics": ["fv_endesa", "fv_auto"],
+    },
+    "linares": {
+        "demand_metric": "energia_consumo",
+        "pv_metrics": ["fv_endesa"],
+    },
 }
 
 
@@ -66,6 +68,8 @@ def handler(event, context):
     if path.endswith("/aggregates/yearly"):
         return response(get_aggregates(params, "yearly"))
     if path.endswith("/series/24h"):
+        if params.get("metric"):
+            return response(get_series_24h_by_metric(params))
         if params.get("rt_prefix"):
             return response(get_series_24h_by_prefix(params))
         return response(get_series_24h(params))
@@ -77,37 +81,47 @@ def get_realtime(params, multi_params):
     rt_ids = multi_params.get("rt_id") or []
     if not rt_ids and params.get("rt_id"):
         rt_ids = [params["rt_id"]]
+    gateway_id = params.get("gateway_id")
 
     if rt_ids:
-        items = batch_get_latest(rt_ids)
+        items = batch_get_latest(rt_ids, gateway_id)
         return {"ts": int(max([i.get("ts_event", 0) for i in items] or [0])), "items": items}
 
     prefix = build_prefix(params.get("campus"), params.get("domain"))
     if not prefix:
         return {"error": "missing_filters"}
 
-    items = scan_latest(prefix)
+    items = scan_latest(prefix, gateway_id)
     return {"ts": int(max([i.get("ts_event", 0) for i in items] or [0])), "items": items}
 
 
-def batch_get_latest(rt_ids):
+def batch_get_latest(rt_ids, gateway_id=None):
     keys = [{"rt_id": rt_id} for rt_id in rt_ids]
     response = get_dynamodb().batch_get_item(
         RequestItems={DDB_LATEST_TABLE: {"Keys": keys}}
     )
     items = response.get("Responses", {}).get(DDB_LATEST_TABLE, [])
-    return sorted([normalize_item(i) for i in items], key=lambda x: x["rt_id"])
+    normalized = [normalize_item(i) for i in items]
+    if gateway_id:
+        normalized = [item for item in normalized if item.get("gateway_id") == gateway_id]
+    return sorted(normalized, key=lambda x: x["rt_id"])
 
 
-def scan_latest(prefix):
+def scan_latest(prefix, gateway_id=None):
     items = []
     last_key = None
+    filter_expression = Attr("rt_id").begins_with(prefix)
+    if gateway_id:
+        filter_expression = filter_expression & Attr("gateway_id").eq(gateway_id)
     while True:
-        kwargs = {"FilterExpression": Attr("rt_id").begins_with(prefix)}
+        kwargs = {"FilterExpression": filter_expression}
         if last_key:
             kwargs["ExclusiveStartKey"] = last_key
         response = get_latest_table().scan(**kwargs)
-        items.extend([normalize_item(i) for i in response.get("Items", [])])
+        normalized = [normalize_item(i) for i in response.get("Items", [])]
+        if gateway_id:
+            normalized = [item for item in normalized if item.get("gateway_id") == gateway_id]
+        items.extend(normalized)
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
             break
@@ -191,17 +205,20 @@ def normalize_item(item):
         "value": float(item["value"]),
         "unit": item.get("unit"),
         "ts_event": int(item.get("ts_event", 0)),
+        "gateway_id": item.get("gateway_id"),
     }
 
 
 def get_series_24h(params):
     campus = params.get("campus", "jaen")
-    config = SERIES_CONFIG.get(campus)
+    config = BALANCE_SERIES_CONFIG.get(campus)
     if not config:
         return {"error": "unsupported_campus"}
 
-    demand_series = query_timeseries(config["demand_rt_ids"])
-    pv_series = query_timeseries(config["pv_rt_ids"])
+    demand_series = get_metric_series(campus, config["demand_metric"])
+    pv_series = sum_series_maps(
+        [get_metric_series(campus, metric) for metric in config["pv_metrics"]]
+    )
 
     all_ts = sorted(set(demand_series) | set(pv_series))
     series = [
@@ -218,6 +235,29 @@ def get_series_24h(params):
         "interval_minutes": SERIES_INTERVAL_MINUTES,
         "unit": "kW",
         "series": series,
+    }
+
+
+def get_series_24h_by_metric(params):
+    campus = params.get("campus")
+    metric = params.get("metric")
+    if not campus or not metric:
+        return {"error": "missing_params"}
+
+    series_map = get_metric_series(campus, metric)
+    if series_map is None:
+        return {"error": "unsupported_metric"}
+
+    rows = [
+        {"ts": ts, "value": float(value)}
+        for ts, value in sorted(series_map.items())
+    ]
+    return {
+        "campus": campus,
+        "metric": metric,
+        "interval_minutes": SERIES_INTERVAL_MINUTES,
+        "unit": "kW",
+        "series": rows,
     }
 
 
@@ -240,46 +280,58 @@ def get_series_24h_by_prefix(params):
     }
 
 
-def query_timeseries(rt_ids):
-    if not rt_ids:
-        return {}
-    in_clause = ",".join([f"'{rt_id}'" for rt_id in rt_ids])
-    query = f"""
-SELECT ts, sum(value) AS value
-FROM (
-  SELECT
-    bin(time, {SERIES_INTERVAL_MINUTES}m) AS ts,
-    rt_id,
-    max_by(measure_value::double, time) AS value
-  FROM "{TS_DATABASE}"."{TS_TABLE}"
-  WHERE time > ago(24h)
-    AND measure_name = 'value'
-    AND rt_id IN ({in_clause})
-    AND measure_value::double <= {MAX_VALID_VALUE}
-    AND measure_value::double >= {-MAX_VALID_VALUE}
-  GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)
-)
-GROUP BY ts
-ORDER BY ts
-"""
-    rows = query_timestream(query)
+def get_metric_series(campus, metric):
+    config = METRIC_SERIES_CONFIG.get((campus, metric))
+    if not config:
+        return None
+    if config.get("rt_ids"):
+        return query_timeseries(config["rt_ids"])
+    return query_timeseries_by_select(
+        rt_prefix=config["rt_prefix"],
+        rt_like_patterns=config.get("rt_like_patterns"),
+    )
+
+
+def sum_series_maps(series_maps):
     result = {}
-    for row in rows:
-        data = row.get("Data", [])
-        if len(data) < 2:
+    for series_map in series_maps:
+        if not series_map:
             continue
-        ts_value = data[0].get("ScalarValue")
-        value = data[1].get("ScalarValue")
-        if ts_value is None or value is None:
-            continue
-        ts_epoch = parse_ts(ts_value)
-        if ts_epoch == 0:
-            continue
-        result[ts_epoch] = float(value)
+        for ts, value in series_map.items():
+            result[ts] = result.get(ts, 0.0) + value
     return result
 
 
+def query_timeseries(rt_ids):
+    return query_timeseries_by_select(rt_ids=rt_ids)
+
+
 def query_timeseries_by_prefix(rt_prefix):
+    return query_timeseries_by_select(
+        rt_prefix=rt_prefix,
+        rt_like_patterns=["%.p_%"],
+    )
+
+
+def query_timeseries_by_select(rt_ids=None, rt_prefix=None, rt_like_patterns=None):
+    where_clauses = [
+        "time > ago(24h)",
+        "measure_name = 'value'",
+    ]
+    if rt_ids:
+        in_clause = ",".join([f"'{rt_id}'" for rt_id in rt_ids])
+        where_clauses.append(f"rt_id IN ({in_clause})")
+    elif rt_prefix:
+        where_clauses.append(f"rt_id LIKE '{rt_prefix}%'")
+    else:
+        return {}
+
+    if rt_like_patterns:
+        patterns = " OR ".join([f"rt_id LIKE '{pattern}'" for pattern in rt_like_patterns])
+        where_clauses.append(f"({patterns})")
+
+    where_clauses.append(f"measure_value::double <= {MAX_VALID_VALUE}")
+    where_clauses.append(f"measure_value::double >= {-MAX_VALID_VALUE}")
     query = f"""
 SELECT ts, sum(value) AS value
 FROM (
@@ -288,18 +340,16 @@ FROM (
     rt_id,
     max_by(measure_value::double, time) AS value
   FROM "{TS_DATABASE}"."{TS_TABLE}"
-  WHERE time > ago(24h)
-    AND measure_name = 'value'
-    AND rt_id LIKE '{rt_prefix}%'
-    AND rt_id LIKE '%.p_%'
-    AND measure_value::double <= {MAX_VALID_VALUE}
-    AND measure_value::double >= {-MAX_VALID_VALUE}
+  WHERE {" AND ".join(where_clauses)}
   GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)
 )
 GROUP BY ts
 ORDER BY ts
 """
-    rows = query_timestream(query)
+    return rows_to_series_map(query_timestream(query))
+
+
+def rows_to_series_map(rows):
     result = {}
     for row in rows:
         data = row.get("Data", [])
