@@ -208,12 +208,36 @@ jobs:
             --rule-name uja_ingest_gw_autoconsumo_jaen \
             > /tmp/iot_rule_autoconsumo.json
           python -c "import json; payload=json.load(open('/tmp/iot_rule_autoconsumo.json','r',encoding='utf-8')); assert payload.get('rule', {}).get('ruleName')=='uja_ingest_gw_autoconsumo_jaen'"
-          aws dynamodb get-item \
-            --table-name latest_readings \
-            --key '{"rt_id":{"S":"uja.jaen.fv.auto.ct_total.p_kw"}}' \
-            > /tmp/latest_autoconsumo.json
-          python -c "import json; payload=json.load(open('/tmp/latest_autoconsumo.json','r',encoding='utf-8')); assert 'Item' in payload"
-          aws timestream-query query \
-            --query-string "SELECT measure_value::double AS value FROM \"uja_monitoring\".\"telemetry_rt\" WHERE measure_name = 'value' AND rt_id = 'uja.jaen.fv.auto.ct_total.p_kw' AND time > ago(15m) LIMIT 1" \
-            > /tmp/ts_autoconsumo.json
-          python -c "import json; payload=json.load(open('/tmp/ts_autoconsumo.json','r',encoding='utf-8')); assert payload.get('Rows')"
+          API_ID=$(aws apigateway get-rest-apis --query "items[?name=='uja-public-api'].id | [0]" --output text)
+          export API_BASE="https://${API_ID}.execute-api.${AWS_REGION}.amazonaws.com/v1"
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.request
+
+          api_base = os.environ["API_BASE"]
+
+          def fetch_json(path):
+            with urllib.request.urlopen(f"{api_base}{path}", timeout=15) as response:
+              return json.load(response)
+
+          latest_path = "/realtime?campus=jaen&domain=fv&gateway_id=gw_autoconsumo_jaen"
+          series_path = "/series/24h?campus=jaen&metric=fv_auto"
+
+          latest_payload = None
+          series_payload = None
+          for attempt in range(12):
+            latest_payload = fetch_json(latest_path)
+            series_payload = fetch_json(series_path)
+            latest_ids = {item.get("rt_id") for item in latest_payload.get("items", [])}
+            has_latest = "uja.jaen.fv.auto.ct_total.p_kw" in latest_ids
+            has_series = bool(series_payload.get("series"))
+            if has_latest and has_series:
+              break
+            time.sleep(10)
+
+          latest_ids = {item.get("rt_id") for item in latest_payload.get("items", [])}
+          assert "uja.jaen.fv.auto.ct_total.p_kw" in latest_ids, latest_payload
+          assert series_payload.get("series"), series_payload
+          PY

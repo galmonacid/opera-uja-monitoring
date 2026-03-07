@@ -41,6 +41,13 @@ Resources:
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: aggregates
 
+  ResourceKpis:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: kpis
+
   ResourceDaily:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -100,6 +107,18 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
 
+  KpisMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceKpis
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
+
   MonthlyMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -140,6 +159,7 @@ Resources:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
       - RealtimeMethod
+      - KpisMethod
       - DailyMethod
       - MonthlyMethod
       - YearlyMethod
