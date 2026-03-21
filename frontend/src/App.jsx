@@ -241,7 +241,12 @@ const AreaChart = ({ series }) => {
   const pvPath = buildPath("pv");
 
   return (
-    <svg className="area-chart" viewBox="-12 0 112 60" role="img">
+    <svg
+      className="area-chart"
+      viewBox="-12 0 112 60"
+      role="img"
+      aria-label="Curva de demanda y generación fotovoltaica de las últimas 24 horas"
+    >
       <g className="axis axis-y">
         {Array.from({ length: ticksY + 1 }).map((_, idx) => {
           const y = (height / ticksY) * idx;
@@ -666,7 +671,9 @@ function App() {
           <thead>
             <tr>
               {columns.map((col) => (
-                <th key={col}>{col}</th>
+                <th key={col} scope="col">
+                  {col}
+                </th>
               ))}
             </tr>
           </thead>
@@ -725,15 +732,16 @@ function App() {
     ]);
 
     return (
-      <div key={gateway.id} className="gateway-card">
+      <article key={gateway.id} className="gateway-card">
         <div className="gateway-header">
           <div>
-            <h2 className="gateway-title">{gateway.label}</h2>
+            <h3 className="gateway-title">{gateway.label}</h3>
             <div className="gateway-topic">{gateway.topic}</div>
           </div>
           <button
-            className="api-refresh"
+            className="action-button action-button-secondary action-button-compact"
             type="button"
+            aria-label={`Actualizar ${gateway.label}`}
             onClick={() => {
               fetchGatewayLatest(gateway);
               fetchGatewaySeries(gateway);
@@ -746,14 +754,14 @@ function App() {
         </div>
         <div className="gateway-grid">
           <div className="api-card">
-            <div className="api-card-title">Último valor disponible</div>
+            <h4 className="api-card-title">Último valor disponible</h4>
             <div className={`api-status status-${state.latest?.status}`}>
               {renderStatus(state.latest || {})}
             </div>
             {renderTable(["rt_id", "value", "unit", "ts_event"], latestRows)}
           </div>
           <div className="api-card">
-            <div className="api-card-title">Últimas 24 horas</div>
+            <h4 className="api-card-title">Últimas 24 horas</h4>
             <div className={`api-status status-${state.series?.status}`}>
               {renderStatus(state.series || {})}
             </div>
@@ -765,21 +773,21 @@ function App() {
             )}
           </div>
           <div className="api-card">
-            <div className="api-card-title">{labels.daily}</div>
+            <h4 className="api-card-title">{labels.daily}</h4>
             <div className={`api-status status-${state.daily?.status}`}>
               {renderStatus(state.daily || {})}
             </div>
             {renderTable(["date", "value", "unit"], dailyRows)}
           </div>
           <div className="api-card">
-            <div className="api-card-title">{labels.monthly}</div>
+            <h4 className="api-card-title">{labels.monthly}</h4>
             <div className={`api-status status-${state.monthly?.status}`}>
               {renderStatus(state.monthly || {})}
             </div>
             {renderTable(["date", "value", "unit"], monthlyRows)}
           </div>
         </div>
-      </div>
+      </article>
     );
   };
 
@@ -814,14 +822,15 @@ function App() {
       <article key={scope.id} className={`dashboard-panel panel-${panelStatus.kind}`}>
         <div className="dashboard-panel-header">
           <div>
-            <h2 className="dashboard-panel-title">{title}</h2>
+            <h3 className="dashboard-panel-title">{title}</h3>
             <div className={`dashboard-status status-${panelStatus.kind}`}>
               {panelStatus.label}
             </div>
           </div>
           <button
-            className="api-refresh"
+            className="action-button action-button-secondary action-button-compact"
             type="button"
+            aria-label={`Actualizar ${title}`}
             onClick={() => {
               fetchDashboardKpis(scope);
               fetchDashboardSeries(scope);
@@ -884,45 +893,97 @@ function App() {
   };
 
   const isValidation = route === "#/validacion";
+  const pageTitle = isValidation ? "Validación de datos" : "Balance de energía en tiempo real";
+  const pageSubtitle = isValidation
+    ? "Vista institucional para revisar la ingestión, las series temporales y los agregados operativos por gateway."
+    : "Seguimiento operativo de consumos, generación fotovoltaica y balances de campus con una presentación alineada con la identidad UJA.";
+  const pageActionLabel = isValidation ? "Actualizar validación" : "Actualizar paneles";
+  const pageAction = isValidation ? refreshValidation : refreshDashboard;
+  const secondaryActionHref = isValidation ? "#/" : "#/validacion";
+  const secondaryActionLabel = isValidation ? "Ver dashboard" : "Ver validación";
+  const breadcrumbCurrent = isValidation ? "Validación de datos" : "Dashboard energético";
 
   return (
     <div className="app">
-      <header className="topbar">
-        <div className="container topbar-inner">
-          <div className="topbar-brand">UJA Monitoring</div>
-          <nav className="topbar-nav">
-            <a
-              className={`topbar-link ${!isValidation ? "active" : ""}`}
-              href="#/"
-            >
-              Dashboard
-            </a>
-            <a
-              className={`topbar-link ${isValidation ? "active" : ""}`}
-              href="#/validacion"
-            >
-              Validación de datos
-            </a>
-          </nav>
+      <a className="skip-link" href="#main-content">
+        Saltar al contenido principal
+      </a>
+      <header className="site-header">
+        <div className="utility-bar">
+          <div className="container utility-bar-inner">
+            <p className="utility-bar-text">Universidad de Jaén</p>
+            <p className="utility-bar-text">Entorno digital de monitorización operativa</p>
+          </div>
+        </div>
+        <div className="topbar">
+          <div className="container topbar-inner">
+            <div className="brand-lockup">
+              <p className="brand-kicker">Universidad de Jaén</p>
+              <p className="brand-title">Monitorización operativa de campus</p>
+            </div>
+            <nav className="topbar-nav" aria-label="Navegación principal">
+              <a
+                className={`topbar-link ${!isValidation ? "active" : ""}`}
+                href="#/"
+              >
+                Dashboard energético
+              </a>
+              <a
+                className={`topbar-link ${isValidation ? "active" : ""}`}
+                href="#/validacion"
+              >
+                Validación de datos
+              </a>
+            </nav>
+          </div>
         </div>
       </header>
-      <main>
+      <main id="main-content">
+        <section className="hero-section">
+          <div className="container">
+            <nav className="breadcrumb" aria-label="Ruta de navegación">
+              <a className="breadcrumb-link" href="#/">
+                Inicio
+              </a>
+              <span className="breadcrumb-separator" aria-hidden="true">
+                /
+              </span>
+              <span className="breadcrumb-current">{breadcrumbCurrent}</span>
+            </nav>
+            <div className="page-hero">
+              <div className="page-intro">
+                <p className="page-eyebrow">Supervisión institucional</p>
+                <h1 className="page-title">{pageTitle}</h1>
+                <p className="page-subtitle">{pageSubtitle}</p>
+              </div>
+              <div className="page-actions">
+                <button
+                  className="action-button action-button-primary"
+                  type="button"
+                  onClick={pageAction}
+                >
+                  {pageActionLabel}
+                </button>
+                <a
+                  className="action-button action-button-secondary"
+                  href={secondaryActionHref}
+                >
+                  {secondaryActionLabel}
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
         {isValidation ? (
           <section className="section">
             <div className="container">
-              <div className="api-header">
-                <h1 className="section-title">Validación de datos</h1>
-                <button
-                  className="api-refresh"
-                  type="button"
-                  onClick={refreshValidation}
-                >
-                  Actualizar todo
-                </button>
+              <div className="section-header">
+                <h2 className="section-title">Estado por gateway</h2>
+                <p className="section-subtitle">
+                  Consulta la última muestra recibida, la serie de las últimas 24 horas y
+                  los agregados diarios y mensuales de cada origen de datos.
+                </p>
               </div>
-              <p className="api-subtitle">
-                Vista técnica por gateway para validar ingestión, series y agregados.
-              </p>
               <div className="gateway-stack">
                 {GATEWAYS.map((gateway) => buildGatewayTables(gateway))}
               </div>
@@ -932,19 +993,13 @@ function App() {
           <>
             <section className="section">
               <div className="container">
-                <div className="api-header">
-                  <h1 className="section-title">Balance de energia en tiempo real</h1>
-                  <button
-                    className="api-refresh"
-                    type="button"
-                    onClick={refreshDashboard}
-                  >
-                    Actualizar paneles
-                  </button>
+                <div className="section-header">
+                  <h2 className="section-title">Paneles por campus</h2>
+                  <p className="section-subtitle">
+                    Indicadores de demanda, producción fotovoltaica, red y autoconsumo,
+                    junto con la curva operativa de las últimas 24 horas.
+                  </p>
                 </div>
-                <p className="api-subtitle">
-                  Balance operativo separado para Las Lagunillas y CTL Linares.
-                </p>
                 <div className="dashboard-panels">
                   {DASHBOARD_SCOPES.map((scope) => buildDashboardPanel(scope))}
                 </div>
@@ -953,9 +1008,18 @@ function App() {
 
             <section className="section">
               <div className="container">
-                <h2 className="section-title">Mapa de Las Lagunillas</h2>
+                <div className="section-header">
+                  <h2 className="section-title">Mapa del Campus Las Lagunillas</h2>
+                  <p className="section-subtitle">
+                    Visualización resumida de lecturas energéticas por edificio y puntos
+                    singulares del campus.
+                  </p>
+                </div>
                 <div className="map-frame">
-                  <img src={campus} alt="Mapa campus" />
+                  <img
+                    src={campus}
+                    alt="Plano del Campus Las Lagunillas con puntos de lectura energética"
+                  />
                   {MAP_POINTS.map((point) => {
                     const reading = readValue(point.rtId);
                     const valueText = reading
@@ -979,6 +1043,25 @@ function App() {
           </>
         )}
       </main>
+      <footer className="site-footer">
+        <div className="container site-footer-inner">
+          <div>
+            <p className="site-footer-title">Universidad de Jaén</p>
+            <p className="site-footer-copy">
+              Aplicación interna para seguimiento de consumos, producción fotovoltaica y
+              validación de telemetría en los campus de Jaén y Linares.
+            </p>
+          </div>
+          <div className="site-footer-links">
+            <a className="site-footer-link" href="#/">
+              Dashboard energético
+            </a>
+            <a className="site-footer-link" href="#/validacion">
+              Validación de datos
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

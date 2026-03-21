@@ -1,0 +1,51 @@
+:root {
+  --uja-green: #00a65d;
+  --uja-green-dark: #006d38;
+  --uja-gold: #ddb10a;
+  --uja-gold-75: rgba(221, 177, 10, 0.75);
+  --uja-gold-40: rgba(221, 177, 10, 0.4);
+  --uja-red: #ef4044;
+  --uja-gray: #898a8d;
+  --uja-black: #231f20;
+
+  --color-text: var(--uja-black);
+  --color-text-soft: #5f6368;
+  --color-bg: #ffffff;
+  --color-bg-subtle: #f5f5f5;
+  --color-border: #d9d9d9;
+  --color-link: var(--uja-green-dark);
+  --color-link-hover: var(--uja-green);
+
+  --surface-success: rgba(0, 166, 93, 0.08);
+  --surface-warning: rgba(221, 177, 10, 0.12);
+  --surface-danger: rgba(239, 64, 68, 0.08);
+  --border-success: rgba(0, 109, 56, 0.18);
+  --border-warning: rgba(221, 177, 10, 0.28);
+  --border-danger: rgba(239, 64, 68, 0.24);
+  --text-warning: #765400;
+  --text-danger: #9f2023;
+
+  --font-ui: "DIN Next LT Pro", "DIN Next", "DIN", "Arial Narrow", Arial, sans-serif;
+  --font-display: "New Baskerville BT", Baskerville, Georgia, "Times New Roman", serif;
+
+  --container-max: 1200px;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --shadow-soft: 0 8px 20px rgba(35, 31, 32, 0.06);
+  --focus-ring: 3px solid rgba(221, 177, 10, 0.85);
+
+  --bp-sm: 576px;
+  --bp-md: 768px;
+  --bp-lg: 992px;
+  --bp-xl: 1200px;
+}
