@@ -124,3 +124,41 @@ def test_daily_water_uses_counter_delta():
     assert result["status"] == "ok"
     total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#total")
     assert float(total_item["value"]) == 6.75
+
+
+def test_query_timestream_clamps_negative_ct_total_to_zero():
+    daily = load_daily_module()
+    
+    class FakeQuery:
+        def query(self, **_kwargs):
+            return {
+                "Rows": [
+                    {
+                        "Data": [
+                            {"ScalarValue": "2026-03-06 10:00:00.000000000"},
+                            {"ScalarValue": "-0.34"},
+                        ]
+                    },
+                    {
+                        "Data": [
+                            {"ScalarValue": "2026-03-06 11:00:00.000000000"},
+                            {"ScalarValue": "-0.20"},
+                        ]
+                    },
+                    {
+                        "Data": [
+                            {"ScalarValue": "2026-03-06 12:00:00.000000000"},
+                            {"ScalarValue": "1.2"},
+                        ]
+                    },
+                ]
+            }
+
+    daily.get_ts_query = lambda: FakeQuery()
+    result = daily.query_timestream(
+        "uja.jaen.fv.auto.ct_total.p_kw",
+        "2026-03-06T10:00:00+00:00",
+        "2026-03-06T12:00:00+00:00",
+    )
+
+    assert [value for _, value in result] == [0.0, 0.0, 1.2]

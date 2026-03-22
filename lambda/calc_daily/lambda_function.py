@@ -12,6 +12,7 @@ DDB_MAPPING_TABLE = os.getenv("DDB_MAPPING_TABLE", "gateway_variable_map")
 DDB_CONFIG_TABLE = os.getenv("DDB_CONFIG_TABLE", "aggregation_configs")
 TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
+NEGATIVE_TO_ZERO_RT_IDS = {"uja.jaen.fv.auto.ct_total.p_kw"}
 CALC_VERSION = os.getenv("CALC_VERSION", "v1")
 
 _dynamodb = None
@@ -235,7 +236,7 @@ def query_timestream(rt_id, start, end):
     while "NextToken" in response:
         response = get_ts_query().query(QueryString=query, NextToken=response["NextToken"])
         rows.extend(parse_rows(response))
-    return rows
+    return [(ts, normalize_rt_value(rt_id, value)) for ts, value in rows]
 
 
 def parse_rows(response):
@@ -250,6 +251,12 @@ def parse_rows(response):
 
 def parse_time(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def normalize_rt_value(rt_id, value):
+    if rt_id in NEGATIVE_TO_ZERO_RT_IDS and value < 0:
+        return 0.0
+    return value
 
 
 def build_item(pk, sk, value, config):

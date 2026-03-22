@@ -13,6 +13,7 @@ TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
+NEGATIVE_TO_ZERO_RT_IDS = {"uja.jaen.fv.auto.ct_total.p_kw"}
 
 _dynamodb = None
 _latest_table = None
@@ -258,26 +259,27 @@ def get_aggregates(params, period):
         return {"error": "unsupported_metric"}
 
     pk = f"{campus}#{domain}#{system}#{period}"
-    items = query_pk(pk)
-    if not items:
+    items = normalize_aggregate_items(query_pk(pk), metric)
+    if period == "monthly":
+        fallback_items = build_aggregate_fallback_items(campus, metric, period)
+        if fallback_items:
+            existing_keys = {(item["date"], item["asset"]) for item in items}
+            items.extend(
+                item
+                for item in fallback_items
+                if (item["date"], item["asset"]) not in existing_keys
+            )
+    elif not items:
         items = build_aggregate_fallback_items(campus, metric, period)
 
     series = []
     for item in items:
-        if "sk" in item:
-            sk = item["sk"]
-            if not sk.endswith(f"#{asset}"):
-                continue
-            date = sk.split("#", 1)[0]
-            series.append({"date": date, "value": float(item["value"])})
-            continue
-
         if item.get("asset") != asset:
             continue
         series.append({"date": item["date"], "value": float(item["value"])})
 
     series.sort(key=lambda x: x["date"])
-    unit = items[0].get("unit") if items else "kWh"
+    unit = items[0].get("unit") if items else infer_aggregate_unit(metric)
     return {
         "campus": campus,
         "metric": metric,
@@ -285,6 +287,38 @@ def get_aggregates(params, period):
         "unit": unit,
         "series": series,
     }
+
+
+def normalize_aggregate_items(items, metric):
+    normalized = []
+    for item in items or []:
+        if "sk" in item:
+            sk = item.get("sk", "")
+            if "#" not in sk:
+                continue
+            date, asset = sk.split("#", 1)
+            normalized.append(
+                {
+                    "date": date,
+                    "asset": asset,
+                    "value": float(item["value"]),
+                    "unit": item.get("unit", infer_aggregate_unit(metric)),
+                }
+            )
+            continue
+
+        date = item.get("date")
+        if not date:
+            continue
+        normalized.append(
+            {
+                "date": date,
+                "asset": item.get("asset", "total"),
+                "value": float(item["value"]),
+                "unit": item.get("unit", infer_aggregate_unit(metric)),
+            }
+        )
+    return normalized
 
 
 def metric_to_scope(metric):
@@ -315,9 +349,10 @@ def query_pk(pk):
 
 
 def normalize_item(item):
+    value = normalize_rt_value(item["rt_id"], float(item["value"]))
     return {
         "rt_id": item["rt_id"],
-        "value": float(item["value"]),
+        "value": value,
         "unit": item.get("unit"),
         "ts_event": int(item.get("ts_event", 0)),
         "gateway_id": item.get("gateway_id"),
@@ -670,20 +705,16 @@ def query_timeseries_by_select(rt_ids=None, rt_prefix=None, rt_like_patterns=Non
     where_clauses.append(f"measure_value::double <= {MAX_VALID_VALUE}")
     where_clauses.append(f"measure_value::double >= {-MAX_VALID_VALUE}")
     query = f"""
-SELECT ts, sum(value) AS value
-FROM (
-  SELECT
-    bin(time, {SERIES_INTERVAL_MINUTES}m) AS ts,
-    rt_id,
-    max_by(measure_value::double, time) AS value
-  FROM "{TS_DATABASE}"."{TS_TABLE}"
-  WHERE {" AND ".join(where_clauses)}
-  GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)
-)
-GROUP BY ts
-ORDER BY ts
+SELECT
+  bin(time, {SERIES_INTERVAL_MINUTES}m) AS ts,
+  rt_id,
+  max_by(measure_value::double, time) AS value
+FROM "{TS_DATABASE}"."{TS_TABLE}"
+WHERE {" AND ".join(where_clauses)}
+GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)
+ORDER BY ts, rt_id
 """
-    return rows_to_series_map(query_timestream(query))
+    return rows_to_timeseries_sum_map(query_timestream(query))
 
 
 def query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
@@ -883,6 +914,37 @@ def rows_to_series_map(rows):
             continue
         result[ts_epoch] = float(value)
     return result
+
+
+def rows_to_timeseries_sum_map(rows):
+    result = {}
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 2:
+            continue
+        ts_value = data[0].get("ScalarValue")
+        ts_epoch = parse_ts(ts_value)
+        if ts_epoch == 0:
+            continue
+        if len(data) >= 3:
+            rt_id = data[1].get("ScalarValue")
+            value_raw = data[2].get("ScalarValue")
+        else:
+            rt_id = None
+            value_raw = data[1].get("ScalarValue")
+        if value_raw is None:
+            continue
+        value = float(value_raw)
+        if rt_id:
+            value = normalize_rt_value(rt_id, value)
+        result[ts_epoch] = result.get(ts_epoch, 0.0) + value
+    return result
+
+
+def normalize_rt_value(rt_id, value):
+    if rt_id in NEGATIVE_TO_ZERO_RT_IDS and value < 0:
+        return 0.0
+    return value
 
 
 def get_dynamodb():

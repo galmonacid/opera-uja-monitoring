@@ -21,6 +21,7 @@ DEFAULT_GATEWAY_ID = os.getenv("DEFAULT_GATEWAY_ID")
 LOG_SAMPLE_LIMIT = int(os.getenv("LOG_SAMPLE_LIMIT", "10"))
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
 MAX_VALID_VALUE_KWH = float(os.getenv("MAX_VALID_VALUE_KWH", "1000000000"))
+NEGATIVE_TO_ZERO_RT_IDS = {"uja.jaen.fv.auto.ct_total.p_kw"}
 
 serializer = TypeSerializer()
 deserializer = TypeDeserializer()
@@ -122,6 +123,7 @@ def handler(event, context):
     for ts_event, records_by_rt_id in records_by_ts.items():
         raw_values = raw_values_by_ts.get(ts_event, {})
         apply_adjustments(records_by_rt_id, raw_values)
+        apply_rt_value_controls(records_by_rt_id)
 
     all_records = []
     for records_by_rt_id in records_by_ts.values():
@@ -326,6 +328,18 @@ def apply_adjustments(records_by_rt_id, raw_values):
         value = sum(raw_values[key] * sign for key, sign in terms)
         records_by_rt_id[rt_id]["value"] = value
         records_by_rt_id[rt_id]["unit"] = "kW"
+
+
+def normalize_rt_value(rt_id, value):
+    if rt_id in NEGATIVE_TO_ZERO_RT_IDS and value < 0:
+        logger.info("negative value normalized to 0 for %s: %s", rt_id, value)
+        return 0.0
+    return value
+
+
+def apply_rt_value_controls(records_by_rt_id):
+    for record in records_by_rt_id.values():
+        record["value"] = normalize_rt_value(record["rt_id"], record["value"])
 
 
 def write_latest_readings(records):

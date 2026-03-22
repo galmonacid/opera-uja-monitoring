@@ -142,3 +142,48 @@ def test_ingest_normalizes_out_of_range_measurements_to_zero():
         "rt.energy": 0.0,
         "rt.radiation": 0.0,
     }
+
+
+def test_ingest_normalizes_negative_ct_total_to_zero():
+    module = load_lambda_module()
+
+    event = {
+        "topic": "uja/jaen/produccion/fv_autoconsumo/gw_autoconsumo_jaen",
+        "payload": {
+            "meter": [
+                {
+                    "name": "OPERA-UNIVER--Autocon--FV.UJA",
+                    "time": 1772912407,
+                    "data": [
+                        {"var": "Tot_FV_KW sys", "value": -0.34, "unit": "kW"},
+                    ],
+                }
+            ]
+        },
+    }
+
+    mapping = {
+        "OPERA-UNIVER--Autocon--FV.UJA::Tot_FV_KW sys": {
+            "rt_id": "uja.jaen.fv.auto.ct_total.p_kw",
+            "unit_expected": "kW",
+            "enabled": True,
+        }
+    }
+
+    def fetch_mappings(_gateway_id, source_keys):
+        return {sk: mapping[sk] for sk in source_keys if sk in mapping}
+
+    captured = {}
+
+    def write_latest_readings(records):
+        captured["latest"] = records
+
+    module.fetch_mappings = fetch_mappings
+    module.write_latest_readings = write_latest_readings
+    module.write_timestream_records = lambda _records: None
+
+    result = module.handler(event, None)
+
+    assert result["status"] == "ok"
+    values = {item["rt_id"]: item["value"] for item in captured["latest"]}
+    assert values["uja.jaen.fv.auto.ct_total.p_kw"] == 0.0

@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 
 import campus from "./assets/sections/campus.png";
+import EnergyFlowDiagram from "./components/EnergyFlowDiagram";
+import {
+  getMonitoringPointLabel,
+  getMonitoringPointMeta,
+  getMonitoringPointShortLabel,
+} from "./data/monitoringPoints";
 
 const DEFAULT_API_BASE = "https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1";
 const API_BASES = [
@@ -16,16 +22,16 @@ const number = new Intl.NumberFormat("es-ES", {
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
 
 const MAP_POINTS = [
-  { label: "A0", rtId: "uja.jaen.energia.consumo.edificio_a0.p_kw", x: 79, y: 15 },
-  { label: "A1", rtId: "uja.jaen.energia.consumo.edificio_a1.p_kw", x: 54, y: 28 },
-  { label: "A2", rtId: "uja.jaen.energia.consumo.edificio_a2.p_kw", x: 45, y: 35 },
-  { label: "A3", rtId: "uja.jaen.energia.consumo.edificio_a3.p_kw", x: 38, y: 43 },
+  { label: "A0", rtId: "uja.jaen.energia.consumo.edificio_a0.p_kw", x: 83, y: 15 },
+  { label: "A1", rtId: "uja.jaen.energia.consumo.edificio_a1.p_kw", x: 64, y: 32 },
+  { label: "A2", rtId: "uja.jaen.energia.consumo.edificio_a2.p_kw", x: 50, y: 40 },
+  { label: "A3", rtId: "uja.jaen.energia.consumo.edificio_a3.p_kw", x: 40, y: 44 },
   { label: "A4", rtId: "uja.jaen.energia.consumo.edificio_a4.p_kw", x: 31, y: 55 },
-  { label: "B1", rtId: "uja.jaen.energia.consumo.edificio_b1.p_kw", x: 83, y: 33 },
-  { label: "B2", rtId: "uja.jaen.energia.consumo.edificio_b2.p_kw", x: 60, y: 45 },
-  { label: "B3", rtId: "uja.jaen.energia.consumo.edificio_b3.p_kw", x: 51, y: 52 },
-  { label: "B4", rtId: "uja.jaen.energia.consumo.edificio_b4.p_kw", x: 45, y: 56 },
-  { label: "B5", rtId: "uja.jaen.energia.consumo.edificio_b5.p_kw", x: 40, y: 63 },
+  { label: "B1", rtId: "uja.jaen.energia.consumo.edificio_b1.p_kw", x: 87, y: 30 },
+  { label: "B2", rtId: "uja.jaen.energia.consumo.edificio_b2.p_kw", x: 64, y: 44 },
+  { label: "B3", rtId: "uja.jaen.energia.consumo.edificio_b3.p_kw", x: 55, y: 52 },
+  { label: "B4", rtId: "uja.jaen.energia.consumo.edificio_b4.p_kw", x: 45, y: 60 },
+  { label: "B5", rtId: "uja.jaen.energia.consumo.edificio_b5.p_kw", x: 36, y: 67 },
   { label: "C1", rtId: "uja.jaen.energia.consumo.edificio_c1.p_kw", x: 68, y: 55 },
   { label: "C2", rtId: "uja.jaen.energia.consumo.edificio_c2.p_kw", x: 61, y: 63 },
   { label: "C3", rtId: "uja.jaen.energia.consumo.edificio_c3.p_kw", x: 49, y: 70 },
@@ -118,6 +124,158 @@ const GATEWAYS = [
     aggregateMetric: "fv_auto",
   },
 ];
+
+const PORTAL_ROUTES = [
+  { id: "summary", hash: "#/", label: "Balance" },
+  { id: "energy", hash: "#/energia", label: "Energía" },
+  { id: "map", hash: "#/mapa", label: "Mapa" },
+  { id: "water", hash: "#/agua", label: "Agua" },
+  { id: "solar", hash: "#/fotovoltaica", label: "Fotovoltaica" },
+  { id: "projects", hash: "#/autoconsumo", label: "Autoconsumo" },
+  { id: "validation", hash: "#/validacion", label: "Validación" },
+];
+
+const ENERGY_VIEW_CONFIG = [
+  {
+    scopeId: "las_lagunillas",
+    campus: "jaen",
+    label: "Campus Las Lagunillas",
+    gatewayId: "gw_jaen_energia",
+  },
+  {
+    scopeId: "ctl_linares",
+    campus: "linares",
+    label: "Campus CTL Linares",
+    gatewayId: "gw_linares_mix",
+  },
+];
+
+const WATER_VIEW_CONFIG = [
+  {
+    id: "jaen",
+    campus: "jaen",
+    label: "Las Lagunillas",
+    gatewayId: "gw_jaen_agua",
+    prefix: "uja.jaen.agua.",
+    trendStatusKey: "gw_jaen_agua",
+    hasTrend: true,
+  },
+  {
+    id: "linares",
+    campus: "linares",
+    label: "CTL Linares",
+    gatewayId: "gw_linares_mix",
+    prefix: "uja.linares.agua.",
+    trendStatusKey: null,
+    hasTrend: false,
+  },
+];
+
+const SOLAR_VIEW_CONFIG = [
+  {
+    id: "endesa_jaen",
+    campus: "jaen",
+    label: "FV Endesa Jaén",
+    gatewayId: "gw_endesa_jaen",
+    kind: "Planta FV",
+    description: "Generación principal de Endesa en Las Lagunillas.",
+  },
+  {
+    id: "autoconsumo_jaen",
+    campus: "jaen",
+    label: "Autoconsumo Jaén",
+    gatewayId: "gw_autoconsumo_jaen",
+    kind: "Proyecto autoconsumo",
+    description: "Producción de autoconsumo de Jaén para explotación interna.",
+  },
+  {
+    id: "endesa_linares",
+    campus: "linares",
+    label: "FV Endesa Linares",
+    gatewayId: "gw_endesa_linares",
+    kind: "Planta FV",
+    description: "Generación principal de CTL Linares.",
+  },
+];
+
+const PROJECT_VIEW_CONFIG = [
+  {
+    id: "autoconsumo_jaen",
+    campus: "jaen",
+    label: "Autoconsumo Jaén",
+    gatewayId: "gw_autoconsumo_jaen",
+    type: "Autoconsumo fotovoltaico",
+    coverage: "CT total y apoyo a edificio A0",
+  },
+  {
+    id: "endesa_jaen",
+    campus: "jaen",
+    label: "FV Endesa Jaén",
+    gatewayId: "gw_endesa_jaen",
+    type: "Planta fotovoltaica",
+    coverage: "Producción campus Las Lagunillas",
+  },
+  {
+    id: "endesa_linares",
+    campus: "linares",
+    label: "FV Endesa Linares",
+    gatewayId: "gw_endesa_linares",
+    type: "Planta fotovoltaica",
+    coverage: "Producción campus CTL Linares",
+  },
+];
+
+const MAP_LAYER_OPTIONS = [
+  { value: "all", label: "Todas las capas" },
+  { value: "buildings", label: "Edificios" },
+  { value: "energy", label: "Puntos energéticos" },
+  { value: "water", label: "Agua" },
+  { value: "solar", label: "Fotovoltaica" },
+  { value: "projects", label: "Autoconsumo" },
+];
+
+const CAMPUS_OPTIONS = [
+  { value: "all", label: "Todos los campus" },
+  { value: "jaen", label: "Las Lagunillas" },
+  { value: "linares", label: "CTL Linares" },
+];
+
+const PERIOD_OPTIONS = [
+  { value: "actual", label: "Actual" },
+  { value: "daily", label: "Diario" },
+  { value: "monthly", label: "Mensual" },
+];
+
+const VALIDATION_DOMAIN_OPTIONS = [
+  { value: "all", label: "Todos los dominios" },
+  { value: "mixto", label: "Mixto" },
+  { value: "agua", label: "Agua" },
+  { value: "fv", label: "Fotovoltaica" },
+];
+
+const resolveRouteId = (hash) => {
+  switch (hash) {
+    case "#/balance":
+    case "#/resumen":
+    case "#/":
+      return "summary";
+    case "#/energia":
+      return "energy";
+    case "#/mapa":
+      return "map";
+    case "#/agua":
+      return "water";
+    case "#/fotovoltaica":
+      return "solar";
+    case "#/autoconsumo":
+    case "#/proyectos":
+      return "projects";
+    case "#/validacion":
+      return "validation";
+    default:
+      return "summary";
+  }
+};
 
 const formatTs = (ts) => {
   if (!ts && ts !== 0) return "--";
@@ -216,7 +374,8 @@ const AreaChart = ({ series }) => {
   );
   const start = now - 86400;
   const range = 86400;
-  const height = 60;
+  const plotHeight = 30;
+  const totalHeight = 38;
   const ticksY = 4;
   const ticksX = [0, 6, 12, 18, 24];
 
@@ -229,11 +388,11 @@ const AreaChart = ({ series }) => {
   const buildPath = (key) => {
     const points = chartSeries.map((item) => {
       const x = ((item.ts - start) / range) * 100;
-      const y = height - (item[key] / maxValue) * height;
+      const y = plotHeight - (item[key] / maxValue) * plotHeight;
       return [x, y];
     });
     const line = points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-    const area = `M ${line} L 100,${height} L 0,${height} Z`;
+    const area = `M ${line} L 100,${plotHeight} L 0,${plotHeight} Z`;
     return { line, area };
   };
 
@@ -243,18 +402,18 @@ const AreaChart = ({ series }) => {
   return (
     <svg
       className="area-chart"
-      viewBox="-12 0 112 60"
+      viewBox="-8 0 108 38"
       role="img"
       aria-label="Curva de demanda y generación fotovoltaica de las últimas 24 horas"
     >
       <g className="axis axis-y">
         {Array.from({ length: ticksY + 1 }).map((_, idx) => {
-          const y = (height / ticksY) * idx;
+          const y = (plotHeight / ticksY) * idx;
           const value = maxValue - (maxValue / ticksY) * idx;
           return (
             <g key={`y-${idx}`} transform={`translate(0, ${y})`}>
               <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
-              <text className="axis-label axis-label-y" x="-2" y="-1">
+              <text className="axis-label axis-label-y" x="-1.2" y="-1" textAnchor="end">
                 {number.format(Math.round(value / 100) * 100)}
               </text>
             </g>
@@ -264,10 +423,11 @@ const AreaChart = ({ series }) => {
       <g className="axis axis-x">
         {ticksX.map((hours) => {
           const x = (hours / 24) * 100;
+          const textAnchor = hours === 0 ? "start" : hours === 24 ? "end" : "middle";
           return (
-            <g key={`x-${hours}`} transform={`translate(${x}, ${height})`}>
+            <g key={`x-${hours}`} transform={`translate(${x}, ${plotHeight})`}>
               <line className="axis-tick" x1="0" x2="0" y1="0" y2="2" />
-              <text className="axis-label" x="0" y="6">
+              <text className="axis-label" x="0" y="6" textAnchor={textAnchor}>
                 {formatHour(24 - hours)}
               </text>
             </g>
@@ -278,6 +438,82 @@ const AreaChart = ({ series }) => {
       <path className="area area-pv" d={pvPath.area} />
       <polyline className="line line-demand" points={demandPath.line} />
       <polyline className="line line-pv" points={pvPath.line} />
+    </svg>
+  );
+};
+
+const ValueChart = ({ series, label }) => {
+  const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
+  const chartSeries = useMemo(() => {
+    const normalized = (series || [])
+      .map((item) => ({ ts: item.ts, value: Number(item.value || 0) }))
+      .sort((a, b) => a.ts - b.ts);
+    if (normalized.length >= 2) return normalized;
+    const seed = normalized[0] || { ts: renderNow, value: 0 };
+    return [
+      { ...seed, ts: renderNow - 86400 },
+      { ...seed, ts: renderNow },
+    ];
+  }, [renderNow, series]);
+
+  const maxValue = Math.max(1, ...chartSeries.map((item) => item.value));
+  const now = Math.max(renderNow, chartSeries[chartSeries.length - 1]?.ts || 0);
+  const start = now - 86400;
+  const range = 86400;
+  const height = 60;
+  const ticksY = 4;
+  const ticksX = [0, 6, 12, 18, 24];
+
+  const formatHour = (hoursAgo) => {
+    const date = new Date((now - hoursAgo * 3600) * 1000);
+    const hh = String(date.getHours()).padStart(2, "0");
+    return `${hh}:00`;
+  };
+
+  const points = chartSeries.map((item) => {
+    const x = ((item.ts - start) / range) * 100;
+    const y = height - (item.value / maxValue) * height;
+    return [x, y];
+  });
+  const line = points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
+  const area = `M ${line} L 100,${height} L 0,${height} Z`;
+
+  return (
+    <svg
+      className="value-chart"
+      viewBox="-12 0 112 60"
+      role="img"
+      aria-label={`${label} últimas 24 horas`}
+    >
+      <g className="axis axis-y">
+        {Array.from({ length: ticksY + 1 }).map((_, idx) => {
+          const y = (height / ticksY) * idx;
+          const value = maxValue - (maxValue / ticksY) * idx;
+          return (
+            <g key={`value-y-${idx}`} transform={`translate(0, ${y})`}>
+              <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
+              <text className="axis-label axis-label-y" x="-2" y="-1">
+                {number.format(Math.round(value))}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+      <g className="axis axis-x">
+        {ticksX.map((hours) => {
+          const x = (hours / 24) * 100;
+          return (
+            <g key={`value-x-${hours}`} transform={`translate(${x}, ${height})`}>
+              <line className="axis-tick" x1="0" x2="0" y1="0" y2="2" />
+              <text className="axis-label" x="0" y="6">
+                {formatHour(24 - hours)}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+      <path className="value-area" d={area} />
+      <polyline className="value-line" points={line} />
     </svg>
   );
 };
@@ -348,7 +584,13 @@ const IconAutoconsumo = () => (
 );
 
 function App() {
-  const [route, setRoute] = useState(() => window.location.hash || "#/");
+  const [routeHash, setRouteHash] = useState(() => window.location.hash || "#/");
+  const [campusFilter, setCampusFilter] = useState("all");
+  const [periodFilter, setPeriodFilter] = useState("actual");
+  const [mapLayer, setMapLayer] = useState("all");
+  const [selectedMapPoint, setSelectedMapPoint] = useState(null);
+  const [selectedProjectId, setSelectedProjectId] = useState(PROJECT_VIEW_CONFIG[0].id);
+  const [validationDomainFilter, setValidationDomainFilter] = useState("all");
   const [realtime, setRealtime] = useState({
     status: "idle",
     data: null,
@@ -376,6 +618,8 @@ function App() {
     });
     return initial;
   });
+
+  const routeId = resolveRouteId(routeHash);
 
   const fetchWithFallback = async (path) => {
     let lastError = null;
@@ -472,8 +716,7 @@ function App() {
       const params = new URLSearchParams({ campus: gateway.campus });
       if (gateway.domain) params.set("domain", gateway.domain);
       if (gateway.gatewayId) params.set("gateway_id", gateway.gatewayId);
-      const query = `/realtime?${params.toString()}`;
-      const payload = await fetchWithFallback(query);
+      const payload = await fetchWithFallback(`/realtime?${params.toString()}`);
       const items = filterByPrefixes(payload.items || [], gateway.rtPrefixes);
       setValidation((prev) => ({
         ...prev,
@@ -577,6 +820,49 @@ function App() {
     }
   };
 
+  const refreshScopeData = (scope) => {
+    fetchDashboardKpis(scope);
+    fetchDashboardSeries(scope);
+  };
+
+  const refreshDashboard = () => {
+    DASHBOARD_SCOPES.forEach((scope) => {
+      refreshScopeData(scope);
+    });
+  };
+
+  const refreshGatewayData = (gateway) => {
+    fetchGatewayLatest(gateway);
+    fetchGatewaySeries(gateway);
+    fetchGatewayAggregates(gateway, "daily");
+    fetchGatewayAggregates(gateway, "monthly");
+  };
+
+  const refreshOperationalLatest = () => {
+    GATEWAYS.forEach((gateway) => {
+      fetchGatewayLatest(gateway);
+    });
+  };
+
+  const refreshOperationalHistory = () => {
+    GATEWAYS.forEach((gateway) => {
+      fetchGatewaySeries(gateway);
+      fetchGatewayAggregates(gateway, "daily");
+      fetchGatewayAggregates(gateway, "monthly");
+    });
+  };
+
+  const refreshOperationalData = () => {
+    refreshOperationalLatest();
+    refreshOperationalHistory();
+  };
+
+  const refreshPortal = () => {
+    fetchRealtime();
+    refreshDashboard();
+    refreshOperationalData();
+  };
+
   useEffect(() => {
     fetchRealtime();
     const interval = setInterval(fetchRealtime, 60000);
@@ -608,35 +894,84 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const handleHash = () => setRoute(window.location.hash || "#/");
+    refreshOperationalLatest();
+    const interval = setInterval(refreshOperationalLatest, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    refreshOperationalHistory();
+    const interval = setInterval(refreshOperationalHistory, 300000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleHash = () => setRouteHash(window.location.hash || "#/");
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
   }, []);
 
-  useEffect(() => {
-    if (route !== "#/validacion") return;
-    GATEWAYS.forEach((gateway) => {
-      fetchGatewayLatest(gateway);
-      fetchGatewaySeries(gateway);
-      fetchGatewayAggregates(gateway, "daily");
-      fetchGatewayAggregates(gateway, "monthly");
-    });
-  }, [route]);
+  const formatValue = (value, unit) => (value == null ? "--" : `${number.format(value)} ${unit}`);
 
-  const refreshDashboard = () => {
-    DASHBOARD_SCOPES.forEach((scope) => {
-      fetchDashboardKpis(scope);
-      fetchDashboardSeries(scope);
-    });
+  const getLastAggregateValue = (series) => {
+    if (!series?.length) return null;
+    return series[series.length - 1].value ?? null;
   };
 
-  const refreshValidation = () => {
-    GATEWAYS.forEach((gateway) => {
-      fetchGatewayLatest(gateway);
-      fetchGatewaySeries(gateway);
-      fetchGatewayAggregates(gateway, "daily");
-      fetchGatewayAggregates(gateway, "monthly");
-    });
+  const getAnnualValue = (series) => {
+    if (!series?.length) return null;
+    return series.reduce((sum, item) => sum + Number(item.value || 0), 0);
+  };
+
+  const getStatusKind = (status) => {
+    if (status === "ready") return "complete";
+    if (status === "loading") return "loading";
+    if (status === "error") return "error";
+    return "idle";
+  };
+
+  const getPrimaryLatest = (items) => {
+    if (!items.length) return { value: null, unit: "--", ts: null };
+    const ctTotal = items.find((item) => item.rt_id?.includes("ct_total"));
+    if (ctTotal) {
+      return {
+        value: ctTotal.value,
+        unit: ctTotal.unit || "kW",
+        ts: ctTotal.ts_event || null,
+      };
+    }
+    if (items.length === 1) {
+      return {
+        value: items[0].value,
+        unit: items[0].unit || "kW",
+        ts: items[0].ts_event || null,
+      };
+    }
+    return {
+      value: items.reduce((sum, item) => sum + Number(item.value || 0), 0),
+      unit: items[0].unit || "kW",
+      ts: items.reduce((maxTs, item) => Math.max(maxTs, Number(item.ts_event || 0)), 0),
+    };
+  };
+
+  const pickMetricSnapshot = ({
+    currentLabel,
+    currentValue,
+    currentUnit,
+    dailyLabel,
+    dailyValue,
+    dailyUnit,
+    monthlyLabel,
+    monthlyValue,
+    monthlyUnit,
+  }) => {
+    if (periodFilter === "daily") {
+      return { label: dailyLabel, value: dailyValue, unit: dailyUnit };
+    }
+    if (periodFilter === "monthly") {
+      return { label: monthlyLabel, value: monthlyValue, unit: monthlyUnit };
+    }
+    return { label: currentLabel, value: currentValue, unit: currentUnit };
   };
 
   const realtimeItems = useMemo(() => realtime.data?.items || [], [realtime.data]);
@@ -652,6 +987,115 @@ function App() {
     if (!item) return null;
     return { value: item.value, unit: item.unit || "kW" };
   };
+
+  const dashboardOverview = useMemo(() => {
+    const result = {};
+    DASHBOARD_SCOPES.forEach((scope) => {
+      const state = dashboard[scope.id] || {};
+      const status = resolveDashboardStatus(state.kpis || {}, state.series || {});
+      result[scope.id] = {
+        scope,
+        campus: scope.id === "las_lagunillas" ? "jaen" : "linares",
+        status,
+        title: state.kpis?.data?.label || state.series?.data?.label || scope.title,
+        demand: readKpiValue(state.kpis?.data, "demanda_kw"),
+        pv: readKpiValue(state.kpis?.data, "fv_kw"),
+        grid: readKpiValue(state.kpis?.data, "red_kw"),
+        autoconsumoPct: readKpiValue(state.kpis?.data, "autoconsumo_pct"),
+        chartSeries: state.series?.data?.series || [],
+        tsEvent: state.kpis?.data?.ts_event || null,
+      };
+    });
+    return result;
+  }, [dashboard]);
+
+  const gatewayOverview = useMemo(() => {
+    const result = {};
+    GATEWAYS.forEach((gateway) => {
+      const state = validation[gateway.id] || {};
+      const latestItems = state.latest?.data?.items || [];
+      const primaryLatest = getPrimaryLatest(latestItems);
+      result[gateway.id] = {
+        gateway,
+        latestItems,
+        seriesItems: state.series?.data?.series || [],
+        dailySeries: state.daily?.data?.series || [],
+        monthlySeries: state.monthly?.data?.series || [],
+        latestStatus: state.latest?.status || "idle",
+        seriesStatus: state.series?.status || "idle",
+        dailyStatus: state.daily?.status || "idle",
+        monthlyStatus: state.monthly?.status || "idle",
+        latestValue: primaryLatest.value,
+        latestUnit: primaryLatest.unit,
+        latestTs: primaryLatest.ts,
+        dailyValue: getLastAggregateValue(state.daily?.data?.series || []),
+        dailyUnit: state.daily?.data?.unit || "--",
+        monthlyValue: getLastAggregateValue(state.monthly?.data?.series || []),
+        monthlyUnit: state.monthly?.data?.unit || state.daily?.data?.unit || "--",
+        annualValue: getAnnualValue(state.monthly?.data?.series || []),
+        annualUnit: state.monthly?.data?.unit || state.daily?.data?.unit || "--",
+      };
+    });
+    return result;
+  }, [validation]);
+
+  const validationSummary = useMemo(() => {
+    let errors = 0;
+    let loading = 0;
+    let ready = 0;
+    let lastSync = 0;
+
+    GATEWAYS.forEach((gateway) => {
+      const summary = gatewayOverview[gateway.id];
+      const statuses = [
+        summary?.latestStatus,
+        summary?.seriesStatus,
+        summary?.dailyStatus,
+        summary?.monthlyStatus,
+      ];
+      if (statuses.includes("error")) {
+        errors += 1;
+      } else if (statuses.includes("loading")) {
+        loading += 1;
+      } else if (statuses.includes("ready")) {
+        ready += 1;
+      }
+      lastSync = Math.max(lastSync, Number(summary?.latestTs || 0));
+    });
+
+    return {
+      errors,
+      loading,
+      ready,
+      lastSync,
+    };
+  }, [gatewayOverview]);
+
+  const visibleMapPoints = useMemo(() => {
+    if (mapLayer === "water" || mapLayer === "solar") return [];
+    if (mapLayer === "projects") {
+      return MAP_POINTS.filter((point) => point.label === "Carga VHE");
+    }
+    if (mapLayer === "buildings") {
+      return MAP_POINTS.filter((point) => point.label !== "Carga VHE");
+    }
+    return MAP_POINTS;
+  }, [mapLayer]);
+
+  useEffect(() => {
+    if (routeId !== "map") return;
+    if (!visibleMapPoints.length) {
+      setSelectedMapPoint(null);
+      return;
+    }
+    if (!visibleMapPoints.some((point) => point.rtId === selectedMapPoint)) {
+      setSelectedMapPoint(visibleMapPoints[0].rtId);
+    }
+  }, [routeId, selectedMapPoint, visibleMapPoints]);
+
+  const selectedProject =
+    PROJECT_VIEW_CONFIG.find((item) => item.id === selectedProjectId) || PROJECT_VIEW_CONFIG[0];
+  const selectedProjectData = gatewayOverview[selectedProject.gatewayId];
 
   const renderStatus = (state) => {
     if (state.status === "na") return "No disponible";
@@ -695,12 +1139,19 @@ function App() {
     const labels = aggregateLabels(gateway.aggregateMetric);
     const state = validation[gateway.id] || {};
     const latestItems = state.latest?.data?.items || [];
-    const latestRows = latestItems.map((item) => [
-      item.rt_id,
-      number.format(item.value),
-      item.unit || "kW",
-      formatTs(item.ts_event),
-    ]);
+    const latestRows = latestItems
+      .map((item) => ({
+        sortLabel: getMonitoringPointLabel(item.rt_id),
+        cells: [
+          getMonitoringPointLabel(item.rt_id),
+          item.rt_id,
+          number.format(item.value),
+          item.unit || "kW",
+          formatTs(item.ts_event),
+        ],
+      }))
+      .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, "es"))
+      .map((item) => item.cells);
 
     const seriesItems = state.series?.data?.series || [];
     const usesValueSeries = Boolean(state.series?.data?.metric || state.series?.data?.rt_prefix);
@@ -742,12 +1193,7 @@ function App() {
             className="action-button action-button-secondary action-button-compact"
             type="button"
             aria-label={`Actualizar ${gateway.label}`}
-            onClick={() => {
-              fetchGatewayLatest(gateway);
-              fetchGatewaySeries(gateway);
-              fetchGatewayAggregates(gateway, "daily");
-              fetchGatewayAggregates(gateway, "monthly");
-            }}
+            onClick={() => refreshGatewayData(gateway)}
           >
             Actualizar
           </button>
@@ -758,7 +1204,7 @@ function App() {
             <div className={`api-status status-${state.latest?.status}`}>
               {renderStatus(state.latest || {})}
             </div>
-            {renderTable(["rt_id", "value", "unit", "ts_event"], latestRows)}
+            {renderTable(["Punto", "rt_id", "value", "unit", "ts_event"], latestRows)}
           </div>
           <div className="api-card">
             <h4 className="api-card-title">Últimas 24 horas</h4>
@@ -815,9 +1261,6 @@ function App() {
       chartEmptyText = `Error: ${errorText}`;
     }
 
-    const formatValue = (value, unit) =>
-      value == null ? "--" : `${number.format(value)} ${unit}`;
-
     return (
       <article key={scope.id} className={`dashboard-panel panel-${panelStatus.kind}`}>
         <div className="dashboard-panel-header">
@@ -831,10 +1274,7 @@ function App() {
             className="action-button action-button-secondary action-button-compact"
             type="button"
             aria-label={`Actualizar ${title}`}
-            onClick={() => {
-              fetchDashboardKpis(scope);
-              fetchDashboardSeries(scope);
-            }}
+            onClick={() => refreshScopeData(scope)}
           >
             Actualizar
           </button>
@@ -846,6 +1286,17 @@ function App() {
           <div className="dashboard-warning warning-error">Error: {errorText}</div>
         ) : null}
         <div className="balance-grid">
+          <div className="chart-card">
+            <div className="chart-legend">
+              <span className="legend-item demand">Curva Demanda kW</span>
+              <span className="legend-item pv">Curva Generación kW</span>
+            </div>
+            {isComplete && chartSeries.length ? (
+              <AreaChart series={chartSeries} />
+            ) : (
+              <div className="chart-empty">{chartEmptyText}</div>
+            )}
+          </div>
           <div className="infographic">
             <div className="metric-card demand">
               <div className="metric-icon">
@@ -876,32 +1327,840 @@ function App() {
               <div className="metric-value">{formatValue(autoconsumoPct, "%")}</div>
             </div>
           </div>
-          <div className="chart-card">
-            <div className="chart-legend">
-              <span className="legend-item demand">Curva Demanda kW</span>
-              <span className="legend-item pv">Curva Generación kW</span>
-            </div>
-            {isComplete && chartSeries.length ? (
-              <AreaChart series={chartSeries} />
-            ) : (
-              <div className="chart-empty">{chartEmptyText}</div>
-            )}
-          </div>
         </div>
       </article>
     );
   };
 
-  const isValidation = route === "#/validacion";
-  const pageTitle = isValidation ? "Validación de datos" : "Balance de energía en tiempo real";
-  const pageSubtitle = isValidation
-    ? "Vista institucional para revisar la ingestión, las series temporales y los agregados operativos por gateway."
-    : "Seguimiento operativo de consumos, generación fotovoltaica y balances de campus con una presentación alineada con la identidad UJA.";
-  const pageActionLabel = isValidation ? "Actualizar validación" : "Actualizar paneles";
-  const pageAction = isValidation ? refreshValidation : refreshDashboard;
-  const secondaryActionHref = isValidation ? "#/" : "#/validacion";
-  const secondaryActionLabel = isValidation ? "Ver dashboard" : "Ver validación";
-  const breadcrumbCurrent = isValidation ? "Validación de datos" : "Dashboard energético";
+  const buildSummaryCampusCard = (config) => {
+    const scopeSummary = dashboardOverview[config.scopeId];
+    const campusLabel = scopeSummary?.title || config.label;
+
+    return (
+      <article key={config.scopeId} className="summary-campus-card">
+        <div className="summary-card-header">
+          <div>
+            <h3 className="summary-card-title">{campusLabel}</h3>
+            <div className={`dashboard-status status-${scopeSummary?.status?.kind || "idle"}`}>
+              {scopeSummary?.status?.label || "Sin datos"}
+            </div>
+          </div>
+        </div>
+        <div className="summary-diagram-shell">
+          <EnergyFlowDiagram
+            campusLabel={campusLabel}
+            gridPower={scopeSummary?.grid}
+            consumption={scopeSummary?.demand}
+            generation={scopeSummary?.pv}
+            autoconsumption={scopeSummary?.autoconsumoPct}
+          />
+        </div>
+        <span className="summary-card-copy">Última actualización {formatTs(scopeSummary?.tsEvent)}</span>
+        {scopeSummary?.chartSeries?.length ? (
+          <div className="summary-chart">
+            <AreaChart series={scopeSummary.chartSeries} />
+          </div>
+        ) : (
+          <div className="chart-empty">Sin curva resumida disponible.</div>
+        )}
+      </article>
+    );
+  };
+
+  const buildWaterRows = (config) => {
+    const summary = gatewayOverview[config.gatewayId];
+    const rows = (summary?.latestItems || [])
+      .filter((item) => item.rt_id?.startsWith(config.prefix))
+      .map((item) => ({
+        sortLabel: getMonitoringPointLabel(item.rt_id),
+        cells: [
+          getMonitoringPointLabel(item.rt_id),
+          number.format(item.value),
+          item.unit || "m3",
+          formatTs(item.ts_event),
+        ],
+      }))
+      .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, "es"))
+      .map((item) => item.cells);
+    return rows;
+  };
+
+  const pageMeta = {
+    summary: {
+      title: "Balance general",
+      subtitle:
+        "Estado general de energía y producción en Las Lagunillas y CTL Linares.",
+      primaryLabel: "Actualizar balance",
+      primaryAction: refreshPortal,
+    },
+    energy: {
+      title: "Explotación energética",
+      subtitle:
+        "Vista operativa para demanda, red, generación y acumulados por campus.",
+      primaryLabel: "Actualizar energía",
+      primaryAction: refreshDashboard,
+    },
+    map: {
+      title: "Mapa de campus",
+      subtitle:
+        "Vista cartográfica con capas activas y detalle del punto seleccionado.",
+      primaryLabel: "Actualizar mapa",
+      primaryAction: fetchRealtime,
+    },
+    water: {
+      title: "Monitorización de agua",
+      subtitle:
+        "Sección tabular y analítica para consumo de agua por campus y punto de medida.",
+      primaryLabel: "Actualizar agua",
+      primaryAction: refreshOperationalData,
+    },
+    solar: {
+      title: "Monitorización fotovoltaica",
+      subtitle:
+        "Explotación especializada de plantas e instalaciones FV con KPIs, producción y curvas.",
+      primaryLabel: "Actualizar FV",
+      primaryAction: refreshOperationalData,
+    },
+    projects: {
+      title: "Autoconsumo",
+      subtitle:
+        "Seguimiento de instalaciones y activos de autoconsumo con ficha técnica y tendencia.",
+      primaryLabel: "Actualizar autoconsumo",
+      primaryAction: refreshOperationalData,
+    },
+    validation: {
+      title: "Validación de datos",
+      subtitle:
+        "Módulo técnico para incidencias, datos faltantes, series y agregados por gateway.",
+      primaryLabel: "Actualizar validación",
+      primaryAction: refreshOperationalData,
+    },
+  }[routeId];
+
+  const filteredEnergyConfigs = ENERGY_VIEW_CONFIG.filter(
+    (config) => campusFilter === "all" || config.campus === campusFilter
+  );
+  const summaryEnergyConfigs = ENERGY_VIEW_CONFIG;
+  const filteredWaterConfigs = WATER_VIEW_CONFIG.filter(
+    (config) => campusFilter === "all" || config.campus === campusFilter
+  );
+  const filteredSolarConfigs = SOLAR_VIEW_CONFIG.filter(
+    (config) => campusFilter === "all" || config.campus === campusFilter
+  );
+  const filteredValidationGateways = GATEWAYS.filter((gateway) => {
+    const domain = gateway.domain || "mixto";
+    return (
+      (campusFilter === "all" || gateway.campus === campusFilter) &&
+      (validationDomainFilter === "all" || validationDomainFilter === domain)
+    );
+  });
+
+  const selectedMapData = selectedMapPoint
+    ? visibleMapPoints.find((point) => point.rtId === selectedMapPoint) || null
+    : null;
+  const selectedMapReading = selectedMapData ? realtimeMap.get(selectedMapData.rtId) : null;
+
+  const renderToolbar = () => {
+    const controls = [];
+    const addCampusControl = !["summary", "map", "projects"].includes(routeId);
+    const addPeriodControl = !["summary", "map", "validation"].includes(routeId);
+
+    if (addCampusControl) {
+      controls.push(
+        <label key="campus" className="toolbar-field">
+          <span className="toolbar-label">Campus</span>
+          <select
+            className="toolbar-select"
+            value={campusFilter}
+            onChange={(event) => setCampusFilter(event.target.value)}
+          >
+            {CAMPUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+
+    if (addPeriodControl) {
+      controls.push(
+        <label key="period" className="toolbar-field">
+          <span className="toolbar-label">Periodo</span>
+          <select
+            className="toolbar-select"
+            value={periodFilter}
+            onChange={(event) => setPeriodFilter(event.target.value)}
+          >
+            {PERIOD_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+
+    if (routeId === "map") {
+      controls.push(
+        <label key="layer" className="toolbar-field">
+          <span className="toolbar-label">Capa</span>
+          <select
+            className="toolbar-select"
+            value={mapLayer}
+            onChange={(event) => setMapLayer(event.target.value)}
+          >
+            {MAP_LAYER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+
+    if (routeId === "projects") {
+      controls.push(
+        <label key="project" className="toolbar-field">
+          <span className="toolbar-label">Activo</span>
+          <select
+            className="toolbar-select"
+            value={selectedProjectId}
+            onChange={(event) => setSelectedProjectId(event.target.value)}
+          >
+            {PROJECT_VIEW_CONFIG.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+      controls.push(
+        <label key="project-period" className="toolbar-field">
+          <span className="toolbar-label">Periodo</span>
+          <select
+            className="toolbar-select"
+            value={periodFilter}
+            onChange={(event) => setPeriodFilter(event.target.value)}
+          >
+            {PERIOD_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+
+    if (routeId === "validation") {
+      controls.push(
+        <label key="domain" className="toolbar-field">
+          <span className="toolbar-label">Dominio</span>
+          <select
+            className="toolbar-select"
+            value={validationDomainFilter}
+            onChange={(event) => setValidationDomainFilter(event.target.value)}
+          >
+            {VALIDATION_DOMAIN_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
+    }
+
+    let note = "Vista operativa lista.";
+    if (routeId === "map") {
+      note = `${visibleMapPoints.length} puntos visibles en la capa actual.`;
+    } else if (routeId === "validation") {
+      note = `${filteredValidationGateways.length} gateways visibles en seguimiento.`;
+    } else if (routeId === "projects") {
+      note = `${selectedProject.label} · ${selectedProject.type}.`;
+    } else if (routeId === "summary") {
+      note = `${summaryEnergyConfigs.length} campus en seguimiento.`;
+    }
+
+    return (
+      <div className="view-toolbar">
+        <div className="container view-toolbar-inner">
+          <div className="view-toolbar-controls">{controls}</div>
+          <div className="view-toolbar-note">{note}</div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSummaryView = () => {
+    const shortcuts = [
+      {
+        href: "#/energia",
+        title: "Energía",
+        copy: "Balance operativo, curvas y acumulados por campus.",
+        status: `${summaryEnergyConfigs.length} campus activos`,
+      },
+      {
+        href: "#/mapa",
+        title: "Mapa campus",
+        copy: "Vista cartográfica con capas activas y detalle de puntos.",
+        status: `${MAP_POINTS.length} puntos de referencia`,
+      },
+      {
+        href: "#/agua",
+        title: "Agua",
+        copy: "Tabla operativa, totales y seguimiento del consumo.",
+        status: `${WATER_VIEW_CONFIG.length} áreas disponibles`,
+      },
+      {
+        href: "#/fotovoltaica",
+        title: "Fotovoltaica",
+        copy: "Explotación por instalación con producción y tendencia.",
+        status: `${SOLAR_VIEW_CONFIG.length} instalaciones`,
+      },
+      {
+        href: "#/autoconsumo",
+        title: "Autoconsumo",
+        copy: "Seguimiento de instalaciones y activos vinculados al autoconsumo.",
+        status: `${PROJECT_VIEW_CONFIG.length} activos disponibles`,
+      },
+      {
+        href: "#/validacion",
+        title: "Validación",
+        copy: "Gateway por gateway, con incidencias y series técnicas.",
+        status: `${validationSummary.errors} incidencias abiertas`,
+      },
+    ];
+
+    return (
+      <>
+        <section className="section">
+          <div className="container">
+            <div className="section-header">
+              <h2 className="section-title">Balance energético por campus</h2>
+              <p className="section-subtitle">Seguimiento simultáneo de Las Lagunillas y CTL Linares.</p>
+            </div>
+            <div className="summary-campus-grid">
+              {summaryEnergyConfigs.map((config) => buildSummaryCampusCard(config))}
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="container">
+            <div className="section-header">
+              <h2 className="section-title">Accesos operativos</h2>
+              <p className="section-subtitle">Acceso directo a los módulos principales del portal.</p>
+            </div>
+            <div className="shortcut-grid">
+              {shortcuts.map((shortcut) => (
+                <a key={shortcut.href} className="shortcut-card" href={shortcut.href}>
+                  <span className="shortcut-card-title">{shortcut.title}</span>
+                  <span className="shortcut-card-copy">{shortcut.copy}</span>
+                  <span className="shortcut-card-status">{shortcut.status}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  };
+
+  const renderEnergyView = () => (
+    <>
+      <section className="section">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Banda de KPIs y acumulados</h2>
+            <p className="section-subtitle">Balance actual y acumulados por campus.</p>
+          </div>
+          <div className="insight-grid">
+            {filteredEnergyConfigs.map((config) => {
+              const scopeSummary = dashboardOverview[config.scopeId];
+              const energySummary = gatewayOverview[config.gatewayId];
+              const highlighted = pickMetricSnapshot({
+                currentLabel: "Demanda actual",
+                currentValue: scopeSummary?.demand,
+                currentUnit: "kW",
+                dailyLabel: "Energía diaria",
+                dailyValue: energySummary?.dailyValue,
+                dailyUnit: energySummary?.dailyUnit,
+                monthlyLabel: "Energía mensual",
+                monthlyValue: energySummary?.monthlyValue,
+                monthlyUnit: energySummary?.monthlyUnit,
+              });
+              return (
+                <article key={config.scopeId} className="insight-card">
+                  <span className="insight-label">{scopeSummary?.title || config.label}</span>
+                  <strong className="insight-value">
+                    {formatValue(highlighted.value, highlighted.unit)}
+                  </strong>
+                  <span className="insight-note">{highlighted.label}</span>
+                  <span className="insight-note">
+                    Autoconsumo {formatValue(scopeSummary?.autoconsumoPct, "%")}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Paneles operativos por campus</h2>
+            <p className="section-subtitle">Curvas y métricas de operación por campus.</p>
+          </div>
+          <div className="dashboard-panels">
+            {filteredEnergyConfigs.map((config) => {
+              const scope = DASHBOARD_SCOPES.find((item) => item.id === config.scopeId);
+              return scope ? buildDashboardPanel(scope) : null;
+            })}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+
+  const renderMapView = () => (
+    <section className="section">
+      <div className="container">
+        <div className="section-header">
+          <h2 className="section-title">Mapa operacional</h2>
+          <p className="section-subtitle">
+            Seleccione una capa y consulte el detalle del punto debajo del plano.
+          </p>
+        </div>
+        <div className="map-layout">
+          <div className="map-frame map-workspace">
+            <img
+              src={campus}
+              alt="Plano del campus con puntos de lectura energética destacados"
+            />
+            {visibleMapPoints.map((point) => {
+              const reading = readValue(point.rtId);
+              const valueText = reading ? formatValue(reading.value, reading.unit) : "--";
+              const isActive = point.rtId === selectedMapPoint;
+              const pointMeta = getMonitoringPointMeta(point.rtId);
+              return (
+                <button
+                  key={point.rtId}
+                  className={`map-pin ${isActive ? "is-active" : ""}`}
+                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                  type="button"
+                  onClick={() => setSelectedMapPoint(point.rtId)}
+                >
+                  <span className="map-pin-label">{pointMeta.shortLabel || point.label}</span>
+                  <span className="map-pin-value">{valueText}</span>
+                </button>
+              );
+            })}
+          </div>
+          <article className="api-card map-detail-card">
+            <h3 className="api-card-title">Detalle del punto</h3>
+            {selectedMapData ? (
+              <div className="detail-stack">
+                <div className="detail-row">
+                  <span className="detail-key">Elemento</span>
+                  <span className="detail-value">{getMonitoringPointLabel(selectedMapData.rtId)}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-key">Punto</span>
+                  <span className="detail-value">{getMonitoringPointShortLabel(selectedMapData.rtId)}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-key">Valor</span>
+                  <span className="detail-value">
+                    {selectedMapReading
+                      ? formatValue(selectedMapReading.value, selectedMapReading.unit || "kW")
+                      : "--"}
+                  </span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-key">Última lectura</span>
+                  <span className="detail-value">{formatTs(selectedMapReading?.ts_event)}</span>
+                </div>
+                <div className="detail-row">
+                  <span className="detail-key">Capa activa</span>
+                  <span className="detail-value">
+                    {MAP_LAYER_OPTIONS.find((option) => option.value === mapLayer)?.label}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="chart-empty">
+                No hay puntos visibles para la capa seleccionada.
+              </div>
+            )}
+          </article>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderWaterView = () => (
+    <>
+      <section className="section">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Consumo y acumulados de agua</h2>
+            <p className="section-subtitle">
+              La tabla pasa a ser protagonista y se combina con totales por campus y curva
+              cuando el backend ya la sirve.
+            </p>
+          </div>
+          <div className="insight-grid">
+            {filteredWaterConfigs.map((config) => {
+              const summary = gatewayOverview[config.gatewayId];
+              const rows = buildWaterRows(config);
+              const highlighted = pickMetricSnapshot({
+                currentLabel: "Puntos con lectura",
+                currentValue: rows.length,
+                currentUnit: "",
+                dailyLabel: "Consumo diario",
+                dailyValue: summary?.dailyValue,
+                dailyUnit: summary?.dailyUnit,
+                monthlyLabel: "Consumo mensual",
+                monthlyValue: summary?.monthlyValue,
+                monthlyUnit: summary?.monthlyUnit,
+              });
+              return (
+                <article key={config.id} className="insight-card">
+                  <span className="insight-label">{config.label}</span>
+                  <strong className="insight-value">
+                    {highlighted.unit
+                      ? formatValue(highlighted.value, highlighted.unit)
+                      : number.format(highlighted.value || 0)}
+                  </strong>
+                  <span className="insight-note">{highlighted.label}</span>
+                  <span className="insight-note">
+                    Anual {formatValue(summary?.annualValue, summary?.annualUnit)}
+                  </span>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <div className="water-stack">
+            {filteredWaterConfigs.map((config) => {
+              const summary = gatewayOverview[config.gatewayId];
+              const rows = buildWaterRows(config);
+              const canRenderTrend = config.hasTrend && summary?.seriesItems?.length;
+              return (
+                <article key={config.id} className="gateway-card">
+                  <div className="gateway-header">
+                    <div>
+                      <h3 className="gateway-title">Agua {config.label}</h3>
+                      <div className="gateway-topic">
+                        Lectura instantánea y acumulados por campus.
+                      </div>
+                    </div>
+                    <div className={`dashboard-status status-${getStatusKind(summary?.latestStatus)}`}>
+                      {renderStatus({ status: summary?.latestStatus })}
+                    </div>
+                  </div>
+                  <div className="water-detail-grid">
+                    <div className="api-card">
+                      <h4 className="api-card-title">Tabla operativa</h4>
+                      {renderTable(["Punto", "actual", "unit", "ts_event"], rows)}
+                    </div>
+                    <div className="api-card">
+                      <h4 className="api-card-title">Tendencia y totales</h4>
+                      {canRenderTrend ? (
+                        <ValueChart series={summary.seriesItems} label={`Agua ${config.label}`} />
+                      ) : (
+                        <div className="chart-empty">
+                          {config.hasTrend
+                            ? "Sin serie operativa disponible todavía."
+                            : "El backend actual no separa la serie de agua para este campus."}
+                        </div>
+                      )}
+                      <div className="detail-stack compact-detail-stack">
+                        <div className="detail-row">
+                          <span className="detail-key">Diario</span>
+                          <span className="detail-value">
+                            {formatValue(summary?.dailyValue, summary?.dailyUnit)}
+                          </span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-key">Mensual</span>
+                          <span className="detail-value">
+                            {formatValue(summary?.monthlyValue, summary?.monthlyUnit)}
+                          </span>
+                        </div>
+                        <div className="detail-row">
+                          <span className="detail-key">Anual</span>
+                          <span className="detail-value">
+                            {formatValue(summary?.annualValue, summary?.annualUnit)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+
+  const renderSolarView = () => (
+    <>
+      <section className="section">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Instalaciones fotovoltaicas</h2>
+            <p className="section-subtitle">
+              Cada planta se presenta como vista especializada con KPIs propios y curva
+              independiente.
+            </p>
+          </div>
+          <div className="solar-stack">
+            {filteredSolarConfigs.map((config) => {
+              const summary = gatewayOverview[config.gatewayId];
+              const highlighted = pickMetricSnapshot({
+                currentLabel: "Potencia instantánea",
+                currentValue: summary?.latestValue,
+                currentUnit: summary?.latestUnit,
+                dailyLabel: "Producción diaria",
+                dailyValue: summary?.dailyValue,
+                dailyUnit: summary?.dailyUnit,
+                monthlyLabel: "Producción mensual",
+                monthlyValue: summary?.monthlyValue,
+                monthlyUnit: summary?.monthlyUnit,
+              });
+              return (
+                <article key={config.id} className="gateway-card">
+                  <div className="gateway-header">
+                    <div>
+                      <h3 className="gateway-title">{config.label}</h3>
+                      <div className="gateway-topic">{config.description}</div>
+                    </div>
+                    <div className={`dashboard-status status-${getStatusKind(summary?.latestStatus)}`}>
+                      {renderStatus({ status: summary?.latestStatus })}
+                    </div>
+                  </div>
+                  <div className="summary-metric-grid">
+                    <div className="summary-metric">
+                      <span className="summary-metric-label">{highlighted.label}</span>
+                      <strong className="summary-metric-value">
+                        {formatValue(highlighted.value, highlighted.unit)}
+                      </strong>
+                    </div>
+                    <div className="summary-metric">
+                      <span className="summary-metric-label">Producción diaria</span>
+                      <strong className="summary-metric-value">
+                        {formatValue(summary?.dailyValue, summary?.dailyUnit)}
+                      </strong>
+                    </div>
+                    <div className="summary-metric">
+                      <span className="summary-metric-label">Producción mensual</span>
+                      <strong className="summary-metric-value">
+                        {formatValue(summary?.monthlyValue, summary?.monthlyUnit)}
+                      </strong>
+                    </div>
+                    <div className="summary-metric">
+                      <span className="summary-metric-label">Acumulado anual</span>
+                      <strong className="summary-metric-value">
+                        {formatValue(summary?.annualValue, summary?.annualUnit)}
+                      </strong>
+                    </div>
+                  </div>
+                  {summary?.seriesItems?.length ? (
+                    <ValueChart series={summary.seriesItems} label={config.label} />
+                  ) : (
+                    <div className="chart-empty">Sin curva de producción disponible.</div>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+
+  const renderProjectsView = () => {
+    const linkedEnergy =
+      selectedProject.campus === "jaen"
+        ? dashboardOverview.las_lagunillas
+        : dashboardOverview.ctl_linares;
+    const highlighted = pickMetricSnapshot({
+      currentLabel: "Potencia instantánea",
+      currentValue: selectedProjectData?.latestValue,
+      currentUnit: selectedProjectData?.latestUnit,
+      dailyLabel: "Producción diaria",
+      dailyValue: selectedProjectData?.dailyValue,
+      dailyUnit: selectedProjectData?.dailyUnit,
+      monthlyLabel: "Producción mensual",
+      monthlyValue: selectedProjectData?.monthlyValue,
+      monthlyUnit: selectedProjectData?.monthlyUnit,
+    });
+
+    return (
+      <>
+        <section className="section">
+          <div className="container">
+            <div className="section-header">
+              <h2 className="section-title">Ficha del activo</h2>
+              <p className="section-subtitle">Datos técnicos y tendencia del activo seleccionado.</p>
+            </div>
+            <div className="insight-grid">
+              <article className="insight-card">
+                <span className="insight-label">{highlighted.label}</span>
+                <strong className="insight-value">
+                  {formatValue(highlighted.value, highlighted.unit)}
+                </strong>
+                <span className="insight-note">{selectedProject.label}</span>
+              </article>
+              <article className="insight-card">
+                <span className="insight-label">Producción diaria</span>
+                <strong className="insight-value">
+                  {formatValue(selectedProjectData?.dailyValue, selectedProjectData?.dailyUnit)}
+                </strong>
+                <span className="insight-note">Acumulado diario</span>
+              </article>
+              <article className="insight-card">
+                <span className="insight-label">Producción mensual</span>
+                <strong className="insight-value">
+                  {formatValue(selectedProjectData?.monthlyValue, selectedProjectData?.monthlyUnit)}
+                </strong>
+                <span className="insight-note">Acumulado mensual</span>
+              </article>
+              <article className="insight-card">
+                <span className="insight-label">Autoconsumo campus</span>
+                <strong className="insight-value">
+                  {formatValue(linkedEnergy?.autoconsumoPct, "%")}
+                </strong>
+                <span className="insight-note">Referencia operativa del campus</span>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="container">
+            <div className="project-layout">
+              <article className="gateway-card">
+                <div className="gateway-header">
+                  <div>
+                    <h3 className="gateway-title">{selectedProject.label}</h3>
+                    <div className="gateway-topic">{selectedProject.type}</div>
+                  </div>
+                  <div
+                    className={`dashboard-status status-${getStatusKind(
+                      selectedProjectData?.latestStatus
+                    )}`}
+                  >
+                    {renderStatus({ status: selectedProjectData?.latestStatus })}
+                  </div>
+                </div>
+                {selectedProjectData?.seriesItems?.length ? (
+                  <ValueChart series={selectedProjectData.seriesItems} label={selectedProject.label} />
+                ) : (
+                  <div className="chart-empty">Sin tendencia temporal disponible.</div>
+                )}
+              </article>
+              <article className="api-card project-sheet">
+                <h3 className="api-card-title">Ficha técnica</h3>
+                <div className="detail-stack">
+                  <div className="detail-row">
+                    <span className="detail-key">Campus</span>
+                    <span className="detail-value">{selectedProject.campus}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Gateway</span>
+                    <span className="detail-value">{selectedProject.gatewayId}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Tipología</span>
+                    <span className="detail-value">{selectedProject.type}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Cobertura</span>
+                    <span className="detail-value">{selectedProject.coverage}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="detail-key">Última lectura</span>
+                    <span className="detail-value">{formatTs(selectedProjectData?.latestTs)}</span>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  };
+
+  const renderValidationView = () => (
+    <>
+      <section className="section">
+        <div className="container">
+          <div className="section-header">
+            <h2 className="section-title">Estado técnico por gateway</h2>
+            <p className="section-subtitle">
+              La validación se integra en el portal con filtros por campus y dominio, sin perder
+              la profundidad técnica actual.
+            </p>
+          </div>
+          <div className="insight-grid">
+            <article className="insight-card">
+              <span className="insight-label">Gateways visibles</span>
+              <strong className="insight-value">{filteredValidationGateways.length}</strong>
+              <span className="insight-note">Tras filtros activos</span>
+            </article>
+            <article className="insight-card">
+              <span className="insight-label">Incidencias</span>
+              <strong className="insight-value">{validationSummary.errors}</strong>
+              <span className="insight-note">Gateways con error</span>
+            </article>
+            <article className="insight-card">
+              <span className="insight-label">Actualizando</span>
+              <strong className="insight-value">{validationSummary.loading}</strong>
+              <span className="insight-note">Carga en curso</span>
+            </article>
+            <article className="insight-card">
+              <span className="insight-label">Última sincronización</span>
+              <strong className="insight-value">{formatTs(validationSummary.lastSync)}</strong>
+              <span className="insight-note">Referencia técnica</span>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="container">
+          <div className="gateway-stack">
+            {filteredValidationGateways.map((gateway) => buildGatewayTables(gateway))}
+          </div>
+        </div>
+      </section>
+    </>
+  );
+
+  const renderCurrentView = () => {
+    if (routeId === "summary") return renderSummaryView();
+    if (routeId === "energy") return renderEnergyView();
+    if (routeId === "map") return renderMapView();
+    if (routeId === "water") return renderWaterView();
+    if (routeId === "solar") return renderSolarView();
+    if (routeId === "projects") return renderProjectsView();
+    return renderValidationView();
+  };
 
   return (
     <div className="app">
@@ -912,28 +2171,25 @@ function App() {
         <div className="utility-bar">
           <div className="container utility-bar-inner">
             <p className="utility-bar-text">Universidad de Jaén</p>
-            <p className="utility-bar-text">Entorno digital de monitorización operativa</p>
+            <p className="utility-bar-text">Portal de monitorización operativa</p>
           </div>
         </div>
         <div className="topbar">
           <div className="container topbar-inner">
             <div className="brand-lockup">
               <p className="brand-kicker">Universidad de Jaén</p>
-              <p className="brand-title">Monitorización operativa de campus</p>
+              <p className="brand-title">Portal de monitorización de campus</p>
             </div>
-            <nav className="topbar-nav" aria-label="Navegación principal">
-              <a
-                className={`topbar-link ${!isValidation ? "active" : ""}`}
-                href="#/"
-              >
-                Dashboard energético
-              </a>
-              <a
-                className={`topbar-link ${isValidation ? "active" : ""}`}
-                href="#/validacion"
-              >
-                Validación de datos
-              </a>
+            <nav className="topbar-nav portal-nav" aria-label="Navegación principal">
+              {PORTAL_ROUTES.map((item) => (
+                <a
+                  key={item.id}
+                  className={`topbar-link ${routeId === item.id ? "active" : ""}`}
+                  href={item.hash}
+                >
+                  {item.label}
+                </a>
+              ))}
             </nav>
           </div>
         </div>
@@ -948,117 +2204,45 @@ function App() {
               <span className="breadcrumb-separator" aria-hidden="true">
                 /
               </span>
-              <span className="breadcrumb-current">{breadcrumbCurrent}</span>
+              <span className="breadcrumb-current">{pageMeta.title}</span>
             </nav>
             <div className="page-hero">
               <div className="page-intro">
                 <p className="page-eyebrow">Supervisión institucional</p>
-                <h1 className="page-title">{pageTitle}</h1>
-                <p className="page-subtitle">{pageSubtitle}</p>
+                <h1 className="page-title">{pageMeta.title}</h1>
+                <p className="page-subtitle">{pageMeta.subtitle}</p>
               </div>
               <div className="page-actions">
                 <button
                   className="action-button action-button-primary"
                   type="button"
-                  onClick={pageAction}
+                  onClick={pageMeta.primaryAction}
                 >
-                  {pageActionLabel}
+                  {pageMeta.primaryLabel}
                 </button>
-                <a
-                  className="action-button action-button-secondary"
-                  href={secondaryActionHref}
-                >
-                  {secondaryActionLabel}
-                </a>
               </div>
             </div>
           </div>
         </section>
-        {isValidation ? (
-          <section className="section">
-            <div className="container">
-              <div className="section-header">
-                <h2 className="section-title">Estado por gateway</h2>
-                <p className="section-subtitle">
-                  Consulta la última muestra recibida, la serie de las últimas 24 horas y
-                  los agregados diarios y mensuales de cada origen de datos.
-                </p>
-              </div>
-              <div className="gateway-stack">
-                {GATEWAYS.map((gateway) => buildGatewayTables(gateway))}
-              </div>
-            </div>
-          </section>
-        ) : (
-          <>
-            <section className="section">
-              <div className="container">
-                <div className="section-header">
-                  <h2 className="section-title">Paneles por campus</h2>
-                  <p className="section-subtitle">
-                    Indicadores de demanda, producción fotovoltaica, red y autoconsumo,
-                    junto con la curva operativa de las últimas 24 horas.
-                  </p>
-                </div>
-                <div className="dashboard-panels">
-                  {DASHBOARD_SCOPES.map((scope) => buildDashboardPanel(scope))}
-                </div>
-              </div>
-            </section>
-
-            <section className="section">
-              <div className="container">
-                <div className="section-header">
-                  <h2 className="section-title">Mapa del Campus Las Lagunillas</h2>
-                  <p className="section-subtitle">
-                    Visualización resumida de lecturas energéticas por edificio y puntos
-                    singulares del campus.
-                  </p>
-                </div>
-                <div className="map-frame">
-                  <img
-                    src={campus}
-                    alt="Plano del Campus Las Lagunillas con puntos de lectura energética"
-                  />
-                  {MAP_POINTS.map((point) => {
-                    const reading = readValue(point.rtId);
-                    const valueText = reading
-                      ? `${number.format(reading.value)} ${reading.unit}`
-                      : "--";
-                    return (
-                      <div
-                        key={point.label}
-                        className="map-pin"
-                        style={{ left: `${point.x}%`, top: `${point.y}%` }}
-                        aria-label={`${point.label} ${valueText}`}
-                      >
-                        <div className="map-pin-label">{point.label}</div>
-                        <div className="map-pin-value">{valueText}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          </>
-        )}
+        {renderToolbar()}
+        {renderCurrentView()}
       </main>
       <footer className="site-footer">
         <div className="container site-footer-inner">
           <div>
             <p className="site-footer-title">Universidad de Jaén</p>
             <p className="site-footer-copy">
-              Aplicación interna para seguimiento de consumos, producción fotovoltaica y
-              validación de telemetría en los campus de Jaén y Linares.
+              Aplicación interna para seguimiento de consumos, producción fotovoltaica,
+              cartografía operativa y validación de telemetría en los campus de Jaén y
+              Linares.
             </p>
           </div>
           <div className="site-footer-links">
-            <a className="site-footer-link" href="#/">
-              Dashboard energético
-            </a>
-            <a className="site-footer-link" href="#/validacion">
-              Validación de datos
-            </a>
+            {PORTAL_ROUTES.map((item) => (
+              <a key={item.id} className="site-footer-link" href={item.hash}>
+                {item.label}
+              </a>
+            ))}
           </div>
         </div>
       </footer>

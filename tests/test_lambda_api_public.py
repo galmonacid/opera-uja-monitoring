@@ -126,6 +126,30 @@ def test_scan_latest_filters_by_gateway_id():
     assert result[0]["rt_id"] == "uja.jaen.fv.auto.ct_total.p_kw"
 
 
+def test_scan_latest_clamps_negative_ct_total_to_zero():
+    api = load_lambda_module()
+
+    class FakeTable:
+        def scan(self, **_kwargs):
+            return {
+                "Items": [
+                    {
+                        "rt_id": "uja.jaen.fv.auto.ct_total.p_kw",
+                        "value": -0.34,
+                        "unit": "kW",
+                        "ts_event": 1770351480,
+                        "gateway_id": "gw_autoconsumo_jaen",
+                    }
+                ]
+            }
+
+    api.get_latest_table = lambda: FakeTable()
+
+    result = api.scan_latest("uja.jaen.fv.auto.", gateway_id="gw_autoconsumo_jaen")
+
+    assert result[0]["value"] == 0.0
+
+
 def test_series_by_metric_returns_metric_shape():
     api = load_lambda_module()
     rows = [
@@ -141,6 +165,31 @@ def test_series_by_metric_returns_metric_shape():
     assert result["unit"] == "kW"
     assert len(result["series"]) == 2
     assert result["series"][0]["value"] == 72.8
+
+
+def test_series_by_metric_clamps_negative_ct_total_to_zero():
+    api = load_lambda_module()
+    rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "-0.34"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:15:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "1.2"},
+            ]
+        },
+    ]
+
+    api.query_timestream = lambda _query: rows
+    result = api.get_series_24h_by_metric({"campus": "jaen", "metric": "fv_auto"})
+
+    assert [item["value"] for item in result["series"]] == [0.0, 1.2]
 
 
 def test_series_by_metric_water_uses_counter_deltas():
@@ -200,6 +249,34 @@ def test_monthly_aggregates_fallback_to_daily():
     assert result["series"] == [
         {"date": "2026-02", "value": 22.5},
         {"date": "2026-03", "value": 7.0},
+    ]
+
+
+def test_monthly_aggregates_complete_missing_months_from_daily_when_partial():
+    api = load_lambda_module()
+
+    def fake_query_pk(pk):
+        if pk == "jaen#energia#consumo#monthly":
+            return [
+                {"sk": "2026-02#total", "value": 65.35875, "unit": "kWh"},
+            ]
+        if pk == "jaen#energia#consumo#daily":
+            return [
+                {"sk": "2026-02-20#total", "value": 10.0, "unit": "kWh"},
+                {"sk": "2026-02-21#total", "value": 12.5, "unit": "kWh"},
+                {"sk": "2026-03-01#total", "value": 7.0, "unit": "kWh"},
+                {"sk": "2026-03-02#total", "value": 3.0, "unit": "kWh"},
+            ]
+        return []
+
+    api.query_pk = fake_query_pk
+    result = api.get_aggregates({"campus": "jaen", "metric": "energia_consumo", "asset": "total"}, "monthly")
+
+    assert result["period"] == "monthly"
+    assert result["unit"] == "kWh"
+    assert result["series"] == [
+        {"date": "2026-02", "value": 65.35875},
+        {"date": "2026-03", "value": 10.0},
     ]
 
 
