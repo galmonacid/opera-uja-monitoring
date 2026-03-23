@@ -18,6 +18,8 @@ const number = new Intl.NumberFormat("es-ES", {
 });
 
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
+const JAEN_ENDESA_CT_TOTAL_RT_ID = "uja.jaen.fv.endesa.ct_total.p_kw";
+const JAEN_ENDESA_INVERTER_RT_PREFIX = "uja.jaen.fv.endesa.inv";
 
 const MAP_LAYER_OFFSETS = {
   energy: { x: 0, y: 0 },
@@ -598,7 +600,19 @@ const buildMissingSourcesText = (kpisState, seriesState) => {
 const AreaChart = ({ series }) => {
   const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
   const chartSeries = useMemo(() => {
-    const sorted = [...series].sort((a, b) => a.ts - b.ts);
+    const sorted = [...series]
+      .filter(
+        (item) =>
+          Number.isFinite(Number(item?.ts)) &&
+          Number.isFinite(Number(item?.demand)) &&
+          Number.isFinite(Number(item?.pv))
+      )
+      .map((item) => ({
+        ts: Number(item.ts),
+        demand: Number(item.demand),
+        pv: Number(item.pv),
+      }))
+      .sort((a, b) => a.ts - b.ts);
     if (sorted.length >= 2) return sorted;
     const seed = sorted[0] || { ts: renderNow, demand: 0, pv: 0 };
     return [
@@ -1313,20 +1327,20 @@ function App() {
     return "idle";
   };
 
+  const isPowerItem = (item) => {
+    const rtId = item.rt_id || "";
+    const unit = (item.unit || "").toLowerCase();
+    return (
+      unit === "kw" ||
+      rtId.endsWith(".p_kw") ||
+      rtId.endsWith(".p_ac_kw") ||
+      rtId.includes(".p_kw") ||
+      rtId.includes(".p_ac_kw")
+    );
+  };
+
   const getPrimaryLatest = (items) => {
     if (!items.length) return { value: null, unit: "--", ts: null };
-
-    const isPowerItem = (item) => {
-      const rtId = item.rt_id || "";
-      const unit = (item.unit || "").toLowerCase();
-      return (
-        unit === "kw" ||
-        rtId.endsWith(".p_kw") ||
-        rtId.endsWith(".p_ac_kw") ||
-        rtId.includes(".p_kw") ||
-        rtId.includes(".p_ac_kw")
-      );
-    };
 
     const powerItems = items.filter(isPowerItem);
     const preferredItems = powerItems.length ? powerItems : items;
@@ -1338,6 +1352,7 @@ function App() {
         value: ctTotal.value,
         unit: ctTotal.unit || "kW",
         ts: ctTotal.ts_event || null,
+        rtId: ctTotal.rt_id || null,
       };
     }
     if (preferredItems.length === 1) {
@@ -1345,13 +1360,68 @@ function App() {
         value: preferredItems[0].value,
         unit: preferredItems[0].unit || "kW",
         ts: preferredItems[0].ts_event || null,
+        rtId: preferredItems[0].rt_id || null,
       };
     }
     return {
       value: preferredItems.reduce((sum, item) => sum + Number(item.value || 0), 0),
       unit: preferredItems[0].unit || "kW",
       ts: preferredItems.reduce((maxTs, item) => Math.max(maxTs, Number(item.ts_event || 0)), 0),
+      rtId: null,
     };
+  };
+
+  const getGatewayDisplayLatest = (gateway, items) => {
+    const fallback = { primary: getPrimaryLatest(items), secondary: null };
+    if (!items.length || gateway.domain !== "fv") return fallback;
+
+    if (gateway.id === "gw_endesa_jaen") {
+      const ctTotal = items.find(
+        (item) => item.rt_id === JAEN_ENDESA_CT_TOTAL_RT_ID && isPowerItem(item)
+      );
+      const inverterItems = items.filter(
+        (item) =>
+          isPowerItem(item) && item.rt_id?.startsWith(JAEN_ENDESA_INVERTER_RT_PREFIX)
+      );
+
+      return {
+        primary: ctTotal
+          ? {
+              value: Math.abs(Number(ctTotal.value || 0)),
+              unit: ctTotal.unit || "kW",
+              ts: ctTotal.ts_event || null,
+              rtId: ctTotal.rt_id || null,
+            }
+          : fallback.primary,
+        secondary: inverterItems.length
+          ? {
+              label: "Suma inversores",
+              value: inverterItems.reduce(
+                (sum, item) => sum + Math.abs(Number(item.value || 0)),
+                0
+              ),
+              unit: inverterItems[0].unit || "kW",
+              ts: inverterItems.reduce(
+                (maxTs, item) => Math.max(maxTs, Number(item.ts_event || 0)),
+                0
+              ),
+            }
+          : null,
+      };
+    }
+
+    if (fallback.primary.rtId?.includes("ct_total")) {
+      return {
+        primary: {
+          ...fallback.primary,
+          value:
+            fallback.primary.value == null ? fallback.primary.value : Math.abs(fallback.primary.value),
+        },
+        secondary: null,
+      };
+    }
+
+    return fallback;
   };
 
   const pickMetricSnapshot = ({
@@ -1454,7 +1524,7 @@ function App() {
     GATEWAYS.forEach((gateway) => {
       const state = validation[gateway.id] || {};
       const latestItems = state.latest?.data?.items || [];
-      const primaryLatest = getPrimaryLatest(latestItems);
+      const displayLatest = getGatewayDisplayLatest(gateway, latestItems);
       result[gateway.id] = {
         gateway,
         latestItems,
@@ -1465,9 +1535,13 @@ function App() {
         seriesStatus: state.series?.status || "idle",
         dailyStatus: state.daily?.status || "idle",
         monthlyStatus: state.monthly?.status || "idle",
-        latestValue: primaryLatest.value,
-        latestUnit: primaryLatest.unit,
-        latestTs: primaryLatest.ts,
+        latestValue: displayLatest.primary.value,
+        latestUnit: displayLatest.primary.unit,
+        latestTs: displayLatest.primary.ts,
+        secondaryLatestValue: displayLatest.secondary?.value ?? null,
+        secondaryLatestUnit: displayLatest.secondary?.unit ?? "--",
+        secondaryLatestLabel: displayLatest.secondary?.label ?? null,
+        secondaryLatestTs: displayLatest.secondary?.ts ?? null,
         dailyValue: getLastAggregateValue(state.daily?.data?.series || []),
         dailyUnit: state.daily?.data?.unit || "--",
         monthlyValue: getLastAggregateValue(state.monthly?.data?.series || []),
@@ -2466,6 +2540,14 @@ function App() {
                         {formatValue(highlighted.value, highlighted.unit)}
                       </strong>
                     </div>
+                    {summary?.secondaryLatestLabel ? (
+                      <div className="summary-metric">
+                        <span className="summary-metric-label">{summary.secondaryLatestLabel}</span>
+                        <strong className="summary-metric-value">
+                          {formatValue(summary.secondaryLatestValue, summary.secondaryLatestUnit)}
+                        </strong>
+                      </div>
+                    ) : null}
                     <div className="summary-metric">
                       <span className="summary-metric-label">Producción diaria</span>
                       <strong className="summary-metric-value">

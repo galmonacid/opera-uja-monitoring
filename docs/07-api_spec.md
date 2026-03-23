@@ -121,7 +121,9 @@ Notas:
 - `gateway_id` permite aislar gateways que comparten prefijo de RT_ID, como `gw_jaen_energia` y `gw_autoconsumo_jaen`.
 - En Jaén, el balance por defecto usa demanda total campus, FV Endesa por suma de inversores y FV autoconsumo por `ct_total`.
 - En modo `scope`, `las_lagunillas` usa solo A0-A4, B1-B5, C1-C3/C5/C6, D1-D4 y `carga_vhe`; excluye `um_c4`, `ae_magisterio`, `apartamentos_universitarios`, `residencia_domingo_savio` y `polideportivo`.
-- En modo `scope`, la FV de `las_lagunillas` = suma de inversores Endesa Jaen + `uja.jaen.fv.auto.ct_total.p_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw`.
+- En modo `scope`, la FV de `las_lagunillas` = `abs(uja.jaen.fv.endesa.ct_total.p_kw)` + `uja.jaen.fv.auto.ct_total.p_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw`.
+- `uja.jaen.fv.endesa.ct_total.p_kw` puede llegar en raw con signo negativo; en `scope` se publica con magnitud positiva para mantener la convención visual del portal.
+- `metric=fv_endesa` y sus agregados diarios/mensuales en Jaén siguen calculándose por suma de inversores, no por `ct_total`.
 - En modo `scope`, `ctl_linares` usa `lab_sg_t1`, `lab_sg_t2`, `urbanizacion`, `aulario_departamental`, `polideportivo` y FV desde `uja.linares.fv.endesa.ct_total.p_kw`.
 - `status` puede ser `complete`, `partial` o `empty`. Si faltan fuentes obligatorias, `missing_sources` lista los identificadores afectados y la serie agregada se devuelve vacía.
 - Para `agua_consumo`, la serie 24h devuelve consumo por intervalo a partir de contadores acumulados (unidad `m3`).

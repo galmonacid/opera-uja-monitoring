@@ -335,8 +335,8 @@ def test_scope_series_for_las_lagunillas_is_complete_and_excludes_jaen_resto():
         {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "12"}]},
     ]
     endesa_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "4"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "5"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "-4"}]},
+        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "-5"}]},
     ]
     univer_rows = [
         {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "3"}]},
@@ -356,10 +356,9 @@ def test_scope_series_for_las_lagunillas_is_complete_and_excludes_jaen_resto():
                 for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
             ]
         if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
-            return [
-                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
-                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
-            ]
+            raise AssertionError("scope de Las Lagunillas ya no debe usar inversores Endesa")
+        if rt_ids == ["uja.jaen.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": -4.0, "unit": "kW", "ts_event": 1000}]
         if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
             return [{"rt_id": rt_ids[0], "value": 3.0, "unit": "kW", "ts_event": 1000}]
         if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
@@ -375,7 +374,7 @@ def test_scope_series_for_las_lagunillas_is_complete_and_excludes_jaen_resto():
             return univer_rows
         if "uja.jaen.fv.auto.edificio_a0.p_kw" in query:
             return a0_rows
-        if "uja.jaen.fv.endesa.inv01.p_ac_kw" in query:
+        if "uja.jaen.fv.endesa.ct_total.p_kw" in query:
             return endesa_rows
         if "uja.jaen.energia.consumo.edificio_a0.p_kw" in query:
             return demand_rows
@@ -416,10 +415,9 @@ def test_scope_series_returns_partial_when_univer_is_missing():
                 for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
             ]
         if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
-            return [
-                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
-                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
-            ]
+            raise AssertionError("scope de Las Lagunillas ya no debe usar inversores Endesa")
+        if rt_ids == ["uja.jaen.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": -4.0, "unit": "kW", "ts_event": 1000}]
         if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
             return []
         if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
@@ -429,7 +427,7 @@ def test_scope_series_returns_partial_when_univer_is_missing():
     def fake_query(query):
         if "uja.jaen.fv.auto.edificio_a0.p_kw" in query:
             return a0_rows
-        if "uja.jaen.fv.endesa.inv01.p_ac_kw" in query:
+        if "uja.jaen.fv.endesa.ct_total.p_kw" in query:
             return endesa_rows
         if "uja.jaen.energia.consumo.edificio_a0.p_kw" in query:
             return demand_rows
@@ -445,6 +443,108 @@ def test_scope_series_returns_partial_when_univer_is_missing():
     assert result["series"] == []
 
 
+def test_scope_series_uses_locf_for_recent_balance_gap():
+    api = load_lambda_module()
+    demand_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:35:00.000000000"}, {"ScalarValue": "10"}]},
+    ]
+    endesa_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "-4"}]},
+    ]
+    univer_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "3"}]},
+    ]
+    a0_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "1"}]},
+    ]
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.LAS_LAGUNILLAS_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
+                for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
+            ]
+        if rt_ids == ["uja.jaen.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": -4.0, "unit": "kW", "ts_event": 1000}]
+        if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 3.0, "unit": "kW", "ts_event": 1000}]
+        if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 1.0, "unit": "kW", "ts_event": 1000}]
+        return []
+
+    def fake_query(query):
+        if "uja.jaen.fv.endesa.ct_total.p_kw" in query:
+            return endesa_rows
+        if "uja.jaen.fv.auto.ct_total.p_kw" in query:
+            return univer_rows
+        if "uja.jaen.fv.auto.edificio_a0.p_kw" in query:
+            return a0_rows
+        if "uja.jaen.energia.consumo.edificio_a0.p_kw" in query:
+            return demand_rows
+        return []
+
+    api.batch_get_latest = fake_batch_get
+    api.query_timestream = fake_query
+
+    result = api.get_series_24h({"scope": "las_lagunillas"})
+
+    assert result["series"] == [
+        {"ts": 1735731600, "demand": 10.0, "pv": 8.0},
+    ]
+
+
+def test_scope_series_drops_stale_balance_points_beyond_freshness_limit():
+    api = load_lambda_module()
+    demand_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:20:00.000000000"}, {"ScalarValue": "10"}]},
+    ]
+    endesa_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "-4"}]},
+    ]
+    univer_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "3"}]},
+    ]
+    a0_rows = [
+        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "1"}]},
+    ]
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.LAS_LAGUNILLAS_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 1.0, "unit": "kW", "ts_event": 1000}
+                for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
+            ]
+        if rt_ids == ["uja.jaen.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": -4.0, "unit": "kW", "ts_event": 1000}]
+        if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 3.0, "unit": "kW", "ts_event": 1000}]
+        if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 1.0, "unit": "kW", "ts_event": 1000}]
+        return []
+
+    def fake_query(query):
+        if "uja.jaen.fv.endesa.ct_total.p_kw" in query:
+            return endesa_rows
+        if "uja.jaen.fv.auto.ct_total.p_kw" in query:
+            return univer_rows
+        if "uja.jaen.fv.auto.edificio_a0.p_kw" in query:
+            return a0_rows
+        if "uja.jaen.energia.consumo.edificio_a0.p_kw" in query:
+            return demand_rows
+        return []
+
+    api.batch_get_latest = fake_batch_get
+    api.query_timestream = fake_query
+
+    result = api.get_series_24h({"scope": "las_lagunillas"})
+
+    assert result["series"] == []
+
+
 def test_scope_kpis_for_las_lagunillas_uses_exact_functional_definition():
     api = load_lambda_module()
 
@@ -457,10 +557,9 @@ def test_scope_kpis_for_las_lagunillas_uses_exact_functional_definition():
                 for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
             ]
         if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
-            return [
-                {"rt_id": rt_id, "value": 5.0, "unit": "kW", "ts_event": 1200}
-                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
-            ]
+            raise AssertionError("scope de Las Lagunillas ya no debe usar inversores Endesa")
+        if rt_ids == ["uja.jaen.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": -200.0, "unit": "kW", "ts_event": 1200}]
         if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
             return [{"rt_id": rt_ids[0], "value": 40.0, "unit": "kW", "ts_event": 1200}]
         if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:
@@ -475,10 +574,10 @@ def test_scope_kpis_for_las_lagunillas_uses_exact_functional_definition():
     assert result["status"] == "complete"
     assert result["missing_sources"] == []
     assert values["demanda_kw"] == 200.0
-    assert values["fv_kw"] == 115.0
-    assert values["red_kw"] == 85.0
-    assert values["autoconsumo_kw"] == 115.0
-    assert values["autoconsumo_pct"] == pytest.approx(57.5)
+    assert values["fv_kw"] == 255.0
+    assert values["red_kw"] == 0.0
+    assert values["autoconsumo_kw"] == 200.0
+    assert values["autoconsumo_pct"] == pytest.approx(100.0)
 
 
 def test_scope_kpis_return_partial_when_univer_is_missing():
@@ -493,10 +592,9 @@ def test_scope_kpis_return_partial_when_univer_is_missing():
                 for rt_id in api.LAS_LAGUNILLAS_DEMAND_RT_IDS
             ]
         if key == set(api.JAEN_ENDESA_INVERTER_RT_IDS):
-            return [
-                {"rt_id": rt_id, "value": 5.0, "unit": "kW", "ts_event": 1200}
-                for rt_id in api.JAEN_ENDESA_INVERTER_RT_IDS
-            ]
+            raise AssertionError("scope de Las Lagunillas ya no debe usar inversores Endesa")
+        if rt_ids == ["uja.jaen.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": -200.0, "unit": "kW", "ts_event": 1200}]
         if rt_ids == ["uja.jaen.fv.auto.ct_total.p_kw"]:
             return []
         if rt_ids == ["uja.jaen.fv.auto.edificio_a0.p_kw"]:

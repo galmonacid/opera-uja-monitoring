@@ -35,7 +35,7 @@ Motivos:
 - Dashboard principal por scope:
   - `las_lagunillas`:
     - Demanda = A0-A4, B1-B5, C1-C3/C5/C6, D1-D4 y `carga_vhe`
-    - FV = suma de inversores Endesa Jaen + `uja.jaen.fv.auto.ct_total.p_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw`
+    - FV = `abs(uja.jaen.fv.endesa.ct_total.p_kw)` + `uja.jaen.fv.auto.ct_total.p_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw`
   - `ctl_linares`:
     - Demanda = `lab_sg_t1 + lab_sg_t2 + urbanizacion + aulario_departamental + polideportivo`
     - FV = `uja.linares.fv.endesa.ct_total.p_kw`
@@ -50,6 +50,11 @@ Motivos:
   - series 24h por `campus + metric` para evitar mezclar `ct_total` con inversores
   - agua muestra consumo por intervalo (`m3`) a partir de contadores
   - monthly puede mostrarse reconstruido desde `daily` si aún no existe agregado materializado
+- Convención visual:
+  - el balance de campus y las vistas analíticas muestran FV/autoconsumo en positivo
+  - `uja.jaen.fv.endesa.ct_total.p_kw` se recibe en raw con signo técnico y solo se transforma a magnitud positiva en esas vistas
+  - `Validación` conserva el dato técnico original con su signo raw
+  - la vista de `FV Endesa Jaén` usa `ct_total` como KPI instantánea y mantiene la suma de inversores como referencia secundaria
 
 ## Actualizacion de datos (MVP)
 - `/realtime`: cada 60s

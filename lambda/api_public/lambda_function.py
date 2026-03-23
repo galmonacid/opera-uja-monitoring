@@ -21,6 +21,7 @@ _agg_table = None
 _ts_query = None
 
 SERIES_INTERVAL_MINUTES = 5
+BALANCE_SERIES_MAX_AGE_SECONDS = SERIES_INTERVAL_MINUTES * 60 * 3
 LAS_LAGUNILLAS_DEMAND_RT_IDS = [
     "uja.jaen.energia.consumo.edificio_a0.p_kw",
     "uja.jaen.energia.consumo.edificio_a1.p_kw",
@@ -118,8 +119,9 @@ BALANCE_SCOPE_CONFIG = {
             {
                 "id": "jaen_fv_endesa_total",
                 "label": "FV Endesa Jaen",
-                "rt_ids": JAEN_ENDESA_INVERTER_RT_IDS,
-                "min_items": len(JAEN_ENDESA_INVERTER_RT_IDS),
+                "rt_ids": ["uja.jaen.fv.endesa.ct_total.p_kw"],
+                "min_items": 1,
+                "transform": "abs",
             },
             {
                 "id": "jaen_fv_auto_univer",
@@ -404,15 +406,7 @@ def get_series_24h(params):
         [get_metric_series(campus, metric) for metric in config["pv_metrics"]]
     )
 
-    all_ts = sorted(set(demand_series) | set(pv_series))
-    series = [
-        {
-            "ts": ts,
-            "demand": float(demand_series.get(ts, 0.0)),
-            "pv": float(pv_series.get(ts, 0.0)),
-        }
-        for ts in all_ts
-    ]
+    series = align_balance_series(demand_series, pv_series)
 
     return {
         "campus": campus,
@@ -510,28 +504,26 @@ def build_scope_series_rows(state):
             if source["type"] == "pv_sources"
         ]
     )
-    all_ts = sorted(set(demand_series) | set(pv_series))
-    return [
-        {
-            "ts": ts,
-            "demand": float(demand_series.get(ts, 0.0)),
-            "pv": float(pv_series.get(ts, 0.0)),
-        }
-        for ts in all_ts
-    ]
+    return align_balance_series(demand_series, pv_series)
 
 
 def get_balance_source_state(source, include_series=False):
     latest_items = get_balance_source_latest_items(source)
     min_items = source.get("min_items") or source.get("expected_count") or 1
     latest_complete = len(latest_items) >= min_items
-    latest_total = sum(float(item["value"]) for item in latest_items)
+    latest_total = sum(
+        transform_balance_source_value(float(item["value"]), source) for item in latest_items
+    )
     ts_event = int(max([item.get("ts_event", 0) for item in latest_items] or [0]))
 
     series_map = {}
     series_complete = True
     if include_series and latest_complete:
         series_map = get_balance_source_series_map(source)
+        series_map = {
+            ts: transform_balance_source_value(value, source)
+            for ts, value in series_map.items()
+        }
         series_complete = bool(series_map)
 
     complete = latest_complete and series_complete
@@ -570,6 +562,13 @@ def get_balance_source_series_map(source):
         rt_prefix=rt_prefix,
         rt_like_patterns=source.get("rt_like_patterns"),
     )
+
+
+def transform_balance_source_value(value, source):
+    transform = source.get("transform")
+    if transform == "abs":
+        return abs(float(value))
+    return float(value)
 
 
 def get_metric_latest_items(campus, metric):
@@ -667,6 +666,42 @@ def sum_series_maps(series_maps):
         for ts, value in series_map.items():
             result[ts] = result.get(ts, 0.0) + value
     return result
+
+
+def align_balance_series(demand_series, pv_series):
+    all_ts = sorted(set(demand_series) | set(pv_series))
+    rows = []
+    last_demand_ts = None
+    last_demand_value = None
+    last_pv_ts = None
+    last_pv_value = None
+
+    for ts in all_ts:
+        if ts in demand_series:
+            last_demand_ts = ts
+            last_demand_value = float(demand_series[ts])
+        if ts in pv_series:
+            last_pv_ts = ts
+            last_pv_value = float(pv_series[ts])
+
+        if not is_series_value_fresh(ts, last_demand_ts) or not is_series_value_fresh(ts, last_pv_ts):
+            continue
+
+        rows.append(
+            {
+                "ts": ts,
+                "demand": float(last_demand_value),
+                "pv": float(last_pv_value),
+            }
+        )
+
+    return rows
+
+
+def is_series_value_fresh(current_ts, sample_ts):
+    if sample_ts is None:
+        return False
+    return int(current_ts) - int(sample_ts) <= BALANCE_SERIES_MAX_AGE_SECONDS
 
 
 def get_metric_unit(campus, metric):
