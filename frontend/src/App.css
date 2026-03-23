@@ -817,7 +817,7 @@
 .value-line {
   fill: none;
   stroke: var(--uja-green-dark);
-  stroke-width: 3.0;
+  stroke-width: 0.5;
 }
 
 .line {
@@ -875,30 +875,52 @@
   position: absolute;
   transform: translate(0, -50%);
   margin-left: 0.4rem;
-  min-width: 72px;
-  padding: 0.35rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
   appearance: none;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(35, 31, 32, 0.15);
   border-radius: var(--radius-sm);
   box-shadow: 0 6px 16px rgba(35, 31, 32, 0.08);
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
   font: inherit;
 }
 
-.map-pin-label {
-  color: var(--color-text-soft);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.map-pin-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  color: var(--uja-green-dark);
+}
+
+.map-pin-icon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .map-pin-value {
   color: var(--color-text);
   font-size: 0.875rem;
-  font-weight: 600;
+  font-weight: 700;
+}
+
+.map-pin.layer-water .map-pin-icon {
+  color: var(--uja-gray);
+}
+
+.map-pin.layer-solar .map-pin-icon {
+  color: var(--uja-gold);
+}
+
+.map-pin.layer-autoconsumo .map-pin-icon {
+  color: var(--uja-green);
 }
 
 .map-pin.is-active {
@@ -1003,6 +1025,75 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-4);
+}
+
+.gateway-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.gateway-tab {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 11rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.gateway-tab:hover {
+  border-color: rgba(0, 109, 56, 0.45);
+}
+
+.gateway-tab.is-active {
+  border-color: var(--uja-green);
+  background: rgba(0, 166, 93, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(0, 166, 93, 0.12);
+}
+
+.gateway-tab:focus-visible {
+  outline: 2px solid var(--uja-green-dark);
+  outline-offset: 2px;
+}
+
+.gateway-tab-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.gateway-tab-status {
+  color: var(--color-text-soft);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gateway-tab-status.status-ready {
+  color: var(--uja-green-dark);
+}
+
+.gateway-tab-status.status-error {
+  color: var(--text-danger);
+}
+
+.gateway-panel-card {
+  margin-top: var(--space-4);
+}
+
+.gateway-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .water-detail-grid,
@@ -1143,9 +1234,15 @@
 @media (max-width: 767px) {
   .topbar-inner,
   .dashboard-panel-header,
-  .gateway-header {
+  .gateway-header,
+  .gateway-panel-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .gateway-tab {
+    flex: 1 1 calc(50% - var(--space-3));
+    min-width: 0;
   }
 
   .page-hero {

@@ -5,8 +5,6 @@ import campus from "./assets/sections/campus.png";
 import EnergyFlowDiagram from "./components/EnergyFlowDiagram";
 import {
   getMonitoringPointLabel,
-  getMonitoringPointMeta,
-  getMonitoringPointShortLabel,
 } from "./data/monitoringPoints";
 
 const DEFAULT_API_BASE = "https://lg0yl7xofl.execute-api.eu-west-1.amazonaws.com/v1";
@@ -21,27 +19,270 @@ const number = new Intl.NumberFormat("es-ES", {
 
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
 
-const MAP_POINTS = [
-  { label: "A0", rtId: "uja.jaen.energia.consumo.edificio_a0.p_kw", x: 83, y: 15 },
-  { label: "A1", rtId: "uja.jaen.energia.consumo.edificio_a1.p_kw", x: 64, y: 32 },
-  { label: "A2", rtId: "uja.jaen.energia.consumo.edificio_a2.p_kw", x: 50, y: 40 },
-  { label: "A3", rtId: "uja.jaen.energia.consumo.edificio_a3.p_kw", x: 40, y: 44 },
-  { label: "A4", rtId: "uja.jaen.energia.consumo.edificio_a4.p_kw", x: 31, y: 55 },
-  { label: "B1", rtId: "uja.jaen.energia.consumo.edificio_b1.p_kw", x: 87, y: 30 },
-  { label: "B2", rtId: "uja.jaen.energia.consumo.edificio_b2.p_kw", x: 64, y: 44 },
-  { label: "B3", rtId: "uja.jaen.energia.consumo.edificio_b3.p_kw", x: 55, y: 52 },
-  { label: "B4", rtId: "uja.jaen.energia.consumo.edificio_b4.p_kw", x: 45, y: 60 },
-  { label: "B5", rtId: "uja.jaen.energia.consumo.edificio_b5.p_kw", x: 36, y: 67 },
-  { label: "C1", rtId: "uja.jaen.energia.consumo.edificio_c1.p_kw", x: 68, y: 55 },
-  { label: "C2", rtId: "uja.jaen.energia.consumo.edificio_c2.p_kw", x: 61, y: 63 },
-  { label: "C3", rtId: "uja.jaen.energia.consumo.edificio_c3.p_kw", x: 49, y: 70 },
-  { label: "C5", rtId: "uja.jaen.energia.consumo.edificio_c5.p_kw", x: 36, y: 79 },
-  { label: "C6", rtId: "uja.jaen.energia.consumo.edificio_c6.p_kw", x: 27, y: 85 },
-  { label: "D1", rtId: "uja.jaen.energia.consumo.edificio_d1.p_kw", x: 90, y: 54 },
-  { label: "D2", rtId: "uja.jaen.energia.consumo.edificio_d2.p_kw", x: 69, y: 67 },
-  { label: "D3", rtId: "uja.jaen.energia.consumo.edificio_d3.p_kw", x: 56, y: 74 },
-  { label: "D4", rtId: "uja.jaen.energia.consumo.edificio_d4.p_kw", x: 31, y: 95 },
-  { label: "Carga VHE", rtId: CAMPUS_VHE_RT_ID, x: 26, y: 67 },
+const MAP_LAYER_OFFSETS = {
+  energy: { x: 0, y: 0 },
+  water: { x: 1.2, y: 2 },
+  solar: { x: 1.2, y: -2 },
+  autoconsumo: { x: -1.2, y: 2 },
+};
+
+const createMapEntry = ({
+  id,
+  layer,
+  campus,
+  x,
+  y,
+  rtIds,
+  aggregate = "single",
+  label,
+  detailLabel,
+  icon,
+}) => {
+  const normalizedRtIds = Array.isArray(rtIds) ? rtIds : [rtIds];
+  const fallbackLabel = normalizedRtIds.length === 1 ? getMonitoringPointLabel(normalizedRtIds[0]) : id;
+  const resolvedLabel = label || fallbackLabel;
+  return {
+    id,
+    layer,
+    campus,
+    x,
+    y,
+    rtIds: normalizedRtIds,
+    aggregate,
+    icon: icon || layer,
+    label: resolvedLabel,
+    detailLabel: detailLabel || resolvedLabel,
+  };
+};
+
+const buildSingleMapEntries = (layer, campus, definitions) =>
+  definitions.map(([rtId, x, y, label]) =>
+    createMapEntry({
+      id: `${layer}:${rtId}`,
+      layer,
+      campus,
+      rtIds: rtId,
+      x,
+      y,
+      label,
+      detailLabel: label,
+    })
+  );
+
+const MAP_ENTRIES = [
+  ...buildSingleMapEntries("energy", "jaen", [
+    ["uja.jaen.energia.consumo.edificio_a0.p_kw", 83, 15],
+    ["uja.jaen.energia.consumo.edificio_a1.p_kw", 64, 32],
+    ["uja.jaen.energia.consumo.edificio_a2.p_kw", 50, 40],
+    ["uja.jaen.energia.consumo.edificio_a3.p_kw", 40, 44],
+    ["uja.jaen.energia.consumo.edificio_a4.p_kw", 31, 55],
+    ["uja.jaen.energia.consumo.edificio_b1.p_kw", 87, 30],
+    ["uja.jaen.energia.consumo.edificio_b2.p_kw", 64, 44],
+    ["uja.jaen.energia.consumo.edificio_b3.p_kw", 55, 52],
+    ["uja.jaen.energia.consumo.edificio_b4.p_kw", 45, 60],
+    ["uja.jaen.energia.consumo.edificio_b5.p_kw", 36, 67],
+    ["uja.jaen.energia.consumo.edificio_c1.p_kw", 68, 55],
+    ["uja.jaen.energia.consumo.edificio_c2.p_kw", 61, 63],
+    ["uja.jaen.energia.consumo.edificio_c3.p_kw", 49, 70],
+    ["uja.jaen.energia.consumo.edificio_c5.p_kw", 36, 79],
+    ["uja.jaen.energia.consumo.edificio_c6.p_kw", 27, 85],
+    ["uja.jaen.energia.consumo.edificio_d1.p_kw", 90, 54],
+    ["uja.jaen.energia.consumo.edificio_d2.p_kw", 69, 67],
+    ["uja.jaen.energia.consumo.edificio_d3.p_kw", 56, 74],
+    ["uja.jaen.energia.consumo.edificio_d4.p_kw", 31, 95],
+    [CAMPUS_VHE_RT_ID, 26, 67],
+    ["uja.jaen.energia.consumo.um_c4.p_kw", 44, 87],
+    ["uja.jaen.energia.consumo.ae_magisterio.p_kw", 76, 95],
+    ["uja.jaen.energia.consumo.apartamentos_universitarios.p_kw", 71, 6],
+    ["uja.jaen.energia.consumo.polideportivo.p_kw", 62, 10],
+    ["uja.jaen.energia.consumo.residencia_domingo_savio.p_kw", 82, 4],
+  ]),
+  ...buildSingleMapEntries("energy", "linares", [
+    ["uja.linares.energia.consumo.aulario_departamental.p_kw", 6, 20],
+    ["uja.linares.energia.consumo.lab_sg_t1.p_kw", 4, 29],
+    ["uja.linares.energia.consumo.lab_sg_t2.p_kw", 14, 25],
+    ["uja.linares.energia.consumo.urbanizacion.p_kw", 14, 12],
+    ["uja.linares.energia.consumo.polideportivo.p_kw", 21, 17],
+  ]),
+  ...buildSingleMapEntries("water", "jaen", [
+    ["uja.jaen.agua.consumo.edificio_a0.v_m3", 83, 15],
+    ["uja.jaen.agua.consumo.edificio_a1.v_m3", 64, 32],
+    ["uja.jaen.agua.consumo.edificio_a2.v_m3", 50, 40],
+    ["uja.jaen.agua.consumo.edificio_a3.v_m3", 40, 44],
+    ["uja.jaen.agua.consumo.edificio_a4.v_m3", 31, 55],
+    ["uja.jaen.agua.consumo.edificio_b1.v_m3", 87, 30],
+    ["uja.jaen.agua.consumo.edificio_b2.v_m3", 64, 44],
+    ["uja.jaen.agua.consumo.edificio_b3.v_m3", 55, 52],
+    ["uja.jaen.agua.consumo.edificio_b4.v_m3", 45, 60],
+    ["uja.jaen.agua.consumo.edificio_b5.v_m3", 36, 67],
+    ["uja.jaen.agua.consumo.edificio_c1.v_m3", 68, 55],
+    ["uja.jaen.agua.consumo.edificio_c2.v_m3", 61, 63],
+    ["uja.jaen.agua.consumo.edificio_c3.v_m3", 49, 70],
+    ["uja.jaen.agua.consumo.edificio_c5.v_m3", 36, 79],
+    ["uja.jaen.agua.consumo.edificio_c6.v_m3", 27, 85],
+    ["uja.jaen.agua.consumo.edificio_d1.v_m3", 90, 54],
+    ["uja.jaen.agua.consumo.edificio_d2.v_m3", 69, 67],
+    ["uja.jaen.agua.consumo.edificio_d3.v_m3", 56, 74],
+    ["uja.jaen.agua.consumo.edificio_d4.v_m3", 31, 95],
+    ["uja.jaen.agua.consumo.edificio_c1_garaje.v_m3", 70, 59],
+    ["uja.jaen.agua.consumo.d1_caf.v_m3", 92, 58],
+    ["uja.jaen.agua.consumo.c_futbol.v_m3", 82, 8],
+    ["uja.jaen.agua.consumo.plaz_pueblos.v_m3", 58, 30],
+    ["uja.jaen.agua.consumo.polideportivo.v_m3", 62, 10],
+    ["uja.jaen.agua.consumo.um_c4.v_m3", 44, 87],
+    ["uja.jaen.agua.consumo.ae_magisterio.v_m3", 76, 95],
+  ]),
+  ...buildSingleMapEntries("water", "linares", [
+    ["uja.linares.agua.consumo.cafeteria.v_m3", 19, 16],
+    ["uja.linares.agua.consumo.comedor.v_m3", 12, 21],
+    ["uja.linares.agua.consumo.departamental.v_m3", 5, 25],
+    ["uja.linares.agua.consumo.laboratorios.v_m3", 11, 29],
+    ["uja.linares.agua.consumo.pabellon_polideportivo.v_m3", 23, 10],
+    ["uja.linares.agua.consumo.reciclada_lluvia.v_m3", 4, 33],
+    ["uja.linares.agua.consumo.riego_aulario.v_m3", 9, 14],
+    ["uja.linares.agua.consumo.servicios_generales.v_m3", 16, 31],
+  ]),
+  createMapEntry({
+    id: "solar:jaen:p3",
+    layer: "solar",
+    campus: "jaen",
+    x: 42,
+    y: 96,
+    rtIds: [
+      "uja.jaen.fv.endesa.inv01.p_ac_kw",
+      "uja.jaen.fv.endesa.inv02.p_ac_kw",
+      "uja.jaen.fv.endesa.inv03.p_ac_kw",
+      "uja.jaen.fv.endesa.inv04.p_ac_kw",
+    ],
+    aggregate: "sum",
+    label: "FV Endesa P3",
+  }),
+  createMapEntry({
+    id: "solar:jaen:p4",
+    layer: "solar",
+    campus: "jaen",
+    x: 86,
+    y: 8,
+    rtIds: ["uja.jaen.fv.endesa.inv05.p_ac_kw", "uja.jaen.fv.endesa.inv06.p_ac_kw"],
+    aggregate: "sum",
+    label: "FV Endesa P4",
+  }),
+  createMapEntry({
+    id: "solar:jaen:b4",
+    layer: "solar",
+    campus: "jaen",
+    x: 45,
+    y: 60,
+    rtIds: ["uja.jaen.fv.endesa.inv07.p_ac_kw", "uja.jaen.fv.endesa.inv08.p_ac_kw"],
+    aggregate: "sum",
+    label: "FV Endesa B4",
+  }),
+  createMapEntry({
+    id: "solar:jaen:c3",
+    layer: "solar",
+    campus: "jaen",
+    x: 49,
+    y: 70,
+    rtIds: ["uja.jaen.fv.endesa.inv09.p_ac_kw"],
+    aggregate: "single",
+    label: "FV Endesa C3",
+  }),
+  createMapEntry({
+    id: "solar:jaen:d3",
+    layer: "solar",
+    campus: "jaen",
+    x: 56,
+    y: 74,
+    rtIds: [
+      "uja.jaen.fv.endesa.inv10.p_ac_kw",
+      "uja.jaen.fv.endesa.inv11.p_ac_kw",
+      "uja.jaen.fv.endesa.inv12.p_ac_kw",
+    ],
+    aggregate: "sum",
+    label: "FV Endesa D3",
+  }),
+  createMapEntry({
+    id: "solar:linares:endesa",
+    layer: "solar",
+    campus: "linares",
+    x: 8,
+    y: 6,
+    rtIds: ["uja.linares.fv.endesa.ct_total.p_kw"],
+    aggregate: "single",
+    label: "FV Endesa Linares",
+  }),
+  createMapEntry({
+    id: "autoconsumo:jaen:b5",
+    layer: "autoconsumo",
+    campus: "jaen",
+    x: 36,
+    y: 67,
+    rtIds: ["uja.jaen.fv.auto.b5_inv1.p_ac_kw", "uja.jaen.fv.auto.b5_inv2.p_ac_kw"],
+    aggregate: "sum",
+    label: "Autoconsumo B5",
+  }),
+  createMapEntry({
+    id: "autoconsumo:jaen:pergola",
+    layer: "autoconsumo",
+    campus: "jaen",
+    x: 63,
+    y: 45,
+    rtIds: ["uja.jaen.fv.auto.pergola.p_ac_kw"],
+    aggregate: "single",
+    label: "Pérgola",
+  }),
+  createMapEntry({
+    id: "autoconsumo:jaen:parking",
+    layer: "autoconsumo",
+    campus: "jaen",
+    x: 78,
+    y: 8,
+    rtIds: ["uja.jaen.fv.auto.parking_p4.p_ac_kw"],
+    aggregate: "single",
+    label: "Parking P4",
+  }),
+  createMapEntry({
+    id: "autoconsumo:jaen:fachada",
+    layer: "autoconsumo",
+    campus: "jaen",
+    x: 53,
+    y: 37,
+    rtIds: ["uja.jaen.fv.auto.fachada.p_ac_kw"],
+    aggregate: "single",
+    label: "Fachada",
+  }),
+  createMapEntry({
+    id: "autoconsumo:jaen:a0",
+    layer: "autoconsumo",
+    campus: "jaen",
+    x: 83,
+    y: 15,
+    rtIds: ["uja.jaen.fv.auto.edificio_a0.p_kw"],
+    aggregate: "single",
+    label: "Autoconsumo A0",
+    detailLabel: "Autoconsumo edificio A0",
+  }),
+  createMapEntry({
+    id: "autoconsumo:jaen:c4",
+    layer: "autoconsumo",
+    campus: "jaen",
+    x: 44,
+    y: 87,
+    rtIds: ["uja.jaen.fv.auto.edificio_c4.p_kw"],
+    aggregate: "single",
+    label: "Autoconsumo C4",
+    detailLabel: "Autoconsumo edificio C4",
+  }),
+  createMapEntry({
+    id: "autoconsumo:jaen:magisterio",
+    layer: "autoconsumo",
+    campus: "jaen",
+    x: 76,
+    y: 95,
+    rtIds: ["uja.jaen.fv.auto.magisterio.p_kw"],
+    aggregate: "single",
+    label: "Autoconsumo Magisterio",
+  }),
 ];
 const DASHBOARD_SCOPES = [
   { id: "las_lagunillas", title: "Campus Las Lagunillas" },
@@ -157,8 +398,6 @@ const WATER_VIEW_CONFIG = [
     label: "Las Lagunillas",
     gatewayId: "gw_jaen_agua",
     prefix: "uja.jaen.agua.",
-    trendStatusKey: "gw_jaen_agua",
-    hasTrend: true,
   },
   {
     id: "linares",
@@ -166,8 +405,6 @@ const WATER_VIEW_CONFIG = [
     label: "CTL Linares",
     gatewayId: "gw_linares_mix",
     prefix: "uja.linares.agua.",
-    trendStatusKey: null,
-    hasTrend: false,
   },
 ];
 
@@ -227,11 +464,17 @@ const PROJECT_VIEW_CONFIG = [
 
 const MAP_LAYER_OPTIONS = [
   { value: "all", label: "Todas las capas" },
-  { value: "buildings", label: "Edificios" },
-  { value: "energy", label: "Puntos energéticos" },
+  { value: "energy", label: "Demanda de energía" },
   { value: "water", label: "Agua" },
   { value: "solar", label: "Fotovoltaica" },
-  { value: "projects", label: "Autoconsumo" },
+  { value: "autoconsumo", label: "Autoconsumo" },
+];
+
+const VALIDATION_TAB_OPTIONS = [
+  { id: "latest", label: "Último valor" },
+  { id: "series", label: "24h" },
+  { id: "daily", label: "Diario" },
+  { id: "monthly", label: "Mensual" },
 ];
 
 const CAMPUS_OPTIONS = [
@@ -552,6 +795,25 @@ const IconSolar = () => (
   </svg>
 );
 
+const IconWater = () => (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path
+      d="M12 3s-5 5.4-5 9.1A5 5 0 0 0 17 12c0-3.7-5-9-5-9Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+    />
+    <path
+      d="M10 15.5a2.6 2.6 0 0 0 4 0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const IconGrid = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <path
@@ -563,6 +825,17 @@ const IconGrid = () => (
     />
   </svg>
 );
+
+const renderMapLayerIcon = (layer) => {
+  if (layer === "water") return <IconWater />;
+  if (layer === "solar") return <IconSolar />;
+  if (layer === "autoconsumo") return <IconAutoconsumo />;
+  return <IconDemand />;
+};
+
+const getDefaultMapUnit = (layer) => (layer === "water" ? "m3" : "kW");
+
+const clampPercent = (value) => Math.max(1, Math.min(97, value));
 
 const IconAutoconsumo = () => (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -591,6 +864,9 @@ function App() {
   const [selectedMapPoint, setSelectedMapPoint] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState(PROJECT_VIEW_CONFIG[0].id);
   const [validationDomainFilter, setValidationDomainFilter] = useState("all");
+  const [validationActiveTabs, setValidationActiveTabs] = useState(() =>
+    Object.fromEntries(GATEWAYS.map((gateway) => [gateway.id, "latest"]))
+  );
   const [realtime, setRealtime] = useState({
     status: "idle",
     data: null,
@@ -611,6 +887,17 @@ function App() {
     GATEWAYS.forEach((gateway) => {
       initial[gateway.id] = {
         latest: { status: "idle", data: null, error: null },
+        series: { status: "idle", data: null, error: null },
+        daily: { status: "idle", data: null, error: null },
+        monthly: { status: "idle", data: null, error: null },
+      };
+    });
+    return initial;
+  });
+  const [waterMetrics, setWaterMetrics] = useState(() => {
+    const initial = {};
+    WATER_VIEW_CONFIG.forEach((config) => {
+      initial[config.id] = {
         series: { status: "idle", data: null, error: null },
         daily: { status: "idle", data: null, error: null },
         monthly: { status: "idle", data: null, error: null },
@@ -641,8 +928,27 @@ function App() {
   const fetchRealtime = async () => {
     try {
       setRealtime((prev) => ({ ...prev, status: "loading", error: null }));
-      const payload = await fetchWithFallback("/realtime?campus=jaen");
-      setRealtime({ status: "ready", data: payload, error: null });
+      const [jaenPayload, linaresPayload] = await Promise.all([
+        fetchWithFallback("/realtime?campus=jaen"),
+        fetchWithFallback("/realtime?campus=linares"),
+      ]);
+      const mergedItems = new Map();
+      [jaenPayload, linaresPayload].forEach((payload) => {
+        (payload.items || []).forEach((item) => {
+          const previous = mergedItems.get(item.rt_id);
+          if (!previous || Number(item.ts_event || 0) >= Number(previous.ts_event || 0)) {
+            mergedItems.set(item.rt_id, item);
+          }
+        });
+      });
+      setRealtime({
+        status: "ready",
+        data: {
+          ts: Math.max(Number(jaenPayload.ts || 0), Number(linaresPayload.ts || 0)),
+          items: Array.from(mergedItems.values()).sort((a, b) => a.rt_id.localeCompare(b.rt_id)),
+        },
+        error: null,
+      });
     } catch (error) {
       setRealtime({ status: "error", data: null, error: error.message });
     }
@@ -820,6 +1126,64 @@ function App() {
     }
   };
 
+  const fetchWaterSeries = async (config) => {
+    try {
+      setWaterMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          series: { ...prev[config.id].series, status: "loading", error: null },
+        },
+      }));
+      const payload = await fetchWithFallback(`/series/24h?campus=${config.campus}&metric=agua_consumo`);
+      setWaterMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          series: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setWaterMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          series: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
+  const fetchWaterAggregates = async (config, period) => {
+    try {
+      setWaterMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          [period]: { ...prev[config.id][period], status: "loading", error: null },
+        },
+      }));
+      const payload = await fetchWithFallback(
+        `/aggregates/${period}?campus=${config.campus}&metric=agua_consumo&asset=total`
+      );
+      setWaterMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          [period]: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setWaterMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          [period]: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
   const refreshScopeData = (scope) => {
     fetchDashboardKpis(scope);
     fetchDashboardSeries(scope);
@@ -850,6 +1214,19 @@ function App() {
       fetchGatewayAggregates(gateway, "daily");
       fetchGatewayAggregates(gateway, "monthly");
     });
+  };
+
+  const refreshWaterHistory = () => {
+    WATER_VIEW_CONFIG.forEach((config) => {
+      fetchWaterSeries(config);
+      fetchWaterAggregates(config, "daily");
+      fetchWaterAggregates(config, "monthly");
+    });
+  };
+
+  const refreshWaterData = () => {
+    refreshOperationalLatest();
+    refreshWaterHistory();
   };
 
   const refreshOperationalData = () => {
@@ -906,6 +1283,12 @@ function App() {
   }, []);
 
   useEffect(() => {
+    refreshWaterHistory();
+    const interval = setInterval(refreshWaterHistory, 300000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
     const handleHash = () => setRouteHash(window.location.hash || "#/");
     window.addEventListener("hashchange", handleHash);
     return () => window.removeEventListener("hashchange", handleHash);
@@ -932,7 +1315,24 @@ function App() {
 
   const getPrimaryLatest = (items) => {
     if (!items.length) return { value: null, unit: "--", ts: null };
-    const ctTotal = items.find((item) => item.rt_id?.includes("ct_total"));
+
+    const isPowerItem = (item) => {
+      const rtId = item.rt_id || "";
+      const unit = (item.unit || "").toLowerCase();
+      return (
+        unit === "kw" ||
+        rtId.endsWith(".p_kw") ||
+        rtId.endsWith(".p_ac_kw") ||
+        rtId.includes(".p_kw") ||
+        rtId.includes(".p_ac_kw")
+      );
+    };
+
+    const powerItems = items.filter(isPowerItem);
+    const preferredItems = powerItems.length ? powerItems : items;
+    const ctTotal = preferredItems.find(
+      (item) => item.rt_id?.includes("ct_total") && isPowerItem(item)
+    );
     if (ctTotal) {
       return {
         value: ctTotal.value,
@@ -940,17 +1340,17 @@ function App() {
         ts: ctTotal.ts_event || null,
       };
     }
-    if (items.length === 1) {
+    if (preferredItems.length === 1) {
       return {
-        value: items[0].value,
-        unit: items[0].unit || "kW",
-        ts: items[0].ts_event || null,
+        value: preferredItems[0].value,
+        unit: preferredItems[0].unit || "kW",
+        ts: preferredItems[0].ts_event || null,
       };
     }
     return {
-      value: items.reduce((sum, item) => sum + Number(item.value || 0), 0),
-      unit: items[0].unit || "kW",
-      ts: items.reduce((maxTs, item) => Math.max(maxTs, Number(item.ts_event || 0)), 0),
+      value: preferredItems.reduce((sum, item) => sum + Number(item.value || 0), 0),
+      unit: preferredItems[0].unit || "kW",
+      ts: preferredItems.reduce((maxTs, item) => Math.max(maxTs, Number(item.ts_event || 0)), 0),
     };
   };
 
@@ -982,10 +1382,50 @@ function App() {
     return map;
   }, [realtimeItems]);
 
-  const readValue = (rtId) => {
-    const item = realtimeMap.get(rtId);
-    if (!item) return null;
-    return { value: item.value, unit: item.unit || "kW" };
+  const getMapEntryReading = (entry) => {
+    const items = entry.rtIds
+      .map((rtId) => realtimeMap.get(rtId))
+      .filter(Boolean);
+
+    if (!items.length) {
+      return {
+        value: null,
+        unit: getDefaultMapUnit(entry.layer),
+        tsEvent: null,
+        availableCount: 0,
+        totalCount: entry.rtIds.length,
+        isPartial: false,
+      };
+    }
+
+    const value =
+      entry.aggregate === "sum"
+        ? items.reduce((sum, item) => sum + Number(item.value || 0), 0)
+        : Number(items[0].value || 0);
+
+    return {
+      value,
+      unit: items[0].unit || getDefaultMapUnit(entry.layer),
+      tsEvent: Math.max(...items.map((item) => Number(item.ts_event || 0))),
+      availableCount: items.length,
+      totalCount: entry.rtIds.length,
+      isPartial: items.length < entry.rtIds.length,
+    };
+  };
+
+  const getMapEntryPosition = (entry) => {
+    if (mapLayer !== "all") {
+      return {
+        left: `${clampPercent(entry.x)}%`,
+        top: `${clampPercent(entry.y)}%`,
+      };
+    }
+
+    const offset = MAP_LAYER_OFFSETS[entry.layer] || { x: 0, y: 0 };
+    return {
+      left: `${clampPercent(entry.x + offset.x)}%`,
+      top: `${clampPercent(entry.y + offset.y)}%`,
+    };
   };
 
   const dashboardOverview = useMemo(() => {
@@ -1039,6 +1479,27 @@ function App() {
     return result;
   }, [validation]);
 
+  const waterOverview = useMemo(() => {
+    const result = {};
+    WATER_VIEW_CONFIG.forEach((config) => {
+      const latest = gatewayOverview[config.gatewayId] || {};
+      const metrics = waterMetrics[config.id] || {};
+      result[config.id] = {
+        latestItems: latest.latestItems || [],
+        latestStatus: latest.latestStatus || "idle",
+        seriesItems: metrics.series?.data?.series || [],
+        seriesStatus: metrics.series?.status || "idle",
+        dailyValue: getLastAggregateValue(metrics.daily?.data?.series || []),
+        dailyUnit: metrics.daily?.data?.unit || "--",
+        monthlyValue: getLastAggregateValue(metrics.monthly?.data?.series || []),
+        monthlyUnit: metrics.monthly?.data?.unit || metrics.daily?.data?.unit || "--",
+        annualValue: getAnnualValue(metrics.monthly?.data?.series || []),
+        annualUnit: metrics.monthly?.data?.unit || metrics.daily?.data?.unit || "--",
+      };
+    });
+    return result;
+  }, [gatewayOverview, waterMetrics]);
+
   const validationSummary = useMemo(() => {
     let errors = 0;
     let loading = 0;
@@ -1071,27 +1532,21 @@ function App() {
     };
   }, [gatewayOverview]);
 
-  const visibleMapPoints = useMemo(() => {
-    if (mapLayer === "water" || mapLayer === "solar") return [];
-    if (mapLayer === "projects") {
-      return MAP_POINTS.filter((point) => point.label === "Carga VHE");
-    }
-    if (mapLayer === "buildings") {
-      return MAP_POINTS.filter((point) => point.label !== "Carga VHE");
-    }
-    return MAP_POINTS;
+  const visibleMapEntries = useMemo(() => {
+    if (mapLayer === "all") return MAP_ENTRIES;
+    return MAP_ENTRIES.filter((entry) => entry.layer === mapLayer);
   }, [mapLayer]);
 
   useEffect(() => {
     if (routeId !== "map") return;
-    if (!visibleMapPoints.length) {
+    if (!visibleMapEntries.length) {
       setSelectedMapPoint(null);
       return;
     }
-    if (!visibleMapPoints.some((point) => point.rtId === selectedMapPoint)) {
-      setSelectedMapPoint(visibleMapPoints[0].rtId);
+    if (!visibleMapEntries.some((entry) => entry.id === selectedMapPoint)) {
+      setSelectedMapPoint(visibleMapEntries[0].id);
     }
-  }, [routeId, selectedMapPoint, visibleMapPoints]);
+  }, [routeId, selectedMapPoint, visibleMapEntries]);
 
   const selectedProject =
     PROJECT_VIEW_CONFIG.find((item) => item.id === selectedProjectId) || PROJECT_VIEW_CONFIG[0];
@@ -1114,8 +1569,8 @@ function App() {
         <table>
           <thead>
             <tr>
-              {columns.map((col) => (
-                <th key={col} scope="col">
+              {columns.map((col, colIdx) => (
+                <th key={`${col}-${colIdx}`} scope="col">
                   {col}
                 </th>
               ))}
@@ -1138,6 +1593,7 @@ function App() {
   const buildGatewayTables = (gateway) => {
     const labels = aggregateLabels(gateway.aggregateMetric);
     const state = validation[gateway.id] || {};
+    const activeTab = validationActiveTabs[gateway.id] || "latest";
     const latestItems = state.latest?.data?.items || [];
     const latestRows = latestItems
       .map((item) => ({
@@ -1182,6 +1638,43 @@ function App() {
       state.monthly?.data?.unit || "--",
     ]);
 
+    const tabPanels = {
+      latest: {
+        label: "Último valor",
+        title: "Último valor disponible",
+        status: state.latest || {},
+        content: renderTable(
+          ["Punto", "rt_id", "Valor", "Unidad", "Última lectura"],
+          latestRows
+        ),
+      },
+      series: {
+        label: "24h",
+        title: "Últimas 24 horas",
+        status: state.series || {},
+        content: renderTable(
+          usesValueSeries
+            ? ["Fecha/hora", "Valor", "Unidad"]
+            : ["Fecha/hora", "Demanda", "Unidad", "FV", "Unidad"],
+          seriesRowsLocal
+        ),
+      },
+      daily: {
+        label: "Diario",
+        title: labels.daily,
+        status: state.daily || {},
+        content: renderTable(["Periodo", "Valor", "Unidad"], dailyRows),
+      },
+      monthly: {
+        label: "Mensual",
+        title: labels.monthly,
+        status: state.monthly || {},
+        content: renderTable(["Periodo", "Valor", "Unidad"], monthlyRows),
+      },
+    };
+
+    const activePanel = tabPanels[activeTab] || tabPanels.latest;
+
     return (
       <article key={gateway.id} className="gateway-card">
         <div className="gateway-header">
@@ -1198,40 +1691,44 @@ function App() {
             Actualizar
           </button>
         </div>
-        <div className="gateway-grid">
-          <div className="api-card">
-            <h4 className="api-card-title">Último valor disponible</h4>
-            <div className={`api-status status-${state.latest?.status}`}>
-              {renderStatus(state.latest || {})}
+        <div className="gateway-tabs" role="tablist" aria-label={`Datos de ${gateway.label}`}>
+          {VALIDATION_TAB_OPTIONS.map((tab) => {
+            const tabState = tabPanels[tab.id]?.status || {};
+            const isActive = tab.id === activeTab;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                id={`${gateway.id}-${tab.id}-tab`}
+                aria-selected={isActive}
+                aria-controls={`${gateway.id}-${tab.id}-panel`}
+                className={`gateway-tab${isActive ? " is-active" : ""}`}
+                onClick={() =>
+                  setValidationActiveTabs((prev) => ({ ...prev, [gateway.id]: tab.id }))
+                }
+              >
+                <span className="gateway-tab-label">{tab.label}</span>
+                <span className={`gateway-tab-status status-${tabState.status || "idle"}`}>
+                  {renderStatus(tabState)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="gateway-panel api-card gateway-panel-card"
+          role="tabpanel"
+          id={`${gateway.id}-${activeTab}-panel`}
+          aria-labelledby={`${gateway.id}-${activeTab}-tab`}
+        >
+          <div className="gateway-panel-header">
+            <h4 className="api-card-title">{activePanel.title}</h4>
+            <div className={`api-status status-${activePanel.status.status || "idle"}`}>
+              {renderStatus(activePanel.status)}
             </div>
-            {renderTable(["Punto", "rt_id", "value", "unit", "ts_event"], latestRows)}
           </div>
-          <div className="api-card">
-            <h4 className="api-card-title">Últimas 24 horas</h4>
-            <div className={`api-status status-${state.series?.status}`}>
-              {renderStatus(state.series || {})}
-            </div>
-            {renderTable(
-              usesValueSeries
-                ? ["ts", "value", "unit"]
-                : ["ts", "demand", "unit", "pv", "unit"],
-              seriesRowsLocal
-            )}
-          </div>
-          <div className="api-card">
-            <h4 className="api-card-title">{labels.daily}</h4>
-            <div className={`api-status status-${state.daily?.status}`}>
-              {renderStatus(state.daily || {})}
-            </div>
-            {renderTable(["date", "value", "unit"], dailyRows)}
-          </div>
-          <div className="api-card">
-            <h4 className="api-card-title">{labels.monthly}</h4>
-            <div className={`api-status status-${state.monthly?.status}`}>
-              {renderStatus(state.monthly || {})}
-            </div>
-            {renderTable(["date", "value", "unit"], monthlyRows)}
-          </div>
+          {activePanel.content}
         </div>
       </article>
     );
@@ -1367,9 +1864,8 @@ function App() {
     );
   };
 
-  const buildWaterRows = (config) => {
-    const summary = gatewayOverview[config.gatewayId];
-    const rows = (summary?.latestItems || [])
+  const buildWaterRows = (latestItems, config) => {
+    const rows = (latestItems || [])
       .filter((item) => item.rt_id?.startsWith(config.prefix))
       .map((item) => ({
         sortLabel: getMonitoringPointLabel(item.rt_id),
@@ -1412,7 +1908,7 @@ function App() {
       subtitle:
         "Sección tabular y analítica para consumo de agua por campus y punto de medida.",
       primaryLabel: "Actualizar agua",
-      primaryAction: refreshOperationalData,
+      primaryAction: refreshWaterData,
     },
     solar: {
       title: "Monitorización fotovoltaica",
@@ -1456,9 +1952,9 @@ function App() {
   });
 
   const selectedMapData = selectedMapPoint
-    ? visibleMapPoints.find((point) => point.rtId === selectedMapPoint) || null
+    ? visibleMapEntries.find((entry) => entry.id === selectedMapPoint) || null
     : null;
-  const selectedMapReading = selectedMapData ? realtimeMap.get(selectedMapData.rtId) : null;
+  const selectedMapReading = selectedMapData ? getMapEntryReading(selectedMapData) : null;
 
   const renderToolbar = () => {
     const controls = [];
@@ -1578,7 +2074,7 @@ function App() {
 
     let note = "Vista operativa lista.";
     if (routeId === "map") {
-      note = `${visibleMapPoints.length} puntos visibles en la capa actual.`;
+      note = `${visibleMapEntries.length} puntos visibles en la capa actual.`;
     } else if (routeId === "validation") {
       note = `${filteredValidationGateways.length} gateways visibles en seguimiento.`;
     } else if (routeId === "projects") {
@@ -1609,7 +2105,7 @@ function App() {
         href: "#/mapa",
         title: "Mapa campus",
         copy: "Vista cartográfica con capas activas y detalle de puntos.",
-        status: `${MAP_POINTS.length} puntos de referencia`,
+        status: `${MAP_ENTRIES.length} puntos cartográficos`,
       },
       {
         href: "#/agua",
@@ -1744,20 +2240,23 @@ function App() {
               src={campus}
               alt="Plano del campus con puntos de lectura energética destacados"
             />
-            {visibleMapPoints.map((point) => {
-              const reading = readValue(point.rtId);
-              const valueText = reading ? formatValue(reading.value, reading.unit) : "--";
-              const isActive = point.rtId === selectedMapPoint;
-              const pointMeta = getMonitoringPointMeta(point.rtId);
+            {visibleMapEntries.map((entry) => {
+              const reading = getMapEntryReading(entry);
+              const valueText =
+                reading.value == null ? "--" : formatValue(reading.value, reading.unit);
+              const isActive = entry.id === selectedMapPoint;
               return (
                 <button
-                  key={point.rtId}
-                  className={`map-pin ${isActive ? "is-active" : ""}`}
-                  style={{ left: `${point.x}%`, top: `${point.y}%` }}
+                  key={entry.id}
+                  className={`map-pin layer-${entry.layer} ${isActive ? "is-active" : ""}`}
+                  style={getMapEntryPosition(entry)}
                   type="button"
-                  onClick={() => setSelectedMapPoint(point.rtId)}
+                  onClick={() => setSelectedMapPoint(entry.id)}
+                  aria-label={`${entry.detailLabel}: ${valueText}`}
                 >
-                  <span className="map-pin-label">{pointMeta.shortLabel || point.label}</span>
+                  <span className="map-pin-icon" aria-hidden="true">
+                    {renderMapLayerIcon(entry.icon)}
+                  </span>
                   <span className="map-pin-value">{valueText}</span>
                 </button>
               );
@@ -1769,30 +2268,41 @@ function App() {
               <div className="detail-stack">
                 <div className="detail-row">
                   <span className="detail-key">Elemento</span>
-                  <span className="detail-value">{getMonitoringPointLabel(selectedMapData.rtId)}</span>
+                  <span className="detail-value">{selectedMapData.detailLabel}</span>
                 </div>
                 <div className="detail-row">
-                  <span className="detail-key">Punto</span>
-                  <span className="detail-value">{getMonitoringPointShortLabel(selectedMapData.rtId)}</span>
+                  <span className="detail-key">Capa</span>
+                  <span className="detail-value">
+                    {MAP_LAYER_OPTIONS.find((option) => option.value === selectedMapData.layer)?.label}
+                  </span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-key">Valor</span>
                   <span className="detail-value">
                     {selectedMapReading
-                      ? formatValue(selectedMapReading.value, selectedMapReading.unit || "kW")
+                      ? selectedMapReading.value == null
+                        ? "--"
+                        : `${formatValue(selectedMapReading.value, selectedMapReading.unit)}${
+                            selectedMapReading.isPartial ? " · parcial" : ""
+                          }`
                       : "--"}
                   </span>
                 </div>
                 <div className="detail-row">
                   <span className="detail-key">Última lectura</span>
-                  <span className="detail-value">{formatTs(selectedMapReading?.ts_event)}</span>
+                  <span className="detail-value">{formatTs(selectedMapReading?.tsEvent)}</span>
                 </div>
-                <div className="detail-row">
-                  <span className="detail-key">Capa activa</span>
-                  <span className="detail-value">
-                    {MAP_LAYER_OPTIONS.find((option) => option.value === mapLayer)?.label}
-                  </span>
-                </div>
+                {selectedMapData.rtIds.length > 1 ? (
+                  <div className="detail-row">
+                    <span className="detail-key">Variables incluidas</span>
+                    <span className="detail-value">
+                      {selectedMapData.rtIds.map((rtId) => getMonitoringPointLabel(rtId)).join(", ")}
+                      {selectedMapReading?.availableCount != null
+                        ? ` · ${selectedMapReading.availableCount}/${selectedMapReading.totalCount} disponibles`
+                        : ""}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="chart-empty">
@@ -1818,8 +2328,8 @@ function App() {
           </div>
           <div className="insight-grid">
             {filteredWaterConfigs.map((config) => {
-              const summary = gatewayOverview[config.gatewayId];
-              const rows = buildWaterRows(config);
+              const summary = waterOverview[config.id];
+              const rows = buildWaterRows(summary?.latestItems || [], config);
               const highlighted = pickMetricSnapshot({
                 currentLabel: "Puntos con lectura",
                 currentValue: rows.length,
@@ -1854,9 +2364,9 @@ function App() {
         <div className="container">
           <div className="water-stack">
             {filteredWaterConfigs.map((config) => {
-              const summary = gatewayOverview[config.gatewayId];
-              const rows = buildWaterRows(config);
-              const canRenderTrend = config.hasTrend && summary?.seriesItems?.length;
+              const summary = waterOverview[config.id];
+              const rows = buildWaterRows(summary?.latestItems || [], config);
+              const canRenderTrend = Boolean(summary?.seriesItems?.length);
               return (
                 <article key={config.id} className="gateway-card">
                   <div className="gateway-header">
@@ -1873,18 +2383,14 @@ function App() {
                   <div className="water-detail-grid">
                     <div className="api-card">
                       <h4 className="api-card-title">Tabla operativa</h4>
-                      {renderTable(["Punto", "actual", "unit", "ts_event"], rows)}
+                      {renderTable(["Punto", "Actual", "Unidad", "Última lectura"], rows)}
                     </div>
                     <div className="api-card">
                       <h4 className="api-card-title">Tendencia y totales</h4>
                       {canRenderTrend ? (
                         <ValueChart series={summary.seriesItems} label={`Agua ${config.label}`} />
                       ) : (
-                        <div className="chart-empty">
-                          {config.hasTrend
-                            ? "Sin serie operativa disponible todavía."
-                            : "El backend actual no separa la serie de agua para este campus."}
-                        </div>
+                        <div className="chart-empty">Sin serie operativa disponible todavía.</div>
                       )}
                       <div className="detail-stack compact-detail-stack">
                         <div className="detail-row">

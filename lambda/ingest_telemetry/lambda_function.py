@@ -248,8 +248,11 @@ def normalize_meter_name(value):
 def normalize_var_name(value):
     if not isinstance(value, str):
         return value
+    value = value.strip()
+    if value.startswith("UJA."):
+        value = value.split("UJA.", 1)[1]
     if "kW sys" in value:
-        return value.replace("kW sys", "KW sys")
+        value = value.replace("kW sys", "KW sys")
     return value
 
 

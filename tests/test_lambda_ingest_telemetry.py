@@ -187,3 +187,11 @@ def test_ingest_normalizes_negative_ct_total_to_zero():
     assert result["status"] == "ok"
     values = {item["rt_id"]: item["value"] for item in captured["latest"]}
     assert values["uja.jaen.fv.auto.ct_total.p_kw"] == 0.0
+
+
+def test_normalize_var_name_handles_autoconsumo_variants():
+    module = load_lambda_module()
+
+    assert module.normalize_var_name("UJA.Tot_FV_kW sys") == "Tot_FV_KW sys"
+    assert module.normalize_var_name("UJA.Pergola_kW sys") == "Pergola_KW sys"
+    assert module.normalize_var_name("UJA.Fachada_Radiación") == "Fachada_Radiación"
