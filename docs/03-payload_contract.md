@@ -52,6 +52,25 @@ Requisitos del payload para que la solución funcione:
 Se normalizan a `0` los valores no finitos o fuera de rango razonable (`abs(value) > 1e6` por defecto).
 Este umbral es configurable vía `MAX_VALID_VALUE`.
 
+### 5.2 Política de anomalías y trazabilidad
+La solución distingue entre:
+- `raw_validation`: valor técnico observado tal como llega o como puede reconstruirse desde histórico.
+- `analytics`: valor utilizable para KPIs, balance y series operativas.
+
+Reglas activas:
+- `negative_not_allowed`: demanda de energía, agua y potencias FV/autoconsumo no deben ser negativas.
+- `above_max_threshold`: `abs(value)` por encima del umbral configurado.
+- `non_finite`: `NaN`, `Infinity` o valor no numérico.
+- Excepción explícita: `uja.jaen.fv.endesa.ct_total.p_kw` puede llegar negativo en raw.
+
+Comportamiento:
+- Los sentinelas ya normalizados en ingestión siguen normalizándose a `0` y además se registran en `validation_anomalies`.
+- Las anomalías que no son sentinelas persistentes no se fuerzan a `0` en ingestión; se registran y se excluyen de la analítica pública.
+- La tabla `validation_anomalies` conserva `raw_value`, `applied_value`, `anomaly_type`, `reason` y `ts_event`.
+
+Limitación:
+- Si un valor histórico ya fue clamped en ingestión antes de existir este registro, puede no ser recuperable retrospectivamente salvo que siga visible en Timestream raw.
+
 ## 6) Lista de datos a solicitar al operador (para cerrar mapeo)
 - Catálogo por gateway:
   - meter.name

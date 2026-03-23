@@ -17,6 +17,9 @@ Parameters:
   AggregationConfigsTable:
     Type: String
     Default: aggregation_configs
+  ValidationAnomaliesTable:
+    Type: String
+    Default: validation_anomalies
 
 Resources:
   LatestReadings:
@@ -91,6 +94,33 @@ Resources:
         - AttributeName: config_id
           KeyType: HASH
 
+  ValidationAnomalies:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref ValidationAnomaliesTable
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: gateway_id
+          AttributeType: S
+        - AttributeName: event_key
+          AttributeType: S
+        - AttributeName: campus_domain
+          AttributeType: S
+      KeySchema:
+        - AttributeName: gateway_id
+          KeyType: HASH
+        - AttributeName: event_key
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: campus_domain_event_key
+          KeySchema:
+            - AttributeName: campus_domain
+              KeyType: HASH
+            - AttributeName: event_key
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
 Outputs:
   LatestReadingsTableName:
     Value: !Ref LatestReadingsTable
@@ -102,3 +132,5 @@ Outputs:
     Value: !Ref GatewayVariableMapTable
   AggregationConfigsTableName:
     Value: !Ref AggregationConfigsTable
+  ValidationAnomaliesTableName:
+    Value: !Ref ValidationAnomaliesTable

@@ -83,6 +83,13 @@ Resources:
       ParentId: !Ref ResourceSeries
       PathPart: 24h
 
+  ResourceAnomalies:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: anomalies
+
   RealtimeMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -155,6 +162,18 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
 
+  AnomaliesMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceAnomalies
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
+
   ApiDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
@@ -164,6 +183,7 @@ Resources:
       - MonthlyMethod
       - YearlyMethod
       - Series24hMethod
+      - AnomaliesMethod
     Properties:
       RestApiId: !Ref RestApi
       Description: !Sub "deploy-${DeploymentVersion}"

@@ -15,15 +15,45 @@ def load_lambda_module():
 def test_series_24h_merges_demand_and_pv():
     api = load_lambda_module()
     demand_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "10"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:15:00.000000000"}, {"ScalarValue": "12"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a0.p_kw"},
+                {"ScalarValue": "10"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:15:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a0.p_kw"},
+                {"ScalarValue": "12"},
+            ]
+        },
     ]
     endesa_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "4"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:15:00.000000000"}, {"ScalarValue": "5"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
+                {"ScalarValue": "4"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:15:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
+                {"ScalarValue": "5"},
+            ]
+        },
     ]
     auto_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "3"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "3"},
+            ]
+        },
     ]
 
     def fake_query(query):
@@ -81,6 +111,114 @@ def test_sum_aligned_series_maps_drops_points_newer_than_cutoff():
     )
 
     assert result == {1000: 850.0}
+
+
+def test_query_timeseries_analytics_carries_forward_after_negative_anomaly():
+    api = load_lambda_module()
+    api.current_balance_cutoff_ts = lambda: 2000000000
+    rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a3.p_kw"},
+                {"ScalarValue": "200"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a3.p_kw"},
+                {"ScalarValue": "-106.63"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:10:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a3.p_kw"},
+                {"ScalarValue": "220"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_b1.p_kw"},
+                {"ScalarValue": "1000"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_b1.p_kw"},
+                {"ScalarValue": "1020"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:10:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_b1.p_kw"},
+                {"ScalarValue": "1010"},
+            ]
+        },
+    ]
+
+    api.query_timestream = lambda _query: rows
+
+    result = api.query_timeseries(
+        [
+            "uja.jaen.energia.consumo.edificio_a3.p_kw",
+            "uja.jaen.energia.consumo.edificio_b1.p_kw",
+        ],
+        analytics=True,
+    )
+
+    assert result == {
+        1735689600: 1200.0,
+        1735689900: 1220.0,
+        1735690200: 1230.0,
+    }
+
+
+def test_get_valid_latest_items_with_fallback_uses_recent_valid_sample():
+    api = load_lambda_module()
+
+    api.batch_get_latest = lambda rt_ids, gateway_id=None: [
+        {
+            "rt_id": rt_ids[0],
+            "value": -106.63,
+            "unit": "kW",
+            "ts_event": 1735689900,
+            "gateway_id": gateway_id,
+        }
+    ]
+    api.query_timestream = lambda _query: [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "-106.63"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "219.09"},
+            ]
+        },
+    ]
+
+    result = api.get_valid_latest_items_with_fallback(
+        ["uja.jaen.energia.consumo.edificio_a3.p_kw"],
+        interval_minutes=5,
+    )
+
+    assert result == [
+        {
+            "rt_id": "uja.jaen.energia.consumo.edificio_a3.p_kw",
+            "value": 219.09,
+            "unit": "kW",
+            "ts_event": 1735689600,
+            "gateway_id": None,
+        }
+    ]
 
 
 def test_handler_series_24h_route():
@@ -173,6 +311,58 @@ def test_handler_kpis_route():
     assert "ok" in response["body"]
 
 
+def test_handler_anomalies_route():
+    api = load_lambda_module()
+
+    def fake_get_anomalies(params):
+        return {"ok": True, "params": params}
+
+    api.get_anomalies = fake_get_anomalies
+
+    event = {
+        "path": "/v1/anomalies",
+        "queryStringParameters": {"campus": "jaen", "domain": "energia"},
+        "multiValueQueryStringParameters": None,
+    }
+    response = api.handler(event, None)
+    assert response["statusCode"] == 200
+    assert "ok" in response["body"]
+
+
+def test_get_anomalies_queries_by_campus_domain_index():
+    api = load_lambda_module()
+
+    class FakeTable:
+        def query(self, **kwargs):
+            assert kwargs["IndexName"] == "campus_domain_event_key"
+            return {
+                "Items": [
+                    {
+                        "gateway_id": "gw_jaen_energia",
+                        "campus": "jaen",
+                        "domain": "energia",
+                        "rt_id": "uja.jaen.energia.consumo.edificio_a3.p_kw",
+                        "unit": "kW",
+                        "raw_value": "-106.63",
+                        "applied_value": "-106.63",
+                        "anomaly_type": "negative_not_allowed",
+                        "reason": "Valor negativo no permitido para este punto.",
+                        "threshold": "0",
+                        "ts_event": 1735689900,
+                        "detected_by": "backfill",
+                    }
+                ]
+            }
+
+    api.get_anomalies_table = lambda: FakeTable()
+
+    result = api.get_anomalies({"campus": "jaen", "domain": "energia"})
+
+    assert result["count"] == 1
+    assert result["items"][0]["gateway_id"] == "gw_jaen_energia"
+    assert result["items"][0]["anomaly_type"] == "negative_not_allowed"
+
+
 def test_metric_to_scope_supports_new_metrics():
     api = load_lambda_module()
     assert api.metric_to_scope("agua_consumo") == ("agua", "consumo")
@@ -240,8 +430,20 @@ def test_scan_latest_clamps_negative_ct_total_to_zero():
 def test_series_by_metric_returns_metric_shape():
     api = load_lambda_module()
     rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "72.8"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:15:00.000000000"}, {"ScalarValue": "70.2"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "72.8"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:15:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "70.2"},
+            ]
+        },
     ]
 
     api.query_timestream = lambda _query: rows
@@ -418,20 +620,68 @@ def test_series_by_prefix():
 def test_scope_series_for_las_lagunillas_is_complete_and_excludes_jaen_resto():
     api = load_lambda_module()
     demand_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "10"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "12"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a0.p_kw"},
+                {"ScalarValue": "10"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a0.p_kw"},
+                {"ScalarValue": "12"},
+            ]
+        },
     ]
     endesa_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "-4"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "-5"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.ct_total.p_kw"},
+                {"ScalarValue": "-4"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.ct_total.p_kw"},
+                {"ScalarValue": "-5"},
+            ]
+        },
     ]
     univer_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "3"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "1"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "3"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "1"},
+            ]
+        },
     ]
     a0_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "1"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "2"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.edificio_a0.p_kw"},
+                {"ScalarValue": "1"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.edificio_a0.p_kw"},
+                {"ScalarValue": "2"},
+            ]
+        },
     ]
 
     def fake_batch_get(rt_ids, gateway_id=None):
@@ -484,13 +734,31 @@ def test_scope_series_for_las_lagunillas_is_complete_and_excludes_jaen_resto():
 def test_scope_series_returns_partial_when_univer_is_missing():
     api = load_lambda_module()
     demand_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "10"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a0.p_kw"},
+                {"ScalarValue": "10"},
+            ]
+        },
     ]
     endesa_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "4"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.ct_total.p_kw"},
+                {"ScalarValue": "4"},
+            ]
+        },
     ]
     a0_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "1"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.edificio_a0.p_kw"},
+                {"ScalarValue": "1"},
+            ]
+        },
     ]
 
     def fake_batch_get(rt_ids, gateway_id=None):
@@ -533,16 +801,40 @@ def test_scope_series_returns_partial_when_univer_is_missing():
 def test_scope_series_uses_locf_for_recent_balance_gap():
     api = load_lambda_module()
     demand_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:35:00.000000000"}, {"ScalarValue": "10"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:35:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a0.p_kw"},
+                {"ScalarValue": "10"},
+            ]
+        },
     ]
     endesa_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "-4"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:40:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.ct_total.p_kw"},
+                {"ScalarValue": "-4"},
+            ]
+        },
     ]
     univer_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "3"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:40:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "3"},
+            ]
+        },
     ]
     a0_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "1"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:40:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.edificio_a0.p_kw"},
+                {"ScalarValue": "1"},
+            ]
+        },
     ]
 
     def fake_batch_get(rt_ids, gateway_id=None):
@@ -585,16 +877,40 @@ def test_scope_series_uses_locf_for_recent_balance_gap():
 def test_scope_series_drops_stale_balance_points_beyond_freshness_limit():
     api = load_lambda_module()
     demand_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:20:00.000000000"}, {"ScalarValue": "10"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:20:00.000000000"},
+                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a0.p_kw"},
+                {"ScalarValue": "10"},
+            ]
+        },
     ]
     endesa_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "-4"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:40:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.ct_total.p_kw"},
+                {"ScalarValue": "-4"},
+            ]
+        },
     ]
     univer_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "3"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:40:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.ct_total.p_kw"},
+                {"ScalarValue": "3"},
+            ]
+        },
     ]
     a0_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 11:40:00.000000000"}, {"ScalarValue": "1"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 11:40:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.edificio_a0.p_kw"},
+                {"ScalarValue": "1"},
+            ]
+        },
     ]
 
     def fake_batch_get(rt_ids, gateway_id=None):
@@ -689,6 +1005,7 @@ def test_scope_kpis_return_partial_when_univer_is_missing():
         return []
 
     api.batch_get_latest = fake_batch_get
+    api.query_timestream = lambda _query: []
 
     result = api.get_kpis({"scope": "las_lagunillas"})
     values = {item["kpi"]: item["value"] for item in result["kpis"]}
@@ -702,12 +1019,36 @@ def test_scope_kpis_return_partial_when_univer_is_missing():
 def test_scope_series_for_ctl_linares_uses_ct_total_pv():
     api = load_lambda_module()
     demand_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "30"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "28"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.linares.energia.consumo.lab_sg_t1.p_kw"},
+                {"ScalarValue": "30"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.linares.energia.consumo.lab_sg_t1.p_kw"},
+                {"ScalarValue": "28"},
+            ]
+        },
     ]
     pv_rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "6"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:05:00.000000000"}, {"ScalarValue": "7"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.linares.fv.endesa.ct_total.p_kw"},
+                {"ScalarValue": "6"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.linares.fv.endesa.ct_total.p_kw"},
+                {"ScalarValue": "7"},
+            ]
+        },
     ]
 
     def fake_batch_get(rt_ids, gateway_id=None):

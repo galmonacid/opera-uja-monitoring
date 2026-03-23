@@ -2,12 +2,33 @@ import json
 import logging
 import math
 import os
+import sys
 import time
 from decimal import Decimal
+from pathlib import Path
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 from botocore.exceptions import ClientError
+try:
+    from anomaly_policy import (
+        build_anomaly_event_key,
+        derive_rt_metadata,
+        detect_anomaly,
+        format_anomaly_value,
+        normalize_sentinel_value,
+        threshold_for_unit,
+    )
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from anomaly_policy import (
+        build_anomaly_event_key,
+        derive_rt_metadata,
+        detect_anomaly,
+        format_anomaly_value,
+        normalize_sentinel_value,
+        threshold_for_unit,
+    )
 
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logger = logging.getLogger()
@@ -15,13 +36,13 @@ logger.setLevel(LOG_LEVEL)
 
 DDB_LATEST_TABLE = os.getenv("DDB_LATEST_TABLE", "latest_readings")
 DDB_MAPPING_TABLE = os.getenv("DDB_MAPPING_TABLE", "gateway_variable_map")
+DDB_ANOMALIES_TABLE = os.getenv("DDB_ANOMALIES_TABLE", "validation_anomalies")
 TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 DEFAULT_GATEWAY_ID = os.getenv("DEFAULT_GATEWAY_ID")
 LOG_SAMPLE_LIMIT = int(os.getenv("LOG_SAMPLE_LIMIT", "10"))
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
 MAX_VALID_VALUE_KWH = float(os.getenv("MAX_VALID_VALUE_KWH", "1000000000"))
-NEGATIVE_TO_ZERO_RT_IDS = {"uja.jaen.fv.auto.ct_total.p_kw"}
 
 serializer = TypeSerializer()
 deserializer = TypeDeserializer()
@@ -29,6 +50,7 @@ _dynamodb = None
 _ddb_client = None
 _timestream = None
 _latest_table = None
+_anomalies_table = None
 
 
 def _get_region():
@@ -75,6 +97,13 @@ def _get_latest_table():
     return _latest_table
 
 
+def _get_anomalies_table():
+    global _anomalies_table
+    if _anomalies_table is None:
+        _anomalies_table = _get_dynamodb_resource().Table(DDB_ANOMALIES_TABLE)
+    return _anomalies_table
+
+
 def handler(event, context):
     payload = extract_payload(event)
     if not payload:
@@ -118,16 +147,35 @@ def handler(event, context):
             "unit": unit,
             "ts_event": ts_event,
             "gateway_id": gateway_id,
+            "source_key": source_key,
+            "anomaly_events": [],
         }
+        if measurement.get("extract_anomaly"):
+            records_by_ts[ts_event][rt_id]["anomaly_events"].append(
+                build_anomaly_event(
+                    gateway_id=gateway_id,
+                    rt_id=rt_id,
+                    unit=unit,
+                    ts_event=ts_event,
+                    raw_value=measurement.get("raw_value"),
+                    applied_value=measurement["value"],
+                    anomaly=measurement["extract_anomaly"],
+                    detected_by="ingest",
+                )
+            )
 
     for ts_event, records_by_rt_id in records_by_ts.items():
         raw_values = raw_values_by_ts.get(ts_event, {})
         apply_adjustments(records_by_rt_id, raw_values)
         apply_rt_value_controls(records_by_rt_id)
+        annotate_runtime_anomalies(records_by_rt_id)
 
     all_records = []
+    all_anomalies = []
     for records_by_rt_id in records_by_ts.values():
         all_records.extend(records_by_rt_id.values())
+        for record in records_by_rt_id.values():
+            all_anomalies.extend(record.get("anomaly_events", []))
 
     if not all_records:
         missing_keys = [k for k in source_keys if k not in mappings]
@@ -142,6 +190,7 @@ def handler(event, context):
 
     write_latest_readings(all_records)
     write_timestream_records(all_records)
+    write_validation_anomalies(all_anomalies)
 
     return {"status": "ok", "count": len(all_records)}
 
@@ -177,11 +226,11 @@ def extract_measurements(payload):
         try:
             meters = json.loads(meters)
         except json.JSONDecodeError:
-            return [], {}, {}
+            return [], {}
     if isinstance(meters, dict):
         meters = [meters]
     if not isinstance(meters, list):
-        return [], {}, {}
+        return [], {}
 
     measurements = []
     raw_values_by_ts = {}
@@ -208,13 +257,15 @@ def extract_measurements(payload):
                 continue
 
             try:
-                value_f = float(value)
+                raw_value_f = float(value)
             except (TypeError, ValueError):
                 continue
             source_key = f"{meter_name}::{var}"
             unit_norm = unit.lower() if isinstance(unit, str) else ""
-            max_value = MAX_VALID_VALUE_KWH if unit_norm == "kwh" else MAX_VALID_VALUE
-            if not math.isfinite(value_f) or abs(value_f) > max_value:
+            max_value = threshold_for_unit(unit_norm, MAX_VALID_VALUE, MAX_VALID_VALUE_KWH)
+            extract_anomaly = None
+            value_f = raw_value_f
+            if not math.isfinite(raw_value_f) or abs(raw_value_f) > max_value:
                 logger.warning(
                     "out-of-range measurement normalized to 0: source_key=%s value=%s unit=%s",
                     source_key,
@@ -222,17 +273,26 @@ def extract_measurements(payload):
                     unit,
                 )
                 value_f = 0.0
+                extract_anomaly = detect_anomaly(
+                    "__source__",
+                    raw_value_f,
+                    unit=unit,
+                    max_valid_value=MAX_VALID_VALUE,
+                    max_valid_value_kwh=MAX_VALID_VALUE_KWH,
+                )
 
             measurements.append(
                 {
                     "source_key": source_key,
                     "value": value_f,
+                    "raw_value": raw_value_f,
                     "unit": unit,
                     "ts_event": ts_event,
+                    "extract_anomaly": extract_anomaly,
                 }
             )
             raw_values_by_ts.setdefault(ts_event, {})
-            raw_values_by_ts[ts_event][source_key] = value_f
+            raw_values_by_ts[ts_event][source_key] = raw_value_f
 
     return measurements, raw_values_by_ts
 
@@ -334,15 +394,94 @@ def apply_adjustments(records_by_rt_id, raw_values):
 
 
 def normalize_rt_value(rt_id, value):
-    if rt_id in NEGATIVE_TO_ZERO_RT_IDS and value < 0:
+    normalized = normalize_sentinel_value(rt_id, value)
+    if normalized != float(value):
         logger.info("negative value normalized to 0 for %s: %s", rt_id, value)
-        return 0.0
-    return value
+    return normalized
 
 
 def apply_rt_value_controls(records_by_rt_id):
     for record in records_by_rt_id.values():
-        record["value"] = normalize_rt_value(record["rt_id"], record["value"])
+        original_value = float(record["value"])
+        normalized_value = normalize_rt_value(record["rt_id"], record["value"])
+        if normalized_value != original_value:
+            anomaly = detect_anomaly(
+                record["rt_id"],
+                original_value,
+                unit=record.get("unit"),
+                max_valid_value=MAX_VALID_VALUE,
+                max_valid_value_kwh=MAX_VALID_VALUE_KWH,
+            )
+            if anomaly:
+                record.setdefault("anomaly_events", []).append(
+                    build_anomaly_event(
+                        gateway_id=record["gateway_id"],
+                        rt_id=record["rt_id"],
+                        unit=record.get("unit"),
+                        ts_event=record["ts_event"],
+                        raw_value=original_value,
+                        applied_value=normalized_value,
+                        anomaly=anomaly,
+                        detected_by="ingest",
+                    )
+                )
+        record["value"] = normalized_value
+
+
+def annotate_runtime_anomalies(records_by_rt_id):
+    for record in records_by_rt_id.values():
+        anomaly = detect_anomaly(
+            record["rt_id"],
+            record["value"],
+            unit=record.get("unit"),
+            max_valid_value=MAX_VALID_VALUE,
+            max_valid_value_kwh=MAX_VALID_VALUE_KWH,
+        )
+        if not anomaly:
+            continue
+        event = build_anomaly_event(
+            gateway_id=record["gateway_id"],
+            rt_id=record["rt_id"],
+            unit=record.get("unit"),
+            ts_event=record["ts_event"],
+            raw_value=record["value"],
+            applied_value=record["value"],
+            anomaly=anomaly,
+            detected_by="ingest",
+        )
+        existing = record.setdefault("anomaly_events", [])
+        if not any(item["event_key"] == event["event_key"] for item in existing):
+            existing.append(event)
+
+
+def build_anomaly_event(
+    gateway_id,
+    rt_id,
+    unit,
+    ts_event,
+    raw_value,
+    applied_value,
+    anomaly,
+    detected_by,
+):
+    metadata = derive_rt_metadata(rt_id)
+    return {
+        "gateway_id": gateway_id,
+        "event_key": build_anomaly_event_key(ts_event, rt_id, anomaly["anomaly_type"]),
+        "campus_domain": f"{metadata['campus']}#{metadata['domain']}",
+        "campus": metadata["campus"],
+        "domain": metadata["domain"],
+        "rt_id": rt_id,
+        "unit": unit or "",
+        "raw_value": format_anomaly_value(raw_value),
+        "applied_value": format_anomaly_value(applied_value),
+        "anomaly_type": anomaly["anomaly_type"],
+        "reason": anomaly["reason"],
+        "threshold": format_anomaly_value(anomaly.get("threshold")),
+        "ts_event": int(ts_event),
+        "detected_by": detected_by,
+        "updated_at": int(time.time()),
+    }
 
 
 def write_latest_readings(records):
@@ -406,6 +545,23 @@ def write_timestream_records(records):
                 logger.error("timestream rejected details: %s", rejected)
         except ClientError as exc:
             logger.error("timestream write failed: %s", exc)
+
+
+def write_validation_anomalies(events):
+    if not events:
+        return
+
+    seen = set()
+    with _get_anomalies_table().batch_writer() as batch:
+        for event in events:
+            dedupe_key = (event["gateway_id"], event["event_key"])
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            try:
+                batch.put_item(Item=event)
+            except ClientError as exc:
+                logger.error("anomaly write failed: %s", exc)
 
 
 def build_dimensions(rt_id, unit, gateway_id):

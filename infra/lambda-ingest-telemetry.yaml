@@ -18,6 +18,9 @@ Parameters:
   DdbMappingTable:
     Type: String
     Default: gateway_variable_map
+  DdbAnomaliesTable:
+    Type: String
+    Default: validation_anomalies
   TsDatabase:
     Type: String
     Default: uja_monitoring
@@ -65,6 +68,11 @@ Resources:
                 Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbLatestTable}"
               - Effect: Allow
                 Action:
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:PutItem
+                Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAnomaliesTable}"
+              - Effect: Allow
+                Action:
                   - timestream:DescribeEndpoints
                   - timestream:WriteRecords
                 Resource: "*"
@@ -85,6 +93,7 @@ Resources:
         Variables:
           DDB_LATEST_TABLE: !Ref DdbLatestTable
           DDB_MAPPING_TABLE: !Ref DdbMappingTable
+          DDB_ANOMALIES_TABLE: !Ref DdbAnomaliesTable
           TS_DATABASE: !Ref TsDatabase
           TS_TABLE: !Ref TsTable
           LOG_LEVEL: !Ref LogLevel

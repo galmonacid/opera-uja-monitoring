@@ -53,11 +53,11 @@ jobs:
 
       - name: Package Lambda
         run: |
-          zip -j /tmp/lambda_ingest_telemetry.zip lambda/ingest_telemetry/lambda_function.py
-          zip -j /tmp/lambda_calc_daily.zip lambda/calc_daily/lambda_function.py
+          zip -j /tmp/lambda_ingest_telemetry.zip lambda/ingest_telemetry/lambda_function.py anomaly_policy.py
+          zip -j /tmp/lambda_calc_daily.zip lambda/calc_daily/lambda_function.py anomaly_policy.py
           zip -j /tmp/lambda_calc_monthly.zip lambda/calc_monthly/lambda_function.py
           zip -j /tmp/lambda_calc_yearly.zip lambda/calc_yearly/lambda_function.py
-          zip -j /tmp/lambda_api_public.zip lambda/api_public/lambda_function.py
+          zip -j /tmp/lambda_api_public.zip lambda/api_public/lambda_function.py anomaly_policy.py
 
       - name: Upload Lambda artifact
         run: |

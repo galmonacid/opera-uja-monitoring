@@ -46,10 +46,12 @@ Motivos:
   - se usa como vista operativa de Las Lagunillas
 - Pantalla `#/validacion`:
   - 6 tarjetas, una por gateway requerido
+  - bloque global `Anomalías detectadas` antes de los gateways
   - `realtime` por `campus/domain/gateway_id`
   - series 24h por `campus + metric` para evitar mezclar `ct_total` con inversores
   - agua muestra consumo por intervalo (`m3`) a partir de contadores
   - monthly puede mostrarse reconstruido desde `daily` si aún no existe agregado materializado
+  - las anomalías se consultan vía `/v1/anomalies` con filtros reutilizando campus/dominio
 - Convención visual:
   - el balance de campus y las vistas analíticas muestran FV/autoconsumo en positivo
   - `uja.jaen.fv.endesa.ct_total.p_kw` se recibe en raw con signo técnico y solo se transforma a magnitud positiva en esas vistas
@@ -60,6 +62,17 @@ Motivos:
 - `/realtime`: cada 60s
 - `/kpis?scope=...`: cada 60s
 - `/series/24h?scope=...`: cada 5 min
+- `/anomalies`: cada 60s cuando la vista `Validación` está activa
+
+## Saneado analítico
+- Las gráficas operativas (`Balance`, `Energía`, `Agua`, `Fotovoltaica`, `Autoconsumo`) consumen series analíticas que excluyen muestras anómalas.
+- En balance, si un contribuidor llega anómalo:
+  - se trata como `missing`
+  - se usa `last observation carried forward` dentro de la ventana de frescura
+  - si no existe valor válido reciente, el scope pasa a `partial`
+- `Validación` no oculta el problema:
+  - latest técnico sigue visible
+  - la tabla de anomalías muestra `raw_value`, `applied_value`, `tipo` y `motivo`
 
 ## Runbook rapido (local)
 ```bash

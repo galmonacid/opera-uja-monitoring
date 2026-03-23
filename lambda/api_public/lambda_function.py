@@ -1,23 +1,46 @@
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from fnmatch import fnmatchcase
+from pathlib import Path
 
 import boto3
 from boto3.dynamodb.conditions import Attr, Key
+try:
+    from anomaly_policy import (
+        NEGATIVE_TO_ZERO_RT_IDS,
+        build_anomaly_event_key,
+        detect_anomaly,
+        format_anomaly_value,
+        normalize_sentinel_value,
+        sanitize_for_analytics,
+    )
+except ModuleNotFoundError:
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from anomaly_policy import (
+        NEGATIVE_TO_ZERO_RT_IDS,
+        build_anomaly_event_key,
+        detect_anomaly,
+        format_anomaly_value,
+        normalize_sentinel_value,
+        sanitize_for_analytics,
+    )
 
 
 DDB_LATEST_TABLE = os.getenv("DDB_LATEST_TABLE", "latest_readings")
 DDB_AGG_TABLE = os.getenv("DDB_AGG_TABLE", "aggregates")
+DDB_ANOMALIES_TABLE = os.getenv("DDB_ANOMALIES_TABLE", "validation_anomalies")
 TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
-NEGATIVE_TO_ZERO_RT_IDS = {"uja.jaen.fv.auto.ct_total.p_kw"}
+MAX_VALID_VALUE_KWH = float(os.getenv("MAX_VALID_VALUE_KWH", "1000000000"))
 
 _dynamodb = None
 _latest_table = None
 _agg_table = None
+_anomalies_table = None
 _ts_query = None
 
 SERIES_INTERVAL_MINUTES = 5
@@ -179,6 +202,8 @@ def handler(event, context):
         return response(get_aggregates(params, "monthly"))
     if path.endswith("/aggregates/yearly"):
         return response(get_aggregates(params, "yearly"))
+    if path.endswith("/anomalies"):
+        return response(get_anomalies(params))
     if path.endswith("/series/24h"):
         if params.get("metric"):
             return response(get_series_24h_by_metric(params))
@@ -248,6 +273,28 @@ def build_prefix(campus, domain):
     if campus:
         return f"uja.{campus}."
     return f"uja..{domain}."
+
+
+def get_anomalies(params):
+    campus = params.get("campus")
+    domain = params.get("domain")
+    gateway_id = params.get("gateway_id")
+    lookback_hours = resolve_positive_int(params.get("lookback_hours"), default=72, minimum=1, maximum=24 * 30)
+    limit = resolve_positive_int(params.get("limit"), default=200, minimum=1, maximum=500)
+    min_ts = int(datetime.now(tz=timezone.utc).timestamp()) - lookback_hours * 3600
+
+    if gateway_id:
+        items = query_anomalies_by_gateway(gateway_id, min_ts=min_ts, limit=limit)
+    elif campus and domain:
+        items = query_anomalies_by_campus_domain(campus, domain, min_ts=min_ts, limit=limit)
+    else:
+        items = scan_anomalies(min_ts=min_ts, campus=campus, domain=domain, limit=limit)
+
+    return {
+        "items": items,
+        "count": len(items),
+        "lookback_hours": lookback_hours,
+    }
 
 
 def get_aggregates(params, period):
@@ -352,6 +399,77 @@ def query_pk(pk):
     return items
 
 
+def query_anomalies_by_gateway(gateway_id, min_ts, limit):
+    items = []
+    last_key = None
+    min_event_key = build_anomaly_event_key(min_ts, "", "")
+    while len(items) < limit:
+        kwargs = {
+            "KeyConditionExpression": Key("gateway_id").eq(gateway_id) & Key("event_key").gte(min_event_key),
+            "ScanIndexForward": False,
+        }
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        response = get_anomalies_table().query(**kwargs)
+        items.extend(normalize_anomaly_item(item) for item in response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    return items[:limit]
+
+
+def query_anomalies_by_campus_domain(campus, domain, min_ts, limit):
+    items = []
+    last_key = None
+    min_event_key = build_anomaly_event_key(min_ts, "", "")
+    while len(items) < limit:
+        kwargs = {
+            "IndexName": "campus_domain_event_key",
+            "KeyConditionExpression": Key("campus_domain").eq(f"{campus}#{domain}") & Key("event_key").gte(min_event_key),
+            "ScanIndexForward": False,
+        }
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        response = get_anomalies_table().query(**kwargs)
+        items.extend(normalize_anomaly_item(item) for item in response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    return items[:limit]
+
+
+def scan_anomalies(min_ts, campus=None, domain=None, limit=200):
+    items = []
+    last_key = None
+    filter_expression = Attr("ts_event").gte(min_ts)
+    if campus:
+        filter_expression = filter_expression & Attr("campus").eq(campus)
+    if domain:
+        filter_expression = filter_expression & Attr("domain").eq(domain)
+    while len(items) < limit:
+        kwargs = {"FilterExpression": filter_expression}
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        response = get_anomalies_table().scan(**kwargs)
+        items.extend(normalize_anomaly_item(item) for item in response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    items.sort(key=lambda item: item.get("ts_event", 0), reverse=True)
+    return items[:limit]
+
+
+def resolve_positive_int(raw_value, default, minimum=1, maximum=None):
+    try:
+        resolved = int(raw_value)
+    except (TypeError, ValueError):
+        resolved = default
+    resolved = max(minimum, resolved)
+    if maximum is not None:
+        resolved = min(maximum, resolved)
+    return resolved
+
+
 def normalize_item(item):
     value = normalize_rt_value(item["rt_id"], float(item["value"]))
     return {
@@ -360,6 +478,23 @@ def normalize_item(item):
         "unit": item.get("unit"),
         "ts_event": int(item.get("ts_event", 0)),
         "gateway_id": item.get("gateway_id"),
+    }
+
+
+def normalize_anomaly_item(item):
+    return {
+        "gateway_id": item.get("gateway_id"),
+        "campus": item.get("campus"),
+        "domain": item.get("domain"),
+        "rt_id": item.get("rt_id"),
+        "unit": item.get("unit"),
+        "raw_value": item.get("raw_value"),
+        "applied_value": item.get("applied_value"),
+        "anomaly_type": item.get("anomaly_type"),
+        "reason": item.get("reason"),
+        "threshold": item.get("threshold"),
+        "ts_event": int(item.get("ts_event", 0)),
+        "detected_by": item.get("detected_by"),
     }
 
 
@@ -521,7 +656,7 @@ def build_scope_series_rows(state, interval_minutes=SERIES_INTERVAL_MINUTES):
 
 
 def get_balance_source_state(source, include_series=False, interval_minutes=SERIES_INTERVAL_MINUTES):
-    latest_items = get_balance_source_latest_items(source)
+    latest_items = get_balance_source_latest_items(source, interval_minutes=interval_minutes)
     min_items = source.get("min_items") or source.get("expected_count") or 1
     latest_complete = len(latest_items) >= min_items
     latest_total = sum(
@@ -549,11 +684,9 @@ def get_balance_source_state(source, include_series=False, interval_minutes=SERI
         "complete": complete,
         "has_any_data": bool(latest_items) or bool(series_map),
     }
-
-
-def get_balance_source_latest_items(source):
+def get_balance_source_latest_items(source, interval_minutes=SERIES_INTERVAL_MINUTES):
     if source.get("rt_ids"):
-        return batch_get_latest(source["rt_ids"])
+        return get_valid_latest_items_with_fallback(source["rt_ids"], interval_minutes=interval_minutes)
     if source.get("metric") and source.get("campus"):
         return get_metric_latest_items(source["campus"], source["metric"])
     rt_prefix = source.get("rt_prefix")
@@ -565,7 +698,7 @@ def get_balance_source_latest_items(source):
 
 def get_balance_source_series_map(source, interval_minutes=SERIES_INTERVAL_MINUTES):
     if source.get("rt_ids"):
-        return query_timeseries(source["rt_ids"], interval_minutes=interval_minutes)
+        return query_timeseries(source["rt_ids"], interval_minutes=interval_minutes, analytics=True)
     if source.get("metric") and source.get("campus"):
         return (
             get_metric_series(
@@ -582,6 +715,7 @@ def get_balance_source_series_map(source, interval_minutes=SERIES_INTERVAL_MINUT
         rt_prefix=rt_prefix,
         rt_like_patterns=source.get("rt_like_patterns"),
         interval_minutes=interval_minutes,
+        analytics=True,
     )
 
 
@@ -600,6 +734,64 @@ def get_metric_latest_items(campus, metric):
         return batch_get_latest(config["rt_ids"])
     items = scan_latest(config["rt_prefix"])
     return filter_items_by_patterns(items, config.get("rt_like_patterns"))
+
+
+def get_valid_latest_items_with_fallback(rt_ids, interval_minutes=SERIES_INTERVAL_MINUTES):
+    latest_by_rt = {item["rt_id"]: item for item in batch_get_latest(rt_ids)}
+    resolved = []
+    for rt_id in rt_ids:
+        latest_item = latest_by_rt.get(rt_id)
+        if latest_item:
+            valid, applied_value, _anomaly = sanitize_for_analytics_value(
+                rt_id,
+                latest_item.get("value"),
+                latest_item.get("unit"),
+            )
+            if valid:
+                item = dict(latest_item)
+                item["value"] = applied_value
+                resolved.append(item)
+                continue
+        fallback_item = query_latest_valid_timestream_sample(rt_id, interval_minutes=interval_minutes)
+        if fallback_item:
+            resolved.append(fallback_item)
+    return resolved
+
+
+def query_latest_valid_timestream_sample(rt_id, interval_minutes=SERIES_INTERVAL_MINUTES):
+    lookback_seconds = get_balance_series_max_age_seconds(interval_minutes)
+    query = f"""
+SELECT
+  time,
+  measure_value::double AS value
+FROM "{TS_DATABASE}"."{TS_TABLE}"
+WHERE measure_name = 'value'
+  AND rt_id = '{rt_id}'
+  AND time > ago({lookback_seconds}s)
+ORDER BY time DESC
+LIMIT 25
+"""
+    rows = query_timestream(query)
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 2:
+            continue
+        ts_value = data[0].get("ScalarValue")
+        value_raw = data[1].get("ScalarValue")
+        if ts_value is None or value_raw is None:
+            continue
+        ts_epoch = parse_ts(ts_value)
+        valid, applied_value, _anomaly = sanitize_for_analytics_value(rt_id, value_raw)
+        if not valid:
+            continue
+        return {
+            "rt_id": rt_id,
+            "value": applied_value,
+            "unit": infer_rt_unit(rt_id),
+            "ts_event": ts_epoch,
+            "gateway_id": None,
+        }
+    return None
 
 
 def filter_items_by_patterns(items, rt_like_patterns):
@@ -673,11 +865,12 @@ def get_metric_series(campus, metric, interval_minutes=SERIES_INTERVAL_MINUTES):
             lookback="24h",
         )
     if config.get("rt_ids"):
-        return query_timeseries(config["rt_ids"], interval_minutes=interval_minutes)
+        return query_timeseries(config["rt_ids"], interval_minutes=interval_minutes, analytics=True)
     return query_timeseries_by_select(
         rt_prefix=config["rt_prefix"],
         rt_like_patterns=config.get("rt_like_patterns"),
         interval_minutes=interval_minutes,
+        analytics=True,
     )
 
 
@@ -790,8 +983,12 @@ def get_metric_unit(campus, metric):
     return config.get("unit", "kW")
 
 
-def query_timeseries(rt_ids, interval_minutes=SERIES_INTERVAL_MINUTES):
-    return query_timeseries_by_select(rt_ids=rt_ids, interval_minutes=interval_minutes)
+def query_timeseries(rt_ids, interval_minutes=SERIES_INTERVAL_MINUTES, analytics=False):
+    return query_timeseries_by_select(
+        rt_ids=rt_ids,
+        interval_minutes=interval_minutes,
+        analytics=analytics,
+    )
 
 
 def query_timeseries_by_prefix(rt_prefix):
@@ -806,6 +1003,7 @@ def query_timeseries_by_select(
     rt_prefix=None,
     rt_like_patterns=None,
     interval_minutes=SERIES_INTERVAL_MINUTES,
+    analytics=False,
 ):
     where_clauses = [
         "time > ago(24h)",
@@ -835,7 +1033,14 @@ WHERE {" AND ".join(where_clauses)}
 GROUP BY rt_id, bin(time, {interval_minutes}m)
 ORDER BY ts, rt_id
 """
-    return rows_to_timeseries_sum_map(query_timestream(query))
+    rows = query_timestream(query)
+    if analytics:
+        series_maps = rows_to_timeseries_by_rt_maps(rows, analytics=True)
+        return sum_aligned_series_maps(
+            list(series_maps.values()),
+            interval_minutes=interval_minutes,
+        )
+    return rows_to_timeseries_sum_map(rows)
 
 
 def query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
@@ -1062,10 +1267,53 @@ def rows_to_timeseries_sum_map(rows):
     return result
 
 
+def rows_to_timeseries_by_rt_maps(rows, analytics=False):
+    result = {}
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 3:
+            continue
+        ts_value = data[0].get("ScalarValue")
+        rt_id = data[1].get("ScalarValue")
+        value_raw = data[2].get("ScalarValue")
+        if ts_value is None or value_raw is None or not rt_id:
+            continue
+        ts_epoch = parse_ts(ts_value)
+        if ts_epoch == 0:
+            continue
+        if analytics:
+            valid, applied_value, _anomaly = sanitize_for_analytics_value(rt_id, value_raw)
+            if not valid:
+                continue
+            value = applied_value
+        else:
+            value = normalize_rt_value(rt_id, float(value_raw))
+        result.setdefault(rt_id, {})[ts_epoch] = float(value)
+    return result
+
+
+def infer_rt_unit(rt_id):
+    rt_id = str(rt_id or "")
+    if rt_id.endswith(".v_m3"):
+        return "m3"
+    if rt_id.endswith(".e_kwh"):
+        return "kWh"
+    return "kW"
+
+
+def sanitize_for_analytics_value(rt_id, value, unit=None):
+    resolved_unit = unit or infer_rt_unit(rt_id)
+    return sanitize_for_analytics(
+        rt_id,
+        value,
+        unit=resolved_unit,
+        max_valid_value=MAX_VALID_VALUE,
+        max_valid_value_kwh=MAX_VALID_VALUE_KWH,
+    )
+
+
 def normalize_rt_value(rt_id, value):
-    if rt_id in NEGATIVE_TO_ZERO_RT_IDS and value < 0:
-        return 0.0
-    return value
+    return normalize_sentinel_value(rt_id, value)
 
 
 def get_dynamodb():
@@ -1091,6 +1339,13 @@ def get_agg_table():
     if _agg_table is None:
         _agg_table = get_dynamodb().Table(DDB_AGG_TABLE)
     return _agg_table
+
+
+def get_anomalies_table():
+    global _anomalies_table
+    if _anomalies_table is None:
+        _anomalies_table = get_dynamodb().Table(DDB_ANOMALIES_TABLE)
+    return _anomalies_table
 
 
 def query_timestream(query):

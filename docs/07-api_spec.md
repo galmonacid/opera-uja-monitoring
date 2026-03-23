@@ -129,6 +129,43 @@ Notas:
 - Para `agua_consumo`, la serie 24h devuelve consumo por intervalo a partir de contadores acumulados (unidad `m3`).
 - Si `monthly` no está materializado todavía en DynamoDB, la API puede reconstruirlo a partir de `daily`.
 
+### GET /v1/anomalies
+Registro técnico reciente de anomalías detectadas durante ingestión o backfill.
+
+Query params (opcionales):
+- campus=jaen|linares
+- domain=energia|agua|fv
+- gateway_id=gw_jaen_energia|gw_jaen_agua|gw_linares_mix|gw_endesa_jaen|gw_endesa_linares|gw_autoconsumo_jaen
+- lookback_hours=72 (default)
+- limit=200 (default)
+
+Respuesta:
+{
+  "items":[
+    {
+      "gateway_id":"gw_jaen_energia",
+      "campus":"jaen",
+      "domain":"energia",
+      "rt_id":"uja.jaen.energia.consumo.edificio_a3.p_kw",
+      "unit":"kW",
+      "raw_value":"-106.63",
+      "applied_value":"-106.63",
+      "anomaly_type":"negative_not_allowed",
+      "reason":"Valor negativo no permitido para este punto.",
+      "threshold":"0",
+      "ts_event":1735733400,
+      "detected_by":"backfill"
+    }
+  ],
+  "count":1,
+  "lookback_hours":72
+}
+
+Notas:
+- `Validación` usa este endpoint para la tabla global `Anomalías detectadas`.
+- La analítica pública excluye o corrige estas muestras antes de construir KPIs/series operativas.
+- `realtime` sigue siendo la vista técnica de latest; el registro de anomalías aporta la trazabilidad del raw y del valor aplicado.
+
 ## 3) Limits (desde API Gateway/WAF)
 - Rate limit por IP.
 - Burst limit.

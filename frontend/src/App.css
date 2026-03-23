@@ -1000,6 +1000,10 @@
   box-shadow: var(--shadow-soft);
 }
 
+.anomaly-card {
+  margin-bottom: var(--space-6);
+}
+
 .gateway-header {
   display: flex;
   align-items: flex-start;

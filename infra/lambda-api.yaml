@@ -15,6 +15,9 @@ Parameters:
   DdbAggregatesTable:
     Type: String
     Default: aggregates
+  DdbAnomaliesTable:
+    Type: String
+    Default: validation_anomalies
   AllowedOrigin:
     Type: String
     Default: "*"
@@ -59,6 +62,8 @@ Resources:
                 Resource:
                   - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbLatestTable}"
                   - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAggregatesTable}"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAnomaliesTable}"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAnomaliesTable}/index/*"
         - PolicyName: api-timestream-read
           PolicyDocument:
             Version: "2012-10-17"
@@ -85,6 +90,7 @@ Resources:
         Variables:
           DDB_LATEST_TABLE: !Ref DdbLatestTable
           DDB_AGG_TABLE: !Ref DdbAggregatesTable
+          DDB_ANOMALIES_TABLE: !Ref DdbAnomaliesTable
           ALLOWED_ORIGIN: !Ref AllowedOrigin
           TS_DATABASE: !Ref TimestreamDatabase
           TS_TABLE: !Ref TimestreamTable

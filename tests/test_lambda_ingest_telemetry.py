@@ -44,6 +44,7 @@ def test_ingest_applies_adjustments():
     module.fetch_mappings = fetch_mappings
     module.write_latest_readings = write_latest_readings
     module.write_timestream_records = lambda _records: None
+    module.write_validation_anomalies = lambda _events: None
 
     result = module.handler(event, None)
     assert result["status"] == "ok"
@@ -79,6 +80,7 @@ def test_ingest_autoconsumo_gateway_uses_topic_and_variants():
     module.fetch_mappings = fetch_mappings
     module.write_latest_readings = write_latest_readings
     module.write_timestream_records = lambda _records: None
+    module.write_validation_anomalies = lambda _events: None
 
     result = module.handler(event, None)
     assert result["status"] == "ok"
@@ -131,6 +133,7 @@ def test_ingest_normalizes_out_of_range_measurements_to_zero():
     module.fetch_mappings = fetch_mappings
     module.write_latest_readings = write_latest_readings
     module.write_timestream_records = lambda _records: None
+    module.write_validation_anomalies = lambda events: captured.setdefault("anomalies", events)
 
     result = module.handler(event, None)
 
@@ -142,6 +145,8 @@ def test_ingest_normalizes_out_of_range_measurements_to_zero():
         "rt.energy": 0.0,
         "rt.radiation": 0.0,
     }
+    anomaly_types = {item["anomaly_type"] for item in captured["anomalies"]}
+    assert anomaly_types == {"above_max_threshold", "non_finite"}
 
 
 def test_ingest_normalizes_negative_ct_total_to_zero():
@@ -181,12 +186,16 @@ def test_ingest_normalizes_negative_ct_total_to_zero():
     module.fetch_mappings = fetch_mappings
     module.write_latest_readings = write_latest_readings
     module.write_timestream_records = lambda _records: None
+    module.write_validation_anomalies = lambda events: captured.setdefault("anomalies", events)
 
     result = module.handler(event, None)
 
     assert result["status"] == "ok"
     values = {item["rt_id"]: item["value"] for item in captured["latest"]}
     assert values["uja.jaen.fv.auto.ct_total.p_kw"] == 0.0
+    assert captured["anomalies"][0]["anomaly_type"] == "negative_not_allowed"
+    assert captured["anomalies"][0]["raw_value"] == "-0.34"
+    assert captured["anomalies"][0]["applied_value"] == "0"
 
 
 def test_normalize_var_name_handles_autoconsumo_variants():
@@ -195,3 +204,48 @@ def test_normalize_var_name_handles_autoconsumo_variants():
     assert module.normalize_var_name("UJA.Tot_FV_kW sys") == "Tot_FV_KW sys"
     assert module.normalize_var_name("UJA.Pergola_kW sys") == "Pergola_KW sys"
     assert module.normalize_var_name("UJA.Fachada_Radiación") == "Fachada_Radiación"
+
+
+def test_ingest_logs_negative_demand_anomaly_without_clamping():
+    module = load_lambda_module()
+
+    event = {
+        "topic": "uja/jaen/consumo/energia/gw_jaen_energia",
+        "payload": {
+            "meter": [
+                {
+                    "name": "Consumo_Edif_Lagunillas",
+                    "time": 1772912407,
+                    "data": [
+                        {"var": "A3_KW sys", "value": -106.63, "unit": "kW"},
+                    ],
+                }
+            ]
+        },
+    }
+
+    mapping = {
+        "Consumo_Edif_Lagunillas::A3_KW sys": {
+            "rt_id": "uja.jaen.energia.consumo.edificio_a3.p_kw",
+            "unit_expected": "kW",
+            "enabled": True,
+        }
+    }
+
+    def fetch_mappings(_gateway_id, source_keys):
+        return {sk: mapping[sk] for sk in source_keys if sk in mapping}
+
+    captured = {}
+
+    module.fetch_mappings = fetch_mappings
+    module.write_latest_readings = lambda records: captured.setdefault("latest", records)
+    module.write_timestream_records = lambda _records: None
+    module.write_validation_anomalies = lambda events: captured.setdefault("anomalies", events)
+
+    result = module.handler(event, None)
+
+    assert result["status"] == "ok"
+    assert captured["latest"][0]["value"] == -106.63
+    assert captured["anomalies"][0]["rt_id"] == "uja.jaen.energia.consumo.edificio_a3.p_kw"
+    assert captured["anomalies"][0]["anomaly_type"] == "negative_not_allowed"
+    assert captured["anomalies"][0]["applied_value"] == "-106.63"

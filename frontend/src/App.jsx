@@ -13,10 +13,13 @@ const API_BASES = [
   DEFAULT_API_BASE,
 ].filter(Boolean);
 const ANALYTICS_SERIES_INTERVAL_MINUTES = 15;
+const ANOMALIES_LOOKBACK_HOURS = 72;
+const ANOMALIES_LIMIT = 200;
 
 const number = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
 });
+const NICE_TICK_FACTORS = [1, 2, 2.5, 5, 10];
 const USER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-ES", {
   timeZone: USER_TIME_ZONE,
@@ -520,6 +523,14 @@ const VALIDATION_DOMAIN_OPTIONS = [
   { value: "fv", label: "Fotovoltaica" },
 ];
 
+const ANOMALY_TYPE_LABELS = {
+  negative_not_allowed: "Negativo no permitido",
+  above_max_threshold: "Fuera de rango",
+  non_finite: "No finito",
+};
+
+const GATEWAY_LABELS = Object.fromEntries(GATEWAYS.map((gateway) => [gateway.id, gateway.label]));
+
 const resolveRouteId = (hash) => {
   switch (hash) {
     case "#/balance":
@@ -553,6 +564,31 @@ const formatLocalHour = (ts) => {
   return HOUR_FORMATTER.format(new Date(value * 1000));
 };
 
+const getNiceStep = (roughStep) => {
+  if (!Number.isFinite(roughStep) || roughStep <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const factor = NICE_TICK_FACTORS.find((candidate) => normalized <= candidate) || 10;
+  return factor * magnitude;
+};
+
+const buildYAxisScale = (values, ticksY) => {
+  const maxDataValue = Math.max(0, ...values.map((value) => Number(value || 0)));
+  if (maxDataValue <= 0) {
+    return {
+      axisMax: 1,
+      tickValues: Array.from({ length: ticksY + 1 }, (_, idx) => ticksY - idx),
+    };
+  }
+
+  const step = getNiceStep(maxDataValue / ticksY);
+  const axisMax = step * ticksY;
+  return {
+    axisMax,
+    tickValues: Array.from({ length: ticksY + 1 }, (_, idx) => axisMax - step * idx),
+  };
+};
+
 const formatTs = (ts) => {
   if (!ts && ts !== 0) return "--";
   const value = Number(ts);
@@ -583,6 +619,15 @@ const formatDate = (value) => {
     return DATE_TIME_FORMATTER.format(new Date(value * 1000));
   }
   return value;
+};
+
+const formatScalar = (value) => {
+  if (value == null || value === "") return "--";
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) {
+    return number.format(numeric);
+  }
+  return String(value);
 };
 
 const filterByPrefixes = (items, prefixes) =>
@@ -662,9 +707,10 @@ const AreaChart = ({ series }) => {
     ];
   }, [renderNow, series]);
 
-  const maxValue = Math.max(
-    1,
-    ...chartSeries.map((item) => Math.max(item.demand, item.pv))
+  const ticksY = 4;
+  const { axisMax, tickValues } = buildYAxisScale(
+    chartSeries.flatMap((item) => [item.demand, item.pv]),
+    ticksY
   );
   const now = Math.max(
     renderNow,
@@ -674,7 +720,6 @@ const AreaChart = ({ series }) => {
   const range = 86400;
   const plotHeight = 30;
   const totalHeight = 38;
-  const ticksY = 4;
   const ticksX = [0, 6, 12, 18, 24];
 
   const formatHour = (hoursAgo) => {
@@ -684,7 +729,7 @@ const AreaChart = ({ series }) => {
   const buildPath = (key) => {
     const points = chartSeries.map((item) => {
       const x = ((item.ts - start) / range) * 100;
-      const y = plotHeight - (item[key] / maxValue) * plotHeight;
+      const y = plotHeight - (item[key] / axisMax) * plotHeight;
       return [x, y];
     });
     const line = points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
@@ -703,14 +748,13 @@ const AreaChart = ({ series }) => {
       aria-label="Curva de demanda y generación fotovoltaica de las últimas 24 horas"
     >
       <g className="axis axis-y">
-        {Array.from({ length: ticksY + 1 }).map((_, idx) => {
+        {tickValues.map((value, idx) => {
           const y = (plotHeight / ticksY) * idx;
-          const value = maxValue - (maxValue / ticksY) * idx;
           return (
             <g key={`y-${idx}`} transform={`translate(0, ${y})`}>
               <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
               <text className="axis-label axis-label-y" x="-1.2" y="-1" textAnchor="end">
-                {number.format(Math.round(value / 100) * 100)}
+                {number.format(value)}
               </text>
             </g>
           );
@@ -752,12 +796,15 @@ const ValueChart = ({ series, label }) => {
     ];
   }, [renderNow, series]);
 
-  const maxValue = Math.max(1, ...chartSeries.map((item) => item.value));
+  const ticksY = 4;
+  const { axisMax, tickValues } = buildYAxisScale(
+    chartSeries.map((item) => item.value),
+    ticksY
+  );
   const now = Math.max(renderNow, chartSeries[chartSeries.length - 1]?.ts || 0);
   const start = now - 86400;
   const range = 86400;
   const height = 60;
-  const ticksY = 4;
   const ticksX = [0, 6, 12, 18, 24];
 
   const formatHour = (hoursAgo) => {
@@ -766,7 +813,7 @@ const ValueChart = ({ series, label }) => {
 
   const points = chartSeries.map((item) => {
     const x = ((item.ts - start) / range) * 100;
-    const y = height - (item.value / maxValue) * height;
+    const y = height - (item.value / axisMax) * height;
     return [x, y];
   });
   const line = points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
@@ -780,14 +827,13 @@ const ValueChart = ({ series, label }) => {
       aria-label={`${label} últimas 24 horas`}
     >
       <g className="axis axis-y">
-        {Array.from({ length: ticksY + 1 }).map((_, idx) => {
+        {tickValues.map((value, idx) => {
           const y = (height / ticksY) * idx;
-          const value = maxValue - (maxValue / ticksY) * idx;
           return (
             <g key={`value-y-${idx}`} transform={`translate(0, ${y})`}>
               <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
               <text className="axis-label axis-label-y" x="-2" y="-1">
-                {number.format(Math.round(value))}
+                {number.format(value)}
               </text>
             </g>
           );
@@ -944,6 +990,11 @@ function App() {
       };
     });
     return initial;
+  });
+  const [anomalies, setAnomalies] = useState({
+    status: "idle",
+    data: { items: [], count: 0, lookback_hours: ANOMALIES_LOOKBACK_HOURS },
+    error: null,
   });
   const [waterMetrics, setWaterMetrics] = useState(() => {
     const initial = {};
@@ -1184,6 +1235,44 @@ function App() {
     }
   };
 
+  const fetchAnomalies = async () => {
+    try {
+      setAnomalies((prev) => ({ ...prev, status: "loading", error: null }));
+      const params = new URLSearchParams({
+        lookback_hours: String(ANOMALIES_LOOKBACK_HOURS),
+        limit: String(ANOMALIES_LIMIT),
+      });
+      if (campusFilter !== "all") {
+        params.set("campus", campusFilter);
+      }
+      if (validationDomainFilter !== "all" && validationDomainFilter !== "mixto") {
+        params.set("domain", validationDomainFilter);
+      }
+      const payload = await fetchWithFallback(`/anomalies?${params.toString()}`);
+      let items = payload.items || [];
+      if (validationDomainFilter === "mixto") {
+        const mixedGatewayIds = new Set(
+          GATEWAYS.filter(
+            (gateway) =>
+              gateway.domain == null && (campusFilter === "all" || gateway.campus === campusFilter)
+          ).map((gateway) => gateway.id)
+        );
+        items = items.filter((item) => mixedGatewayIds.has(item.gateway_id));
+      }
+      setAnomalies({
+        status: "ready",
+        data: { ...payload, items, count: items.length },
+        error: null,
+      });
+    } catch (error) {
+      setAnomalies({
+        status: "error",
+        data: { items: [], count: 0, lookback_hours: ANOMALIES_LOOKBACK_HOURS },
+        error: error.message,
+      });
+    }
+  };
+
   const fetchWaterSeries = async (config) => {
     try {
       setWaterMetrics((prev) => ({
@@ -1294,6 +1383,11 @@ function App() {
     refreshOperationalHistory();
   };
 
+  const refreshValidationData = () => {
+    refreshOperationalData();
+    fetchAnomalies();
+  };
+
   const refreshPortal = () => {
     fetchRealtime();
     refreshDashboard();
@@ -1347,6 +1441,13 @@ function App() {
     const interval = setInterval(refreshWaterHistory, 300000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (routeId !== "validation") return undefined;
+    fetchAnomalies();
+    const interval = setInterval(fetchAnomalies, 60000);
+    return () => clearInterval(interval);
+  }, [routeId, campusFilter, validationDomainFilter]);
 
   useEffect(() => {
     const handleHash = () => setRouteHash(window.location.hash || "#/");
@@ -1651,6 +1752,26 @@ function App() {
       lastSync,
     };
   }, [gatewayOverview]);
+
+  const anomaliesRows = useMemo(() => {
+    return (anomalies.data?.items || [])
+      .map((item) => ({
+        sortTs: Number(item.ts_event || 0),
+        cells: [
+          formatTs(item.ts_event),
+          GATEWAY_LABELS[item.gateway_id] || item.gateway_id || "--",
+          getMonitoringPointLabel(item.rt_id),
+          item.rt_id || "--",
+          formatScalar(item.raw_value),
+          formatScalar(item.applied_value),
+          item.unit || "--",
+          ANOMALY_TYPE_LABELS[item.anomaly_type] || item.anomaly_type || "--",
+          item.reason || "--",
+        ],
+      }))
+      .sort((left, right) => right.sortTs - left.sortTs)
+      .map((item) => item.cells);
+  }, [anomalies.data]);
 
   const visibleMapEntries = useMemo(() => {
     if (mapLayer === "all") return MAP_ENTRIES;
@@ -2049,7 +2170,7 @@ function App() {
       subtitle:
         "Módulo técnico para incidencias, datos faltantes, series y agregados por gateway.",
       primaryLabel: "Actualizar validación",
-      primaryAction: refreshOperationalData,
+      primaryAction: refreshValidationData,
     },
   }[routeId];
 
@@ -2758,6 +2879,17 @@ function App() {
               <span className="insight-note">Tras filtros activos</span>
             </article>
             <article className="insight-card">
+              <span className="insight-label">Anomalías recientes</span>
+              <strong className="insight-value">
+                {anomalies.status === "ready" ? anomalies.data?.count || 0 : "--"}
+              </strong>
+              <span className="insight-note">
+                {anomalies.status === "error"
+                  ? "Error al consultar anomalías"
+                  : `Últimas ${ANOMALIES_LOOKBACK_HOURS}h`}
+              </span>
+            </article>
+            <article className="insight-card">
               <span className="insight-label">Incidencias</span>
               <strong className="insight-value">{validationSummary.errors}</strong>
               <span className="insight-note">Gateways con error</span>
@@ -2778,6 +2910,45 @@ function App() {
 
       <section className="section">
         <div className="container">
+          <article className="gateway-card anomaly-card">
+            <div className="gateway-header">
+              <div>
+                <h3 className="gateway-title">Anomalías detectadas</h3>
+                <div className="gateway-topic">
+                  Registro técnico reciente de valores anómalos excluidos o ajustados en la analítica.
+                </div>
+              </div>
+              <div className={`dashboard-status status-${getStatusKind(anomalies.status)}`}>
+                {renderStatus({ status: anomalies.status, error: anomalies.error })}
+              </div>
+            </div>
+            <div className="gateway-panel api-card gateway-panel-card">
+              <div className="gateway-panel-header">
+                <h4 className="api-card-title">Últimas anomalías</h4>
+                <div className={`api-status status-${anomalies.status || "idle"}`}>
+                  {renderStatus({ status: anomalies.status, error: anomalies.error })}
+                </div>
+              </div>
+              {anomalies.status === "error" ? (
+                <div className="api-empty">Error: {anomalies.error}</div>
+              ) : (
+                renderTable(
+                  [
+                    "Fecha/hora",
+                    "Gateway",
+                    "Punto",
+                    "rt_id",
+                    "Valor raw",
+                    "Valor aplicado",
+                    "Unidad",
+                    "Tipo",
+                    "Motivo",
+                  ],
+                  anomaliesRows
+                )
+              )}
+            </div>
+          </article>
           <div className="gateway-stack">
             {filteredValidationGateways.map((gateway) => buildGatewayTables(gateway))}
           </div>

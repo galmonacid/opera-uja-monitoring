@@ -162,3 +162,41 @@ def test_query_timestream_clamps_negative_ct_total_to_zero():
     )
 
     assert [value for _, value in result] == [0.0, 0.0, 1.2]
+
+
+def test_query_timestream_skips_negative_demand_anomaly():
+    daily = load_daily_module()
+
+    class FakeQuery:
+        def query(self, **_kwargs):
+            return {
+                "Rows": [
+                    {
+                        "Data": [
+                            {"ScalarValue": "2026-03-06 10:00:00.000000000"},
+                            {"ScalarValue": "219.09"},
+                        ]
+                    },
+                    {
+                        "Data": [
+                            {"ScalarValue": "2026-03-06 11:00:00.000000000"},
+                            {"ScalarValue": "-106.63"},
+                        ]
+                    },
+                    {
+                        "Data": [
+                            {"ScalarValue": "2026-03-06 12:00:00.000000000"},
+                            {"ScalarValue": "324.58"},
+                        ]
+                    },
+                ]
+            }
+
+    daily.get_ts_query = lambda: FakeQuery()
+    result = daily.query_timestream(
+        "uja.jaen.energia.consumo.edificio_a3.p_kw",
+        "2026-03-06T10:00:00+00:00",
+        "2026-03-06T12:00:00+00:00",
+    )
+
+    assert [value for _, value in result] == [219.09, 324.58]
