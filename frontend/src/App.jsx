@@ -12,9 +12,31 @@ const API_BASES = [
   import.meta.env.VITE_API_BASE,
   DEFAULT_API_BASE,
 ].filter(Boolean);
+const ANALYTICS_SERIES_INTERVAL_MINUTES = 15;
 
 const number = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
+});
+const USER_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("es-ES", {
+  timeZone: USER_TIME_ZONE,
+  dateStyle: "short",
+  timeStyle: "medium",
+});
+const DATE_FORMATTER = new Intl.DateTimeFormat("es-ES", {
+  timeZone: USER_TIME_ZONE,
+  dateStyle: "short",
+});
+const MONTH_FORMATTER = new Intl.DateTimeFormat("es-ES", {
+  timeZone: USER_TIME_ZONE,
+  month: "2-digit",
+  year: "numeric",
+});
+const HOUR_FORMATTER = new Intl.DateTimeFormat("es-ES", {
+  timeZone: USER_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
 });
 
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
@@ -522,24 +544,43 @@ const resolveRouteId = (hash) => {
   }
 };
 
+const buildLocalDateFromParts = (year, month, day = 1) =>
+  new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0);
+
+const formatLocalHour = (ts) => {
+  const value = Number(ts);
+  if (!Number.isFinite(value)) return "--:--";
+  return HOUR_FORMATTER.format(new Date(value * 1000));
+};
+
 const formatTs = (ts) => {
   if (!ts && ts !== 0) return "--";
   const value = Number(ts);
   if (!Number.isFinite(value)) return "--";
-  return new Date(value * 1000).toLocaleString("es-ES");
+  return DATE_TIME_FORMATTER.format(new Date(value * 1000));
 };
 
 const formatDate = (value) => {
   if (!value) return "--";
-  if (typeof value === "string" && value.includes("-")) {
+  if (typeof value === "string") {
+    const fullDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (fullDateMatch) {
+      const [, year, month, day] = fullDateMatch;
+      return DATE_FORMATTER.format(buildLocalDateFromParts(year, month, day));
+    }
+    const monthMatch = value.match(/^(\d{4})-(\d{2})$/);
+    if (monthMatch) {
+      const [, year, month] = monthMatch;
+      return MONTH_FORMATTER.format(buildLocalDateFromParts(year, month));
+    }
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toLocaleDateString("es-ES");
+      return DATE_TIME_FORMATTER.format(parsed);
     }
     return value;
   }
   if (typeof value === "number") {
-    return new Date(value * 1000).toLocaleString("es-ES");
+    return DATE_TIME_FORMATTER.format(new Date(value * 1000));
   }
   return value;
 };
@@ -637,9 +678,7 @@ const AreaChart = ({ series }) => {
   const ticksX = [0, 6, 12, 18, 24];
 
   const formatHour = (hoursAgo) => {
-    const date = new Date((now - hoursAgo * 3600) * 1000);
-    const hh = String(date.getHours()).padStart(2, "0");
-    return `${hh}:00`;
+    return formatLocalHour(now - hoursAgo * 3600);
   };
 
   const buildPath = (key) => {
@@ -722,9 +761,7 @@ const ValueChart = ({ series, label }) => {
   const ticksX = [0, 6, 12, 18, 24];
 
   const formatHour = (hoursAgo) => {
-    const date = new Date((now - hoursAgo * 3600) * 1000);
-    const hh = String(date.getHours()).padStart(2, "0");
-    return `${hh}:00`;
+    return formatLocalHour(now - hoursAgo * 3600);
   };
 
   const points = chartSeries.map((item) => {
@@ -1005,7 +1042,9 @@ function App() {
           series: { ...prev[scope.id].series, status: "loading", error: null },
         },
       }));
-      const payload = await fetchWithFallback(`/series/24h?scope=${scope.id}`);
+      const payload = await fetchWithFallback(
+        `/series/24h?scope=${scope.id}&interval_minutes=${ANALYTICS_SERIES_INTERVAL_MINUTES}`
+      );
       setDashboard((prev) => ({
         ...prev,
         [scope.id]: {
@@ -1079,9 +1118,14 @@ function App() {
           series: { ...prev[gateway.id].series, status: "loading", error: null },
         },
       }));
-      const payload = await fetchWithFallback(
-        `/series/24h?campus=${gateway.campus}&metric=${gateway.seriesMetric}`
-      );
+      const params = new URLSearchParams({
+        campus: gateway.campus,
+        metric: gateway.seriesMetric,
+      });
+      if (["agua_consumo", "fv_endesa", "fv_auto"].includes(gateway.seriesMetric)) {
+        params.set("interval_minutes", String(ANALYTICS_SERIES_INTERVAL_MINUTES));
+      }
+      const payload = await fetchWithFallback(`/series/24h?${params.toString()}`);
       setValidation((prev) => ({
         ...prev,
         [gateway.id]: {
@@ -1149,7 +1193,9 @@ function App() {
           series: { ...prev[config.id].series, status: "loading", error: null },
         },
       }));
-      const payload = await fetchWithFallback(`/series/24h?campus=${config.campus}&metric=agua_consumo`);
+      const payload = await fetchWithFallback(
+        `/series/24h?campus=${config.campus}&metric=agua_consumo&interval_minutes=${ANALYTICS_SERIES_INTERVAL_MINUTES}`
+      );
       setWaterMetrics((prev) => ({
         ...prev,
         [config.id]: {

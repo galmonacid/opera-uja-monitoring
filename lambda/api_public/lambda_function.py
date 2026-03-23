@@ -21,7 +21,9 @@ _agg_table = None
 _ts_query = None
 
 SERIES_INTERVAL_MINUTES = 5
-BALANCE_SERIES_MAX_AGE_SECONDS = SERIES_INTERVAL_MINUTES * 60 * 3
+BALANCE_SERIES_STABILIZATION_DELAY_SECONDS = int(
+    os.getenv("BALANCE_SERIES_STABILIZATION_DELAY_SECONDS", "600")
+)
 LAS_LAGUNILLAS_DEMAND_RT_IDS = [
     "uja.jaen.energia.consumo.edificio_a0.p_kw",
     "uja.jaen.energia.consumo.edificio_a1.p_kw",
@@ -380,9 +382,10 @@ def get_kpis(params):
 
 
 def get_series_24h(params):
+    interval_minutes = resolve_series_interval_minutes(params)
     scope = params.get("scope")
     if scope:
-        state = get_balance_scope_state(scope, include_series=True)
+        state = get_balance_scope_state(scope, include_series=True, interval_minutes=interval_minutes)
         if not state:
             return {"error": "unsupported_scope"}
         return {
@@ -391,9 +394,9 @@ def get_series_24h(params):
             "label": state["label"],
             "status": state["status"],
             "missing_sources": state["missing_sources"],
-            "interval_minutes": SERIES_INTERVAL_MINUTES,
+            "interval_minutes": interval_minutes,
             "unit": "kW",
-            "series": build_scope_series_rows(state),
+            "series": build_scope_series_rows(state, interval_minutes=interval_minutes),
         }
 
     campus = params.get("campus", "jaen")
@@ -401,22 +404,26 @@ def get_series_24h(params):
     if not config:
         return {"error": "unsupported_campus"}
 
-    demand_series = get_metric_series(campus, config["demand_metric"])
-    pv_series = sum_series_maps(
-        [get_metric_series(campus, metric) for metric in config["pv_metrics"]]
+    demand_series = get_metric_series(campus, config["demand_metric"], interval_minutes=interval_minutes)
+    pv_series = sum_aligned_series_maps(
+        [
+            get_metric_series(campus, metric, interval_minutes=interval_minutes)
+            for metric in config["pv_metrics"]
+        ],
+        interval_minutes=interval_minutes,
     )
 
-    series = align_balance_series(demand_series, pv_series)
+    series = align_balance_series(demand_series, pv_series, interval_minutes=interval_minutes)
 
     return {
         "campus": campus,
-        "interval_minutes": SERIES_INTERVAL_MINUTES,
+        "interval_minutes": interval_minutes,
         "unit": "kW",
         "series": series,
     }
 
 
-def get_balance_scope_state(scope, include_series=False):
+def get_balance_scope_state(scope, include_series=False, interval_minutes=SERIES_INTERVAL_MINUTES):
     config = BALANCE_SCOPE_CONFIG.get(scope)
     if not config:
         return None
@@ -424,7 +431,11 @@ def get_balance_scope_state(scope, include_series=False):
     sources = []
     for source_type in ("demand_sources", "pv_sources"):
         for source in config.get(source_type, []):
-            source_state = get_balance_source_state(source, include_series=include_series)
+            source_state = get_balance_source_state(
+                source,
+                include_series=include_series,
+                interval_minutes=interval_minutes,
+            )
             source_state["type"] = source_type
             sources.append(source_state)
 
@@ -486,28 +497,30 @@ def build_scope_kpis(state):
     ]
 
 
-def build_scope_series_rows(state):
+def build_scope_series_rows(state, interval_minutes=SERIES_INTERVAL_MINUTES):
     if state["status"] != "complete":
         return []
 
-    demand_series = sum_series_maps(
+    demand_series = sum_aligned_series_maps(
         [
             source["series_map"]
             for source in state["sources"]
             if source["type"] == "demand_sources"
-        ]
+        ],
+        interval_minutes=interval_minutes,
     )
-    pv_series = sum_series_maps(
+    pv_series = sum_aligned_series_maps(
         [
             source["series_map"]
             for source in state["sources"]
             if source["type"] == "pv_sources"
-        ]
+        ],
+        interval_minutes=interval_minutes,
     )
-    return align_balance_series(demand_series, pv_series)
+    return align_balance_series(demand_series, pv_series, interval_minutes=interval_minutes)
 
 
-def get_balance_source_state(source, include_series=False):
+def get_balance_source_state(source, include_series=False, interval_minutes=SERIES_INTERVAL_MINUTES):
     latest_items = get_balance_source_latest_items(source)
     min_items = source.get("min_items") or source.get("expected_count") or 1
     latest_complete = len(latest_items) >= min_items
@@ -519,7 +532,7 @@ def get_balance_source_state(source, include_series=False):
     series_map = {}
     series_complete = True
     if include_series and latest_complete:
-        series_map = get_balance_source_series_map(source)
+        series_map = get_balance_source_series_map(source, interval_minutes=interval_minutes)
         series_map = {
             ts: transform_balance_source_value(value, source)
             for ts, value in series_map.items()
@@ -550,17 +563,25 @@ def get_balance_source_latest_items(source):
     return filter_items_by_patterns(items, source.get("rt_like_patterns"))
 
 
-def get_balance_source_series_map(source):
+def get_balance_source_series_map(source, interval_minutes=SERIES_INTERVAL_MINUTES):
     if source.get("rt_ids"):
-        return query_timeseries(source["rt_ids"])
+        return query_timeseries(source["rt_ids"], interval_minutes=interval_minutes)
     if source.get("metric") and source.get("campus"):
-        return get_metric_series(source["campus"], source["metric"]) or {}
+        return (
+            get_metric_series(
+                source["campus"],
+                source["metric"],
+                interval_minutes=interval_minutes,
+            )
+            or {}
+        )
     rt_prefix = source.get("rt_prefix")
     if not rt_prefix:
         return {}
     return query_timeseries_by_select(
         rt_prefix=rt_prefix,
         rt_like_patterns=source.get("rt_like_patterns"),
+        interval_minutes=interval_minutes,
     )
 
 
@@ -602,7 +623,8 @@ def get_series_24h_by_metric(params):
     if not campus or not metric:
         return {"error": "missing_params"}
 
-    series_map = get_metric_series(campus, metric)
+    interval_minutes = resolve_series_interval_minutes(params)
+    series_map = get_metric_series(campus, metric, interval_minutes=interval_minutes)
     if series_map is None:
         return {"error": "unsupported_metric"}
 
@@ -614,7 +636,7 @@ def get_series_24h_by_metric(params):
     return {
         "campus": campus,
         "metric": metric,
-        "interval_minutes": SERIES_INTERVAL_MINUTES,
+        "interval_minutes": interval_minutes,
         "unit": unit,
         "series": rows,
     }
@@ -639,7 +661,7 @@ def get_series_24h_by_prefix(params):
     }
 
 
-def get_metric_series(campus, metric):
+def get_metric_series(campus, metric, interval_minutes=SERIES_INTERVAL_MINUTES):
     config = METRIC_SERIES_CONFIG.get((campus, metric))
     if not config:
         return None
@@ -647,14 +669,15 @@ def get_metric_series(campus, metric):
         return query_counter_deltas(
             rt_prefix=config["rt_prefix"],
             rt_like_patterns=config.get("rt_like_patterns"),
-            interval=f"{SERIES_INTERVAL_MINUTES}m",
+            interval=f"{interval_minutes}m",
             lookback="24h",
         )
     if config.get("rt_ids"):
-        return query_timeseries(config["rt_ids"])
+        return query_timeseries(config["rt_ids"], interval_minutes=interval_minutes)
     return query_timeseries_by_select(
         rt_prefix=config["rt_prefix"],
         rt_like_patterns=config.get("rt_like_patterns"),
+        interval_minutes=interval_minutes,
     )
 
 
@@ -668,8 +691,44 @@ def sum_series_maps(series_maps):
     return result
 
 
-def align_balance_series(demand_series, pv_series):
-    all_ts = sorted(set(demand_series) | set(pv_series))
+def sum_aligned_series_maps(series_maps, interval_minutes=SERIES_INTERVAL_MINUTES):
+    valid_maps = [series_map for series_map in series_maps if series_map]
+    if not valid_maps:
+        return {}
+
+    cutoff_ts = current_balance_cutoff_ts()
+    all_ts = sorted(
+        ts
+        for ts in set().union(*(series_map.keys() for series_map in valid_maps))
+        if ts <= cutoff_ts
+    )
+    carried = [
+        {"last_ts": None, "last_value": None, "series_map": series_map}
+        for series_map in valid_maps
+    ]
+    result = {}
+
+    for ts in all_ts:
+        total = 0.0
+        has_any = False
+        for state in carried:
+            series_map = state["series_map"]
+            if ts in series_map:
+                state["last_ts"] = ts
+                state["last_value"] = float(series_map[ts])
+            if not is_series_value_fresh(ts, state["last_ts"], interval_minutes=interval_minutes):
+                continue
+            total += float(state["last_value"])
+            has_any = True
+        if has_any:
+            result[ts] = total
+
+    return result
+
+
+def align_balance_series(demand_series, pv_series, interval_minutes=SERIES_INTERVAL_MINUTES):
+    cutoff_ts = current_balance_cutoff_ts()
+    all_ts = sorted(ts for ts in (set(demand_series) | set(pv_series)) if ts <= cutoff_ts)
     rows = []
     last_demand_ts = None
     last_demand_value = None
@@ -684,7 +743,7 @@ def align_balance_series(demand_series, pv_series):
             last_pv_ts = ts
             last_pv_value = float(pv_series[ts])
 
-        if not is_series_value_fresh(ts, last_demand_ts) or not is_series_value_fresh(ts, last_pv_ts):
+        if not is_series_value_fresh(ts, last_demand_ts, interval_minutes=interval_minutes) or not is_series_value_fresh(ts, last_pv_ts, interval_minutes=interval_minutes):
             continue
 
         rows.append(
@@ -698,10 +757,32 @@ def align_balance_series(demand_series, pv_series):
     return rows
 
 
-def is_series_value_fresh(current_ts, sample_ts):
+def is_series_value_fresh(current_ts, sample_ts, interval_minutes=SERIES_INTERVAL_MINUTES):
     if sample_ts is None:
         return False
-    return int(current_ts) - int(sample_ts) <= BALANCE_SERIES_MAX_AGE_SECONDS
+    return int(current_ts) - int(sample_ts) <= get_balance_series_max_age_seconds(interval_minutes)
+
+
+def get_balance_series_max_age_seconds(interval_minutes):
+    return int(interval_minutes) * 60 * 3
+
+
+def current_balance_cutoff_ts():
+    now_ts = int(datetime.now(tz=timezone.utc).timestamp())
+    return now_ts - BALANCE_SERIES_STABILIZATION_DELAY_SECONDS
+
+
+def resolve_series_interval_minutes(params):
+    raw_value = (params or {}).get("interval_minutes")
+    if raw_value in (None, ""):
+        return SERIES_INTERVAL_MINUTES
+    try:
+        interval_minutes = int(raw_value)
+    except (TypeError, ValueError):
+        return SERIES_INTERVAL_MINUTES
+    if interval_minutes not in {5, 15}:
+        return SERIES_INTERVAL_MINUTES
+    return interval_minutes
 
 
 def get_metric_unit(campus, metric):
@@ -709,8 +790,8 @@ def get_metric_unit(campus, metric):
     return config.get("unit", "kW")
 
 
-def query_timeseries(rt_ids):
-    return query_timeseries_by_select(rt_ids=rt_ids)
+def query_timeseries(rt_ids, interval_minutes=SERIES_INTERVAL_MINUTES):
+    return query_timeseries_by_select(rt_ids=rt_ids, interval_minutes=interval_minutes)
 
 
 def query_timeseries_by_prefix(rt_prefix):
@@ -720,7 +801,12 @@ def query_timeseries_by_prefix(rt_prefix):
     )
 
 
-def query_timeseries_by_select(rt_ids=None, rt_prefix=None, rt_like_patterns=None):
+def query_timeseries_by_select(
+    rt_ids=None,
+    rt_prefix=None,
+    rt_like_patterns=None,
+    interval_minutes=SERIES_INTERVAL_MINUTES,
+):
     where_clauses = [
         "time > ago(24h)",
         "measure_name = 'value'",
@@ -741,12 +827,12 @@ def query_timeseries_by_select(rt_ids=None, rt_prefix=None, rt_like_patterns=Non
     where_clauses.append(f"measure_value::double >= {-MAX_VALID_VALUE}")
     query = f"""
 SELECT
-  bin(time, {SERIES_INTERVAL_MINUTES}m) AS ts,
+  bin(time, {interval_minutes}m) AS ts,
   rt_id,
   max_by(measure_value::double, time) AS value
 FROM "{TS_DATABASE}"."{TS_TABLE}"
 WHERE {" AND ".join(where_clauses)}
-GROUP BY rt_id, bin(time, {SERIES_INTERVAL_MINUTES}m)
+GROUP BY rt_id, bin(time, {interval_minutes}m)
 ORDER BY ts, rt_id
 """
     return rows_to_timeseries_sum_map(query_timestream(query))

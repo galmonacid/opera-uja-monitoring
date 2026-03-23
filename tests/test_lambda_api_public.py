@@ -48,7 +48,39 @@ def test_series_24h_merges_demand_and_pv():
     assert first["demand"] == 10.0
     assert first["pv"] == 7.0
     assert second["demand"] == 12.0
-    assert second["pv"] == 5.0
+    assert second["pv"] == 8.0
+
+
+def test_sum_aligned_series_maps_carries_forward_recent_source_values():
+    api = load_lambda_module()
+    api.current_balance_cutoff_ts = lambda: 2000
+
+    result = api.sum_aligned_series_maps(
+        [
+            {1000: 800.0},
+            {1300: 50.0},
+            {1300: 10.0},
+        ]
+    )
+
+    assert result == {
+        1000: 800.0,
+        1300: 860.0,
+    }
+
+
+def test_sum_aligned_series_maps_drops_points_newer_than_cutoff():
+    api = load_lambda_module()
+    api.current_balance_cutoff_ts = lambda: 1200
+
+    result = api.sum_aligned_series_maps(
+        [
+            {1000: 800.0, 1300: 820.0},
+            {1000: 50.0, 1300: 60.0},
+        ]
+    )
+
+    assert result == {1000: 850.0}
 
 
 def test_handler_series_24h_route():
@@ -66,6 +98,61 @@ def test_handler_series_24h_route():
     response = api.handler(event, None)
     assert response["statusCode"] == 200
     assert "ok" in response["body"]
+
+
+def test_series_24h_scope_accepts_interval_override():
+    api = load_lambda_module()
+    captured = {}
+
+    def fake_scope_state(scope, include_series=False, interval_minutes=api.SERIES_INTERVAL_MINUTES):
+        captured["scope"] = scope
+        captured["include_series"] = include_series
+        captured["interval_minutes"] = interval_minutes
+        return {
+            "campus": "jaen",
+            "label": "Campus Las Lagunillas",
+            "status": "complete",
+            "missing_sources": [],
+        }
+
+    def fake_rows(_state, interval_minutes=api.SERIES_INTERVAL_MINUTES):
+        captured["rows_interval_minutes"] = interval_minutes
+        return [{"ts": 1000, "demand": 10.0, "pv": 5.0}]
+
+    api.get_balance_scope_state = fake_scope_state
+    api.build_scope_series_rows = fake_rows
+
+    result = api.get_series_24h({"scope": "las_lagunillas", "interval_minutes": "15"})
+
+    assert result["interval_minutes"] == 15
+    assert captured == {
+        "scope": "las_lagunillas",
+        "include_series": True,
+        "interval_minutes": 15,
+        "rows_interval_minutes": 15,
+    }
+
+
+def test_series_24h_by_metric_accepts_interval_override_for_water():
+    api = load_lambda_module()
+    captured = {}
+
+    def fake_query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
+        captured["rt_prefix"] = rt_prefix
+        captured["rt_like_patterns"] = rt_like_patterns
+        captured["interval"] = interval
+        captured["lookback"] = lookback
+        return {1000: 3.5}
+
+    api.query_counter_deltas = fake_query_counter_deltas
+
+    result = api.get_series_24h_by_metric(
+        {"campus": "jaen", "metric": "agua_consumo", "interval_minutes": "15"}
+    )
+
+    assert result["interval_minutes"] == 15
+    assert result["series"] == [{"ts": 1000, "value": 3.5}]
+    assert captured["interval"] == "15m"
 
 
 def test_handler_kpis_route():
