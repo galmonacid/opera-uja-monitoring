@@ -490,7 +490,7 @@ const PROJECT_VIEW_CONFIG = [
 ];
 
 const MAP_LAYER_OPTIONS = [
-  { value: "all", label: "Todas las capas" },
+  // { value: "all", label: "Todas las capas" },
   { value: "energy", label: "Demanda de energía" },
   { value: "water", label: "Agua" },
   { value: "solar", label: "Fotovoltaica" },
@@ -957,7 +957,7 @@ function App() {
   const [routeHash, setRouteHash] = useState(() => window.location.hash || "#/");
   const [campusFilter, setCampusFilter] = useState("all");
   const [periodFilter, setPeriodFilter] = useState("actual");
-  const [mapLayer, setMapLayer] = useState("all");
+  const [mapLayer, setMapLayer] = useState("energy");
   const [selectedMapPoint, setSelectedMapPoint] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState(PROJECT_VIEW_CONFIG[0].id);
   const [validationDomainFilter, setValidationDomainFilter] = useState("all");
