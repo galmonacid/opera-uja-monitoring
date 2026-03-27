@@ -7,6 +7,7 @@ def load_daily_module():
     spec = importlib.util.spec_from_file_location("lambda_calc_daily", module_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    module.query_anomaly_timestamps = lambda rt_id, start, end: set()
     return module
 
 

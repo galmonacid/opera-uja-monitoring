@@ -9,6 +9,8 @@ def load_lambda_module():
     spec = importlib.util.spec_from_file_location("lambda_api_public", module_path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
+    module.get_recent_anomaly_bucket_map = lambda rt_ids, min_ts, interval_minutes: {}
+    module.get_recent_anomaly_exact_map = lambda rt_ids, min_ts: {}
     return module
 
 
@@ -178,6 +180,38 @@ def test_query_timeseries_analytics_carries_forward_after_negative_anomaly():
     }
 
 
+def test_get_recent_anomaly_maps_keeps_retained_negative_ct_total_out_of_exclusions():
+    api = load_lambda_module()
+    api.query_all_anomalies_by_campus_domain = lambda campus, domain, min_ts: [
+        {
+            "rt_id": "uja.jaen.fv.auto.ct_total.p_kw",
+            "ts_event": 1735689600,
+            "anomaly_type": "negative_not_allowed",
+        },
+        {
+            "rt_id": "uja.jaen.energia.consumo.edificio_a3.p_kw",
+            "ts_event": 1735689600,
+            "anomaly_type": "negative_not_allowed",
+        },
+    ]
+
+    exact, bucketed = api.get_recent_anomaly_maps(
+        [
+            "uja.jaen.fv.auto.ct_total.p_kw",
+            "uja.jaen.energia.consumo.edificio_a3.p_kw",
+        ],
+        min_ts=1735689000,
+        interval_minutes=15,
+    )
+
+    assert exact == {
+        "uja.jaen.energia.consumo.edificio_a3.p_kw": {1735689600},
+    }
+    assert bucketed == {
+        "uja.jaen.energia.consumo.edificio_a3.p_kw": {1735689600},
+    }
+
+
 def test_get_valid_latest_items_with_fallback_uses_recent_valid_sample():
     api = load_lambda_module()
 
@@ -218,6 +252,55 @@ def test_get_valid_latest_items_with_fallback_uses_recent_valid_sample():
             "ts_event": 1735689600,
             "gateway_id": None,
         }
+    ]
+
+
+def test_series_24h_by_rt_ids_supports_avg_aggregation():
+    api = load_lambda_module()
+    rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.rad01.g_wm2"},
+                {"ScalarValue": "400"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.rad02.g_wm2"},
+                {"ScalarValue": "600"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:15:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.rad01.g_wm2"},
+                {"ScalarValue": "500"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:15:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.rad02.g_wm2"},
+                {"ScalarValue": "700"},
+            ]
+        },
+    ]
+
+    api.query_timestream = lambda _query: rows
+
+    result = api.get_series_24h_by_rt_ids(
+        {"aggregation": "avg", "interval_minutes": "15"},
+        {"rt_id": ["uja.jaen.fv.endesa.rad01.g_wm2", "uja.jaen.fv.endesa.rad02.g_wm2"]},
+    )
+
+    assert result["aggregation"] == "avg"
+    assert result["interval_minutes"] == 15
+    assert result["unit"] == "W/m²"
+    assert result["series"] == [
+        {"ts": 1735689600, "value": 500.0},
+        {"ts": 1735690500, "value": 600.0},
     ]
 
 

@@ -116,6 +116,15 @@ def sanitize_for_ingest(rt_id, value, unit=None, max_valid_value=1000000, max_va
     return False, None, anomaly
 
 
+def should_exclude_anomalous_sample(rt_id, anomaly_type):
+    if (
+        anomaly_type == "negative_not_allowed"
+        and str(rt_id or "") in NEGATIVE_TO_ZERO_RT_IDS
+    ):
+        return False
+    return True
+
+
 def format_anomaly_value(value):
     try:
         numeric = float(value)

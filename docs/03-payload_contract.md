@@ -46,10 +46,10 @@ Requisitos del payload para que la solución funcione:
 - `meter.time` presente.
 - `data.var`, `data.unit`, `data.value` presentes.
 - `meter.name` estable en el tiempo.
-- Valores inválidos (sentinelas) se normalizan a `0` en ingestión.
+- Los valores inválidos se evalúan en ingestión según la política de anomalías.
 
 ### 5.1 Filtro de valores inválidos (sentinelas)
-Se normalizan a `0` los valores no finitos o fuera de rango razonable (`abs(value) > 1e6` por defecto).
+Los valores no finitos o fuera de rango razonable (`abs(value) > 1e6` por defecto) se registran como anomalía y no se persisten en `latest` ni en histórico analítico.
 Este umbral es configurable vía `MAX_VALID_VALUE`.
 
 ### 5.2 Política de anomalías y trazabilidad
@@ -64,8 +64,8 @@ Reglas activas:
 - Excepción explícita: `uja.jaen.fv.endesa.ct_total.p_kw` puede llegar negativo en raw.
 
 Comportamiento:
-- Los sentinelas ya normalizados en ingestión siguen normalizándose a `0` y además se registran en `validation_anomalies`.
-- Las anomalías que no son sentinelas persistentes no se fuerzan a `0` en ingestión; se registran y se excluyen de la analítica pública.
+- Solo los RT con normalización explícita pactada, como `uja.jaen.fv.auto.ct_total.p_kw`, siguen transformándose a `0` en ingestión y además se registran en `validation_anomalies`.
+- Las anomalías que no pertenecen a esos RT excepcionales no se fuerzan a `0` en ingestión; se registran y no se persisten en `latest_readings` ni en Timestream.
 - La tabla `validation_anomalies` conserva `raw_value`, `applied_value`, `anomaly_type`, `reason` y `ts_event`.
 
 Limitación:

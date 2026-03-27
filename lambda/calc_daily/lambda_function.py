@@ -8,10 +8,10 @@ from pathlib import Path
 import boto3
 from boto3.dynamodb.conditions import Key
 try:
-    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics
+    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics, should_exclude_anomalous_sample
 except ModuleNotFoundError:
     sys.path.append(str(Path(__file__).resolve().parents[2]))
-    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics
+    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics, should_exclude_anomalous_sample
 
 
 DDB_AGG_TABLE = os.getenv("DDB_AGG_TABLE", "aggregates")
@@ -268,6 +268,8 @@ def query_anomaly_timestamps(rt_id, start, end):
     for item in items:
         if item.get("rt_id") != rt_id:
             continue
+        if not should_exclude_anomalous_sample(rt_id, item.get("anomaly_type")):
+            continue
         ts_event = int(item.get("ts_event", 0))
         if start_ts <= ts_event <= end_ts:
             timestamps.add(ts_event)
@@ -326,6 +328,10 @@ def infer_rt_unit(rt_id):
         return "m3"
     if rt_id.endswith(".e_kwh"):
         return "kWh"
+    if rt_id.endswith(".g_wm2"):
+        return "W/m²"
+    if rt_id.endswith(".t_c"):
+        return "°C"
     return "kW"
 
 

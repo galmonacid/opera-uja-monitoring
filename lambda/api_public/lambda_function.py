@@ -16,6 +16,7 @@ try:
         format_anomaly_value,
         normalize_sentinel_value,
         sanitize_for_analytics,
+        should_exclude_anomalous_sample,
     )
 except ModuleNotFoundError:
     sys.path.append(str(Path(__file__).resolve().parents[2]))
@@ -27,6 +28,7 @@ except ModuleNotFoundError:
         format_anomaly_value,
         normalize_sentinel_value,
         sanitize_for_analytics,
+        should_exclude_anomalous_sample,
     )
 
 
@@ -539,6 +541,8 @@ def get_recent_anomaly_maps(rt_ids, min_ts, interval_minutes=None):
         for item in items:
             rt_id = item.get("rt_id")
             if rt_id not in scoped_rt_ids:
+                continue
+            if not should_exclude_anomalous_sample(rt_id, item.get("anomaly_type")):
                 continue
             ts_event = int(item.get("ts_event", 0))
             exact.setdefault(rt_id, set()).add(ts_event)
@@ -1492,6 +1496,10 @@ def infer_rt_unit(rt_id):
         return "m3"
     if rt_id.endswith(".e_kwh"):
         return "kWh"
+    if rt_id.endswith(".g_wm2"):
+        return "W/m²"
+    if rt_id.endswith(".t_c"):
+        return "°C"
     return "kW"
 
 

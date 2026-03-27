@@ -76,6 +76,9 @@ Query params:
 - scope=las_lagunillas|ctl_linares (opcional, modo dashboard)
 - campus=jaen|linares
 - metric=energia_consumo|agua_consumo|fv_endesa|fv_auto (opcional)
+- rt_id=... (repetible, opcional)
+- aggregation=sum|avg|max (solo cuando se usa `rt_id` repetible)
+- interval_minutes=5|15 (opcional)
 - rt_prefix=uja.... (opcional, modo tecnico)
 
 Respuesta por scope (modo dashboard principal):
@@ -116,10 +119,22 @@ Respuesta con `metric`:
   ]
 }
 
+Respuesta con `rt_id` repetible:
+{
+  "rt_ids":["uja.jaen.fv.endesa.rad01.g_wm2","uja.jaen.fv.endesa.rad02.g_wm2"],
+  "aggregation":"avg",
+  "interval_minutes":15,
+  "unit":"W/m²",
+  "series":[
+    {"ts":173...,"value":512.4},
+    ...
+  ]
+}
+
 Notas:
-- En ingestión, los valores inválidos/sentinela se normalizan a `0`; las consultas históricas mantienen límites de seguridad sobre Timestream (por defecto `abs(value) > 1e6`).
+- En ingestión, las anomalías se registran en `validation_anomalies`. Solo los RT con normalización explícita, como `uja.jaen.fv.auto.ct_total.p_kw`, se persisten ajustados a `0`; el resto no se escribe en `latest` ni en histórico.
 - `gateway_id` permite aislar gateways que comparten prefijo de RT_ID, como `gw_jaen_energia` y `gw_autoconsumo_jaen`.
-- En Jaén, el balance por defecto usa demanda total campus, FV Endesa por suma de inversores y FV autoconsumo por `ct_total`.
+- En Jaén, el balance por defecto usa demanda total campus, FV Endesa por `abs(ct_total)` y FV autoconsumo por `ct_total + edificio_a0`.
 - En modo `scope`, `las_lagunillas` usa solo A0-A4, B1-B5, C1-C3/C5/C6, D1-D4 y `carga_vhe`; excluye `um_c4`, `ae_magisterio`, `apartamentos_universitarios`, `residencia_domingo_savio` y `polideportivo`.
 - En modo `scope`, la FV de `las_lagunillas` = `abs(uja.jaen.fv.endesa.ct_total.p_kw)` + `uja.jaen.fv.auto.ct_total.p_kw` + `uja.jaen.fv.auto.edificio_a0.p_kw`.
 - `uja.jaen.fv.endesa.ct_total.p_kw` puede llegar en raw con signo negativo; en `scope` se publica con magnitud positiva para mantener la convención visual del portal.
@@ -127,6 +142,7 @@ Notas:
 - En modo `scope`, `ctl_linares` usa `lab_sg_t1`, `lab_sg_t2`, `urbanizacion`, `aulario_departamental`, `polideportivo` y FV desde `uja.linares.fv.endesa.ct_total.p_kw`.
 - `status` puede ser `complete`, `partial` o `empty`. Si faltan fuentes obligatorias, `missing_sources` lista los identificadores afectados y la serie agregada se devuelve vacía.
 - Para `agua_consumo`, la serie 24h devuelve consumo por intervalo a partir de contadores acumulados (unidad `m3`).
+- Las vistas visuales del portal consumen `interval_minutes=15` como granularidad estándar.
 - Si `monthly` no está materializado todavía en DynamoDB, la API puede reconstruirlo a partir de `daily`.
 
 ### GET /v1/anomalies
@@ -149,7 +165,7 @@ Respuesta:
       "rt_id":"uja.jaen.energia.consumo.edificio_a3.p_kw",
       "unit":"kW",
       "raw_value":"-106.63",
-      "applied_value":"-106.63",
+      "applied_value":null,
       "anomaly_type":"negative_not_allowed",
       "reason":"Valor negativo no permitido para este punto.",
       "threshold":"0",

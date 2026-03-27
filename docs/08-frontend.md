@@ -12,7 +12,7 @@ Motivos:
 ## Stack
 - React + Vite
 - UI: CSS custom + SVG inline
-- Charts: SVG propio (area chart MVP)
+- Charts: SVG propio (área/línea y doble eje para FV)
 - Consumo API: fetch
 
 ## Estructura en repo
@@ -21,15 +21,23 @@ Motivos:
 - Config Amplify en `amplify.yml`
 - Variables en `frontend/.env.example` (usar `VITE_API_BASE`)
 
-## MVP (2 secciones)
-1. Balance de energia en tiempo real
+## Vistas operativas actuales
+1. Balance
    - Dos paneles: `Campus Las Lagunillas` y `Campus CTL Linares`
    - KPIs por panel desde `/kpis?scope=...`
-   - Grafica de areas 24h por panel desde `/series/24h?scope=...`
-2. Mapa del campus
-   - `campus.png` con overlays por edificio
-   - Valores instantaneos desde `/realtime` segun `gateway_variable_map_gw_jaen_energia`
-   - Labels de valor colocados a la derecha del identificador de edificio en la imagen
+   - Gráfica de áreas 24h por panel desde `/series/24h?scope=...&interval_minutes=15`
+2. Mapa
+   - `campus.png` con overlays multicapa
+   - Valores instantáneos desde `/realtime`
+3. Agua
+   - Tabla operativa por campus
+   - Tendencia 24h desde `/series/24h?campus=...&metric=agua_consumo&interval_minutes=15`
+4. Fotovoltaica
+   - Vista unificada de FV Endesa y autoconsumo
+   - Producción desde `/series/24h?campus=...&metric=fv_*&interval_minutes=15`
+   - Irradiancia agregada desde `/series/24h?rt_id=...&aggregation=avg&interval_minutes=15`
+5. Validación
+   - Gateways con pestañas y tabla global de anomalías
 
 ## Estado actual implementado
 - Dashboard principal por scope:
@@ -57,15 +65,16 @@ Motivos:
   - `uja.jaen.fv.endesa.ct_total.p_kw` se recibe en raw con signo técnico y solo se transforma a magnitud positiva en esas vistas
   - `Validación` conserva el dato técnico original con su signo raw
   - la vista de `FV Endesa Jaén` usa `ct_total` como KPI instantánea y mantiene la suma de inversores como referencia secundaria
+  - la vista `Fotovoltaica` integra también autoconsumo; `#/autoconsumo` queda como alias compatible hacia `#/fotovoltaica`
 
 ## Actualizacion de datos (MVP)
 - `/realtime`: cada 60s
 - `/kpis?scope=...`: cada 60s
-- `/series/24h?scope=...`: cada 5 min
+- `/series/24h?...interval_minutes=15`: cada 5 min
 - `/anomalies`: cada 60s cuando la vista `Validación` está activa
 
 ## Saneado analítico
-- Las gráficas operativas (`Balance`, `Energía`, `Agua`, `Fotovoltaica`, `Autoconsumo`) consumen series analíticas que excluyen muestras anómalas.
+- Las gráficas operativas (`Balance`, `Energía`, `Agua`, `Fotovoltaica`) consumen series analíticas que excluyen muestras anómalas.
 - En balance, si un contribuidor llega anómalo:
   - se trata como `missing`
   - se usa `last observation carried forward` dentro de la ventana de frescura
@@ -73,6 +82,7 @@ Motivos:
 - `Validación` no oculta el problema:
   - latest técnico sigue visible
   - la tabla de anomalías muestra `raw_value`, `applied_value`, `tipo` y `motivo`
+- En frontend, las líneas y áreas se segmentan para no unir huecos largos cuando faltan datos válidos.
 
 ## Runbook rapido (local)
 ```bash

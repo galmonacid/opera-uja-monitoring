@@ -19,6 +19,9 @@ Parameters:
   DdbConfigTable:
     Type: String
     Default: aggregation_configs
+  DdbAnomaliesTable:
+    Type: String
+    Default: validation_anomalies
   TsDatabase:
     Type: String
     Default: uja_monitoring
@@ -71,6 +74,12 @@ Resources:
                 Resource: !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAggregatesTable}"
               - Effect: Allow
                 Action:
+                  - dynamodb:Query
+                Resource:
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAnomaliesTable}"
+                  - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAnomaliesTable}/index/campus_domain_event_key"
+              - Effect: Allow
+                Action:
                   - timestream:DescribeEndpoints
                   - timestream:Select
                 Resource: "*"
@@ -92,6 +101,7 @@ Resources:
           DDB_AGG_TABLE: !Ref DdbAggregatesTable
           DDB_MAPPING_TABLE: !Ref DdbMappingTable
           DDB_CONFIG_TABLE: !Ref DdbConfigTable
+          DDB_ANOMALIES_TABLE: !Ref DdbAnomaliesTable
           TS_DATABASE: !Ref TsDatabase
           TS_TABLE: !Ref TsTable
           CALC_VERSION: !Ref CalcVersion

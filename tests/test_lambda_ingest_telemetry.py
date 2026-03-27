@@ -138,13 +138,8 @@ def test_ingest_normalizes_out_of_range_measurements_to_zero():
     result = module.handler(event, None)
 
     assert result["status"] == "ok"
-    assert result["count"] == 3
-    values = {item["rt_id"]: item["value"] for item in captured["latest"]}
-    assert values == {
-        "rt.power": 0.0,
-        "rt.energy": 0.0,
-        "rt.radiation": 0.0,
-    }
+    assert result["count"] == 0
+    assert captured["latest"] == []
     anomaly_types = {item["anomaly_type"] for item in captured["anomalies"]}
     assert anomaly_types == {"above_max_threshold", "non_finite"}
 
@@ -245,7 +240,8 @@ def test_ingest_logs_negative_demand_anomaly_without_clamping():
     result = module.handler(event, None)
 
     assert result["status"] == "ok"
-    assert captured["latest"][0]["value"] == -106.63
+    assert result["count"] == 0
+    assert captured["latest"] == []
     assert captured["anomalies"][0]["rt_id"] == "uja.jaen.energia.consumo.edificio_a3.p_kw"
     assert captured["anomalies"][0]["anomaly_type"] == "negative_not_allowed"
-    assert captured["anomalies"][0]["applied_value"] == "-106.63"
+    assert captured["anomalies"][0]["applied_value"] is None

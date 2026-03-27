@@ -105,11 +105,11 @@ const MAP_ENTRIES = [
     ["uja.jaen.energia.consumo.edificio_a4.p_kw", 31, 55],
     ["uja.jaen.energia.consumo.edificio_b1.p_kw", 87, 30],
     ["uja.jaen.energia.consumo.edificio_b2.p_kw", 64, 44],
-    ["uja.jaen.energia.consumo.edificio_b3.p_kw", 55, 52],
+    ["uja.jaen.energia.consumo.edificio_b3.p_kw", 58, 52],
     ["uja.jaen.energia.consumo.edificio_b4.p_kw", 45, 60],
     ["uja.jaen.energia.consumo.edificio_b5.p_kw", 36, 67],
-    ["uja.jaen.energia.consumo.edificio_c1.p_kw", 68, 55],
-    ["uja.jaen.energia.consumo.edificio_c2.p_kw", 61, 63],
+    ["uja.jaen.energia.consumo.edificio_c1.p_kw", 73, 49],
+    ["uja.jaen.energia.consumo.edificio_c2.p_kw", 61, 60],
     ["uja.jaen.energia.consumo.edificio_c3.p_kw", 49, 70],
     ["uja.jaen.energia.consumo.edificio_c5.p_kw", 36, 79],
     ["uja.jaen.energia.consumo.edificio_c6.p_kw", 27, 85],
@@ -399,7 +399,6 @@ const PORTAL_ROUTES = [
   { id: "map", hash: "#/mapa", label: "Mapa" },
   { id: "water", hash: "#/agua", label: "Agua" },
   { id: "solar", hash: "#/fotovoltaica", label: "Fotovoltaica" },
-  { id: "projects", hash: "#/autoconsumo", label: "Autoconsumo" },
   { id: "validation", hash: "#/validacion", label: "Validación" },
 ];
 
@@ -443,6 +442,13 @@ const SOLAR_VIEW_CONFIG = [
     gatewayId: "gw_endesa_jaen",
     kind: "Planta FV",
     description: "Generación principal de Endesa en Las Lagunillas.",
+    irradianceRtIds: [
+      "uja.jaen.fv.endesa.rad01.g_wm2",
+      "uja.jaen.fv.endesa.rad02.g_wm2",
+      "uja.jaen.fv.endesa.rad03.g_wm2",
+      "uja.jaen.fv.endesa.rad04.g_wm2",
+      "uja.jaen.fv.endesa.rad05.g_wm2",
+    ],
   },
   {
     id: "autoconsumo_jaen",
@@ -451,6 +457,11 @@ const SOLAR_VIEW_CONFIG = [
     gatewayId: "gw_autoconsumo_jaen",
     kind: "Proyecto autoconsumo",
     description: "Producción de autoconsumo de Jaén para explotación interna.",
+    irradianceRtIds: [
+      "uja.jaen.fv.auto.pergola_rad.g_wm2",
+      "uja.jaen.fv.auto.b5_rad.g_wm2",
+      "uja.jaen.fv.auto.fachada_rad.g_wm2",
+    ],
   },
   {
     id: "endesa_linares",
@@ -459,33 +470,7 @@ const SOLAR_VIEW_CONFIG = [
     gatewayId: "gw_endesa_linares",
     kind: "Planta FV",
     description: "Generación principal de CTL Linares.",
-  },
-];
-
-const PROJECT_VIEW_CONFIG = [
-  {
-    id: "autoconsumo_jaen",
-    campus: "jaen",
-    label: "Autoconsumo Jaén",
-    gatewayId: "gw_autoconsumo_jaen",
-    type: "Autoconsumo fotovoltaico",
-    coverage: "CT total y apoyo a edificio A0",
-  },
-  {
-    id: "endesa_jaen",
-    campus: "jaen",
-    label: "FV Endesa Jaén",
-    gatewayId: "gw_endesa_jaen",
-    type: "Planta fotovoltaica",
-    coverage: "Producción campus Las Lagunillas",
-  },
-  {
-    id: "endesa_linares",
-    campus: "linares",
-    label: "FV Endesa Linares",
-    gatewayId: "gw_endesa_linares",
-    type: "Planta fotovoltaica",
-    coverage: "Producción campus CTL Linares",
+    irradianceRtIds: ["uja.linares.fv.endesa.rad01.g_wm2"],
   },
 ];
 
@@ -547,7 +532,7 @@ const resolveRouteId = (hash) => {
       return "solar";
     case "#/autoconsumo":
     case "#/proyectos":
-      return "projects";
+      return "solar";
     case "#/validacion":
       return "validation";
     default:
@@ -630,6 +615,17 @@ const formatScalar = (value) => {
   return String(value);
 };
 
+const formatDisplayUnit = (unit) => {
+  if (!unit) return "";
+  if (unit === "m3") return "m³";
+  return unit;
+};
+
+const formatAxisTick = (value, unit) => {
+  const suffix = formatDisplayUnit(unit);
+  return suffix ? `${number.format(value)} ${suffix}` : number.format(value);
+};
+
 const filterByPrefixes = (items, prefixes) =>
   items.filter((item) =>
     prefixes.some((prefix) => item.rt_id?.startsWith(prefix))
@@ -683,119 +679,166 @@ const buildMissingSourcesText = (kpisState, seriesState) => {
   return `Datos incompletos: faltan ${labels.join(", ")}.`;
 };
 
-const AreaChart = ({ series }) => {
-  const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
-  const chartSeries = useMemo(() => {
-    const sorted = [...series]
-      .filter(
-        (item) =>
-          Number.isFinite(Number(item?.ts)) &&
-          Number.isFinite(Number(item?.demand)) &&
-          Number.isFinite(Number(item?.pv))
-      )
-      .map((item) => ({
-        ts: Number(item.ts),
-        demand: Number(item.demand),
-        pv: Number(item.pv),
-      }))
-      .sort((a, b) => a.ts - b.ts);
-    if (sorted.length >= 2) return sorted;
-    const seed = sorted[0] || { ts: renderNow, demand: 0, pv: 0 };
-    return [
-      { ...seed, ts: renderNow - 86400 },
-      { ...seed, ts: renderNow },
-    ];
-  }, [renderNow, series]);
+const buildTimeSegments = (series, intervalMinutes = ANALYTICS_SERIES_INTERVAL_MINUTES) => {
+  if (!series.length) return [];
+  const maxGapSeconds = intervalMinutes * 60 + 300;
+  const segments = [];
+  let current = [];
+  let previousTs = null;
 
+  series.forEach((item) => {
+    if (previousTs != null && item.ts - previousTs > maxGapSeconds) {
+      if (current.length) segments.push(current);
+      current = [];
+    }
+    current.push(item);
+    previousTs = item.ts;
+  });
+
+  if (current.length) segments.push(current);
+  return segments;
+};
+
+const buildLinePoints = (segment, xForTs, yForValue, valueKey = "value") =>
+  segment
+    .map((item) => `${xForTs(item.ts).toFixed(2)},${yForValue(item[valueKey]).toFixed(2)}`)
+    .join(" ");
+
+const buildAreaPath = (segment, xForTs, yForValue, baselineY, valueKey = "value") => {
+  if (!segment.length) return "";
+  const linePoints = buildLinePoints(segment, xForTs, yForValue, valueKey);
+  const firstX = xForTs(segment[0].ts).toFixed(2);
+  const lastX = xForTs(segment[segment.length - 1].ts).toFixed(2);
+  return `M ${firstX},${baselineY.toFixed(2)} L ${linePoints} L ${lastX},${baselineY.toFixed(
+    2
+  )} Z`;
+};
+
+const AreaChart = ({
+  series,
+  intervalMinutes = ANALYTICS_SERIES_INTERVAL_MINUTES,
+  unit = "kW",
+}) => {
+  const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
+  const chartSeries = useMemo(
+    () =>
+      [...(series || [])]
+        .filter(
+          (item) =>
+            Number.isFinite(Number(item?.ts)) &&
+            Number.isFinite(Number(item?.demand)) &&
+            Number.isFinite(Number(item?.pv))
+        )
+        .map((item) => ({
+          ts: Number(item.ts),
+          demand: Number(item.demand),
+          pv: Number(item.pv),
+        }))
+        .sort((a, b) => a.ts - b.ts),
+    [series]
+  );
+
+  const width = 120;
+  const height = 44;
+  const paddingLeft = 18;
+  const paddingRight = 6;
+  const paddingTop = 2;
+  const paddingBottom = 10;
+  const plotHeight = height - paddingTop - paddingBottom;
+  const plotWidth = width - paddingLeft - paddingRight;
   const ticksY = 4;
   const { axisMax, tickValues } = buildYAxisScale(
     chartSeries.flatMap((item) => [item.demand, item.pv]),
     ticksY
   );
-  const now = Math.max(
-    renderNow,
-    chartSeries[chartSeries.length - 1]?.ts || 0
-  );
+  const now = Math.max(renderNow, chartSeries[chartSeries.length - 1]?.ts || 0);
   const start = now - 86400;
-  const range = 86400;
-  const plotHeight = 30;
-  const totalHeight = 38;
-  const ticksX = [0, 6, 12, 18, 24];
-
-  const formatHour = (hoursAgo) => {
-    return formatLocalHour(now - hoursAgo * 3600);
-  };
-
-  const buildPath = (key) => {
-    const points = chartSeries.map((item) => {
-      const x = ((item.ts - start) / range) * 100;
-      const y = plotHeight - (item[key] / axisMax) * plotHeight;
-      return [x, y];
-    });
-    const line = points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-    const area = `M ${line} L 100,${plotHeight} L 0,${plotHeight} Z`;
-    return { line, area };
-  };
-
-  const demandPath = buildPath("demand");
-  const pvPath = buildPath("pv");
+  const xForTs = (ts) => paddingLeft + ((ts - start) / 86400) * plotWidth;
+  const yForValue = (value) => paddingTop + plotHeight - (value / axisMax) * plotHeight;
+  const baselineY = paddingTop + plotHeight;
+  const segments = buildTimeSegments(chartSeries, intervalMinutes);
 
   return (
     <svg
       className="area-chart"
-      viewBox="-8 0 108 38"
+      viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label="Curva de demanda y generación fotovoltaica de las últimas 24 horas"
     >
       <g className="axis axis-y">
         {tickValues.map((value, idx) => {
-          const y = (plotHeight / ticksY) * idx;
+          const y = paddingTop + (plotHeight / ticksY) * idx;
           return (
             <g key={`y-${idx}`} transform={`translate(0, ${y})`}>
-              <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
-              <text className="axis-label axis-label-y" x="-1.2" y="-1" textAnchor="end">
-                {number.format(value)}
+              <line className="axis-line" x1={paddingLeft} x2={width - paddingRight} y1="0" y2="0" />
+              <text className="axis-label axis-label-y" x={paddingLeft - 1.5} y="-1">
+                {formatAxisTick(value, unit)}
               </text>
             </g>
           );
         })}
       </g>
       <g className="axis axis-x">
-        {ticksX.map((hours) => {
-          const x = (hours / 24) * 100;
+        {[0, 6, 12, 18, 24].map((hours) => {
+          const x = paddingLeft + (hours / 24) * plotWidth;
           const textAnchor = hours === 0 ? "start" : hours === 24 ? "end" : "middle";
           return (
-            <g key={`x-${hours}`} transform={`translate(${x}, ${plotHeight})`}>
+            <g key={`x-${hours}`} transform={`translate(${x}, ${baselineY})`}>
               <line className="axis-tick" x1="0" x2="0" y1="0" y2="2" />
-              <text className="axis-label" x="0" y="6" textAnchor={textAnchor}>
-                {formatHour(24 - hours)}
+              <text className="axis-label axis-label-x" x="0" y="4.5" textAnchor={textAnchor}>
+                {formatLocalHour(now - (24 - hours) * 3600)}
               </text>
             </g>
           );
         })}
       </g>
-      <path className="area area-demand" d={demandPath.area} />
-      <path className="area area-pv" d={pvPath.area} />
-      <polyline className="line line-demand" points={demandPath.line} />
-      <polyline className="line line-pv" points={pvPath.line} />
+      {segments.map((segment, idx) => (
+        <path key={`demand-area-${idx}`} className="area area-demand" d={buildAreaPath(segment, xForTs, yForValue, baselineY, "demand")} />
+      ))}
+      {segments.map((segment, idx) => (
+        <path key={`pv-area-${idx}`} className="area area-pv" d={buildAreaPath(segment, xForTs, yForValue, baselineY, "pv")} />
+      ))}
+      {segments.map((segment, idx) => (
+        <polyline
+          key={`demand-line-${idx}`}
+          className="line line-demand"
+          points={buildLinePoints(segment, xForTs, yForValue, "demand")}
+        />
+      ))}
+      {segments.map((segment, idx) => (
+        <polyline
+          key={`pv-line-${idx}`}
+          className="line line-pv"
+          points={buildLinePoints(segment, xForTs, yForValue, "pv")}
+        />
+      ))}
     </svg>
   );
 };
 
-const ValueChart = ({ series, label }) => {
+const ValueChart = ({
+  series,
+  label,
+  unit = "kW",
+  intervalMinutes = ANALYTICS_SERIES_INTERVAL_MINUTES,
+}) => {
   const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
-  const chartSeries = useMemo(() => {
-    const normalized = (series || [])
-      .map((item) => ({ ts: item.ts, value: Number(item.value || 0) }))
-      .sort((a, b) => a.ts - b.ts);
-    if (normalized.length >= 2) return normalized;
-    const seed = normalized[0] || { ts: renderNow, value: 0 };
-    return [
-      { ...seed, ts: renderNow - 86400 },
-      { ...seed, ts: renderNow },
-    ];
-  }, [renderNow, series]);
-
+  const chartSeries = useMemo(
+    () =>
+      (series || [])
+        .filter((item) => Number.isFinite(Number(item?.ts)) && Number.isFinite(Number(item?.value)))
+        .map((item) => ({ ts: Number(item.ts), value: Number(item.value) }))
+        .sort((a, b) => a.ts - b.ts),
+    [series]
+  );
+  const width = 120;
+  const height = 64;
+  const paddingLeft = 18;
+  const paddingRight = 6;
+  const paddingTop = 2;
+  const paddingBottom = 11;
+  const plotHeight = height - paddingTop - paddingBottom;
+  const plotWidth = width - paddingLeft - paddingRight;
   const ticksY = 4;
   const { axisMax, tickValues } = buildYAxisScale(
     chartSeries.map((item) => item.value),
@@ -803,57 +846,167 @@ const ValueChart = ({ series, label }) => {
   );
   const now = Math.max(renderNow, chartSeries[chartSeries.length - 1]?.ts || 0);
   const start = now - 86400;
-  const range = 86400;
-  const height = 60;
-  const ticksX = [0, 6, 12, 18, 24];
-
-  const formatHour = (hoursAgo) => {
-    return formatLocalHour(now - hoursAgo * 3600);
-  };
-
-  const points = chartSeries.map((item) => {
-    const x = ((item.ts - start) / range) * 100;
-    const y = height - (item.value / axisMax) * height;
-    return [x, y];
-  });
-  const line = points.map(([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`).join(" ");
-  const area = `M ${line} L 100,${height} L 0,${height} Z`;
+  const xForTs = (ts) => paddingLeft + ((ts - start) / 86400) * plotWidth;
+  const yForValue = (value) => paddingTop + plotHeight - (value / axisMax) * plotHeight;
+  const baselineY = paddingTop + plotHeight;
+  const segments = buildTimeSegments(chartSeries, intervalMinutes);
 
   return (
-    <svg
-      className="value-chart"
-      viewBox="-12 0 112 60"
-      role="img"
-      aria-label={`${label} últimas 24 horas`}
-    >
+    <svg className="value-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label} últimas 24 horas`}>
       <g className="axis axis-y">
         {tickValues.map((value, idx) => {
-          const y = (height / ticksY) * idx;
+          const y = paddingTop + (plotHeight / ticksY) * idx;
           return (
             <g key={`value-y-${idx}`} transform={`translate(0, ${y})`}>
-              <line className="axis-line" x1="0" x2="100" y1="0" y2="0" />
-              <text className="axis-label axis-label-y" x="-2" y="-1">
-                {number.format(value)}
+              <line className="axis-line" x1={paddingLeft} x2={width - paddingRight} y1="0" y2="0" />
+              <text className="axis-label axis-label-y" x={paddingLeft - 1.5} y="-1">
+                {formatAxisTick(value, unit)}
               </text>
             </g>
           );
         })}
       </g>
       <g className="axis axis-x">
-        {ticksX.map((hours) => {
-          const x = (hours / 24) * 100;
+        {[0, 6, 12, 18, 24].map((hours) => {
+          const x = paddingLeft + (hours / 24) * plotWidth;
+          const textAnchor = hours === 0 ? "start" : hours === 24 ? "end" : "middle";
           return (
-            <g key={`value-x-${hours}`} transform={`translate(${x}, ${height})`}>
+            <g key={`value-x-${hours}`} transform={`translate(${x}, ${baselineY})`}>
               <line className="axis-tick" x1="0" x2="0" y1="0" y2="2" />
-              <text className="axis-label" x="0" y="6">
-                {formatHour(24 - hours)}
+              <text className="axis-label axis-label-x" x="0" y="4.5" textAnchor={textAnchor}>
+                {formatLocalHour(now - (24 - hours) * 3600)}
               </text>
             </g>
           );
         })}
       </g>
-      <path className="value-area" d={area} />
-      <polyline className="value-line" points={line} />
+      {segments.map((segment, idx) => (
+        <path key={`value-area-${idx}`} className="value-area" d={buildAreaPath(segment, xForTs, yForValue, baselineY)} />
+      ))}
+      {segments.map((segment, idx) => (
+        <polyline
+          key={`value-line-${idx}`}
+          className="value-line"
+          points={buildLinePoints(segment, xForTs, yForValue)}
+        />
+      ))}
+    </svg>
+  );
+};
+
+const SolarDualAxisChart = ({
+  powerSeries,
+  irradianceSeries,
+  label,
+  intervalMinutes = ANALYTICS_SERIES_INTERVAL_MINUTES,
+}) => {
+  const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
+  const normalizedPower = useMemo(
+    () =>
+      (powerSeries || [])
+        .filter((item) => Number.isFinite(Number(item?.ts)) && Number.isFinite(Number(item?.value)))
+        .map((item) => ({ ts: Number(item.ts), value: Number(item.value) }))
+        .sort((a, b) => a.ts - b.ts),
+    [powerSeries]
+  );
+  const normalizedIrradiance = useMemo(
+    () =>
+      (irradianceSeries || [])
+        .filter((item) => Number.isFinite(Number(item?.ts)) && Number.isFinite(Number(item?.value)))
+        .map((item) => ({ ts: Number(item.ts), value: Number(item.value) }))
+        .sort((a, b) => a.ts - b.ts),
+    [irradianceSeries]
+  );
+  const width = 124;
+  const height = 64;
+  const paddingLeft = 18;
+  const paddingRight = 18;
+  const paddingTop = 2;
+  const paddingBottom = 11;
+  const plotHeight = height - paddingTop - paddingBottom;
+  const plotWidth = width - paddingLeft - paddingRight;
+  const ticksY = 4;
+  const powerScale = buildYAxisScale(normalizedPower.map((item) => item.value), ticksY);
+  const irradianceScale = buildYAxisScale(normalizedIrradiance.map((item) => item.value), ticksY);
+  const hasIrradiance = normalizedIrradiance.length > 0;
+  const now = Math.max(
+    renderNow,
+    normalizedPower[normalizedPower.length - 1]?.ts || 0,
+    normalizedIrradiance[normalizedIrradiance.length - 1]?.ts || 0
+  );
+  const start = now - 86400;
+  const xForTs = (ts) => paddingLeft + ((ts - start) / 86400) * plotWidth;
+  const yForPower = (value) =>
+    paddingTop + plotHeight - (value / powerScale.axisMax) * plotHeight;
+  const yForIrradiance = (value) =>
+    paddingTop + plotHeight - (value / irradianceScale.axisMax) * plotHeight;
+  const baselineY = paddingTop + plotHeight;
+  const powerSegments = buildTimeSegments(normalizedPower, intervalMinutes);
+  const irradianceSegments = buildTimeSegments(normalizedIrradiance, intervalMinutes);
+
+  return (
+    <svg className="solar-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label} potencia e irradiancia últimas 24 horas`}>
+      <g className="axis axis-y">
+        {powerScale.tickValues.map((value, idx) => {
+          const y = paddingTop + (plotHeight / ticksY) * idx;
+          return (
+            <g key={`solar-y-left-${idx}`} transform={`translate(0, ${y})`}>
+              <line className="axis-line" x1={paddingLeft} x2={width - paddingRight} y1="0" y2="0" />
+              <text className="axis-label axis-label-y" x={paddingLeft - 1.5} y="-1">
+                {formatAxisTick(value, "kW")}
+              </text>
+            </g>
+          );
+        })}
+        {hasIrradiance
+          ? irradianceScale.tickValues.map((value, idx) => {
+              const y = paddingTop + (plotHeight / ticksY) * idx;
+              return (
+                <text
+                  key={`solar-y-right-${idx}`}
+                  className="axis-label axis-label-y-right"
+                  x={width - paddingRight + 1.5}
+                  y={y - 1}
+                >
+                  {formatAxisTick(value, "W/m²")}
+                </text>
+              );
+            })
+          : null}
+      </g>
+      <g className="axis axis-x">
+        {[0, 6, 12, 18, 24].map((hours) => {
+          const x = paddingLeft + (hours / 24) * plotWidth;
+          const textAnchor = hours === 0 ? "start" : hours === 24 ? "end" : "middle";
+          return (
+            <g key={`solar-x-${hours}`} transform={`translate(${x}, ${baselineY})`}>
+              <line className="axis-tick" x1="0" x2="0" y1="0" y2="2" />
+              <text className="axis-label axis-label-x" x="0" y="4.5" textAnchor={textAnchor}>
+                {formatLocalHour(now - (24 - hours) * 3600)}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+      {powerSegments.map((segment, idx) => (
+        <path key={`solar-area-${idx}`} className="value-area" d={buildAreaPath(segment, xForTs, yForPower, baselineY)} />
+      ))}
+      {powerSegments.map((segment, idx) => (
+        <polyline
+          key={`solar-line-power-${idx}`}
+          className="value-line"
+          points={buildLinePoints(segment, xForTs, yForPower)}
+        />
+      ))}
+      {hasIrradiance
+        ? irradianceSegments.map((segment, idx) => (
+            <polyline
+              key={`solar-line-irradiance-${idx}`}
+              className="line line-irradiance"
+              points={buildLinePoints(segment, xForTs, yForIrradiance)}
+            />
+          ))
+        : null}
     </svg>
   );
 };
@@ -959,7 +1112,6 @@ function App() {
   const [periodFilter, setPeriodFilter] = useState("actual");
   const [mapLayer, setMapLayer] = useState("energy");
   const [selectedMapPoint, setSelectedMapPoint] = useState(null);
-  const [selectedProjectId, setSelectedProjectId] = useState(PROJECT_VIEW_CONFIG[0].id);
   const [validationDomainFilter, setValidationDomainFilter] = useState("all");
   const [validationActiveTabs, setValidationActiveTabs] = useState(() =>
     Object.fromEntries(GATEWAYS.map((gateway) => [gateway.id, "latest"]))
@@ -1003,6 +1155,15 @@ function App() {
         series: { status: "idle", data: null, error: null },
         daily: { status: "idle", data: null, error: null },
         monthly: { status: "idle", data: null, error: null },
+      };
+    });
+    return initial;
+  });
+  const [solarMetrics, setSolarMetrics] = useState(() => {
+    const initial = {};
+    SOLAR_VIEW_CONFIG.forEach((config) => {
+      initial[config.id] = {
+        irradiance: { status: "idle", data: null, error: null },
       };
     });
     return initial;
@@ -1173,9 +1334,7 @@ function App() {
         campus: gateway.campus,
         metric: gateway.seriesMetric,
       });
-      if (["agua_consumo", "fv_endesa", "fv_auto"].includes(gateway.seriesMetric)) {
-        params.set("interval_minutes", String(ANALYTICS_SERIES_INTERVAL_MINUTES));
-      }
+      params.set("interval_minutes", String(ANALYTICS_SERIES_INTERVAL_MINUTES));
       const payload = await fetchWithFallback(`/series/24h?${params.toString()}`);
       setValidation((prev) => ({
         ...prev,
@@ -1190,6 +1349,49 @@ function App() {
         [gateway.id]: {
           ...prev[gateway.id],
           series: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
+  const fetchSolarIrradianceSeries = async (config) => {
+    if (!config.irradianceRtIds?.length) {
+      setSolarMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          irradiance: { status: "na", data: null, error: null },
+        },
+      }));
+      return;
+    }
+    try {
+      setSolarMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          irradiance: { ...prev[config.id].irradiance, status: "loading", error: null },
+        },
+      }));
+      const params = new URLSearchParams({
+        aggregation: "avg",
+        interval_minutes: String(ANALYTICS_SERIES_INTERVAL_MINUTES),
+      });
+      config.irradianceRtIds.forEach((rtId) => params.append("rt_id", rtId));
+      const payload = await fetchWithFallback(`/series/24h?${params.toString()}`);
+      setSolarMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          irradiance: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setSolarMetrics((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          irradiance: { status: "error", data: null, error: error.message },
         },
       }));
     }
@@ -1362,6 +1564,9 @@ function App() {
       fetchGatewaySeries(gateway);
       fetchGatewayAggregates(gateway, "daily");
       fetchGatewayAggregates(gateway, "monthly");
+    });
+    SOLAR_VIEW_CONFIG.forEach((config) => {
+      fetchSolarIrradianceSeries(config);
     });
   };
 
@@ -1676,6 +1881,7 @@ function App() {
         gateway,
         latestItems,
         seriesItems: state.series?.data?.series || [],
+        seriesUnit: state.series?.data?.unit || "--",
         dailySeries: state.daily?.data?.series || [],
         monthlySeries: state.monthly?.data?.series || [],
         latestStatus: state.latest?.status || "idle",
@@ -1709,6 +1915,7 @@ function App() {
         latestItems: latest.latestItems || [],
         latestStatus: latest.latestStatus || "idle",
         seriesItems: metrics.series?.data?.series || [],
+        seriesUnit: metrics.series?.data?.unit || "--",
         seriesStatus: metrics.series?.status || "idle",
         dailyValue: getLastAggregateValue(metrics.daily?.data?.series || []),
         dailyUnit: metrics.daily?.data?.unit || "--",
@@ -1753,6 +1960,21 @@ function App() {
     };
   }, [gatewayOverview]);
 
+  const solarOverview = useMemo(() => {
+    const result = {};
+    SOLAR_VIEW_CONFIG.forEach((config) => {
+      const summary = gatewayOverview[config.gatewayId] || {};
+      const irradiance = solarMetrics[config.id]?.irradiance || {};
+      result[config.id] = {
+        ...summary,
+        irradianceItems: irradiance.data?.series || [],
+        irradianceUnit: irradiance.data?.unit || "W/m²",
+        irradianceStatus: irradiance.status || "idle",
+      };
+    });
+    return result;
+  }, [gatewayOverview, solarMetrics]);
+
   const anomaliesRows = useMemo(() => {
     return (anomalies.data?.items || [])
       .map((item) => ({
@@ -1788,10 +2010,6 @@ function App() {
       setSelectedMapPoint(visibleMapEntries[0].id);
     }
   }, [routeId, selectedMapPoint, visibleMapEntries]);
-
-  const selectedProject =
-    PROJECT_VIEW_CONFIG.find((item) => item.id === selectedProjectId) || PROJECT_VIEW_CONFIG[0];
-  const selectedProjectData = gatewayOverview[selectedProject.gatewayId];
 
   const renderStatus = (state) => {
     if (state.status === "na") return "No disponible";
@@ -2030,7 +2248,7 @@ function App() {
               <span className="legend-item pv">Curva Generación kW</span>
             </div>
             {isComplete && chartSeries.length ? (
-              <AreaChart series={chartSeries} />
+              <AreaChart series={chartSeries} unit="kW" />
             ) : (
               <div className="chart-empty">{chartEmptyText}</div>
             )}
@@ -2096,7 +2314,7 @@ function App() {
         <span className="summary-card-copy">Última actualización {formatTs(scopeSummary?.tsEvent)}</span>
         {scopeSummary?.chartSeries?.length ? (
           <div className="summary-chart">
-            <AreaChart series={scopeSummary.chartSeries} />
+            <AreaChart series={scopeSummary.chartSeries} unit="kW" />
           </div>
         ) : (
           <div className="chart-empty">Sin curva resumida disponible.</div>
@@ -2154,15 +2372,8 @@ function App() {
     solar: {
       title: "Monitorización fotovoltaica",
       subtitle:
-        "Explotación especializada de plantas e instalaciones FV con KPIs, producción y curvas.",
+        "Explotación unificada de plantas FV y autoconsumo con KPIs, producción, irradiancia y curvas.",
       primaryLabel: "Actualizar FV",
-      primaryAction: refreshOperationalData,
-    },
-    projects: {
-      title: "Autoconsumo",
-      subtitle:
-        "Seguimiento de instalaciones y activos de autoconsumo con ficha técnica y tendencia.",
-      primaryLabel: "Actualizar autoconsumo",
       primaryAction: refreshOperationalData,
     },
     validation: {
@@ -2199,7 +2410,7 @@ function App() {
 
   const renderToolbar = () => {
     const controls = [];
-    const addCampusControl = !["summary", "map", "projects"].includes(routeId);
+    const addCampusControl = !["summary", "map"].includes(routeId);
     const addPeriodControl = !["summary", "map", "validation"].includes(routeId);
 
     if (addCampusControl) {
@@ -2259,41 +2470,6 @@ function App() {
       );
     }
 
-    if (routeId === "projects") {
-      controls.push(
-        <label key="project" className="toolbar-field">
-          <span className="toolbar-label">Activo</span>
-          <select
-            className="toolbar-select"
-            value={selectedProjectId}
-            onChange={(event) => setSelectedProjectId(event.target.value)}
-          >
-            {PROJECT_VIEW_CONFIG.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      );
-      controls.push(
-        <label key="project-period" className="toolbar-field">
-          <span className="toolbar-label">Periodo</span>
-          <select
-            className="toolbar-select"
-            value={periodFilter}
-            onChange={(event) => setPeriodFilter(event.target.value)}
-          >
-            {PERIOD_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      );
-    }
-
     if (routeId === "validation") {
       controls.push(
         <label key="domain" className="toolbar-field">
@@ -2318,8 +2494,8 @@ function App() {
       note = `${visibleMapEntries.length} puntos visibles en la capa actual.`;
     } else if (routeId === "validation") {
       note = `${filteredValidationGateways.length} gateways visibles en seguimiento.`;
-    } else if (routeId === "projects") {
-      note = `${selectedProject.label} · ${selectedProject.type}.`;
+    } else if (routeId === "solar") {
+      note = `${filteredSolarConfigs.length} instalaciones FV visibles.`;
     } else if (routeId === "summary") {
       note = `${summaryEnergyConfigs.length} campus en seguimiento.`;
     }
@@ -2357,14 +2533,8 @@ function App() {
       {
         href: "#/fotovoltaica",
         title: "Fotovoltaica",
-        copy: "Explotación por instalación con producción y tendencia.",
+        copy: "Explotación unificada por instalación, incluyendo autoconsumo e irradiancia.",
         status: `${SOLAR_VIEW_CONFIG.length} instalaciones`,
-      },
-      {
-        href: "#/autoconsumo",
-        title: "Autoconsumo",
-        copy: "Seguimiento de instalaciones y activos vinculados al autoconsumo.",
-        status: `${PROJECT_VIEW_CONFIG.length} activos disponibles`,
       },
       {
         href: "#/validacion",
@@ -2629,7 +2799,12 @@ function App() {
                     <div className="api-card">
                       <h4 className="api-card-title">Tendencia y totales</h4>
                       {canRenderTrend ? (
-                        <ValueChart series={summary.seriesItems} label={`Agua ${config.label}`} />
+                        <ValueChart
+                          series={summary.seriesItems}
+                          label={`Agua ${config.label}`}
+                          unit={summary?.seriesUnit || "m3"}
+                          intervalMinutes={ANALYTICS_SERIES_INTERVAL_MINUTES}
+                        />
                       ) : (
                         <div className="chart-empty">Sin serie operativa disponible todavía.</div>
                       )}
@@ -2671,13 +2846,13 @@ function App() {
           <div className="section-header">
             <h2 className="section-title">Instalaciones fotovoltaicas</h2>
             <p className="section-subtitle">
-              Cada planta se presenta como vista especializada con KPIs propios y curva
-              independiente.
+              El módulo integra producción FV y autoconsumo con KPIs unificados, curva de potencia
+              e irradiancia agregada por instalación.
             </p>
           </div>
           <div className="solar-stack">
             {filteredSolarConfigs.map((config) => {
-              const summary = gatewayOverview[config.gatewayId];
+              const summary = solarOverview[config.id];
               const highlighted = pickMetricSnapshot({
                 currentLabel: "Potencia instantánea",
                 currentValue: summary?.latestValue,
@@ -2735,7 +2910,20 @@ function App() {
                     </div>
                   </div>
                   {summary?.seriesItems?.length ? (
-                    <ValueChart series={summary.seriesItems} label={config.label} />
+                    <div className="chart-card chart-card-solar">
+                      <div className="chart-legend">
+                        <span className="legend-item demand">Potencia kW</span>
+                        {summary?.irradianceItems?.length ? (
+                          <span className="legend-item irradiance">Irradiancia W/m²</span>
+                        ) : null}
+                      </div>
+                      <SolarDualAxisChart
+                        powerSeries={summary.seriesItems}
+                        irradianceSeries={summary.irradianceItems}
+                        label={config.label}
+                        intervalMinutes={ANALYTICS_SERIES_INTERVAL_MINUTES}
+                      />
+                    </div>
                   ) : (
                     <div className="chart-empty">Sin curva de producción disponible.</div>
                   )}
@@ -2747,119 +2935,6 @@ function App() {
       </section>
     </>
   );
-
-  const renderProjectsView = () => {
-    const linkedEnergy =
-      selectedProject.campus === "jaen"
-        ? dashboardOverview.las_lagunillas
-        : dashboardOverview.ctl_linares;
-    const highlighted = pickMetricSnapshot({
-      currentLabel: "Potencia instantánea",
-      currentValue: selectedProjectData?.latestValue,
-      currentUnit: selectedProjectData?.latestUnit,
-      dailyLabel: "Producción diaria",
-      dailyValue: selectedProjectData?.dailyValue,
-      dailyUnit: selectedProjectData?.dailyUnit,
-      monthlyLabel: "Producción mensual",
-      monthlyValue: selectedProjectData?.monthlyValue,
-      monthlyUnit: selectedProjectData?.monthlyUnit,
-    });
-
-    return (
-      <>
-        <section className="section">
-          <div className="container">
-            <div className="section-header">
-              <h2 className="section-title">Ficha del activo</h2>
-              <p className="section-subtitle">Datos técnicos y tendencia del activo seleccionado.</p>
-            </div>
-            <div className="insight-grid">
-              <article className="insight-card">
-                <span className="insight-label">{highlighted.label}</span>
-                <strong className="insight-value">
-                  {formatValue(highlighted.value, highlighted.unit)}
-                </strong>
-                <span className="insight-note">{selectedProject.label}</span>
-              </article>
-              <article className="insight-card">
-                <span className="insight-label">Producción diaria</span>
-                <strong className="insight-value">
-                  {formatValue(selectedProjectData?.dailyValue, selectedProjectData?.dailyUnit)}
-                </strong>
-                <span className="insight-note">Acumulado diario</span>
-              </article>
-              <article className="insight-card">
-                <span className="insight-label">Producción mensual</span>
-                <strong className="insight-value">
-                  {formatValue(selectedProjectData?.monthlyValue, selectedProjectData?.monthlyUnit)}
-                </strong>
-                <span className="insight-note">Acumulado mensual</span>
-              </article>
-              <article className="insight-card">
-                <span className="insight-label">Autoconsumo campus</span>
-                <strong className="insight-value">
-                  {formatValue(linkedEnergy?.autoconsumoPct, "%")}
-                </strong>
-                <span className="insight-note">Referencia operativa del campus</span>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <section className="section">
-          <div className="container">
-            <div className="project-layout">
-              <article className="gateway-card">
-                <div className="gateway-header">
-                  <div>
-                    <h3 className="gateway-title">{selectedProject.label}</h3>
-                    <div className="gateway-topic">{selectedProject.type}</div>
-                  </div>
-                  <div
-                    className={`dashboard-status status-${getStatusKind(
-                      selectedProjectData?.latestStatus
-                    )}`}
-                  >
-                    {renderStatus({ status: selectedProjectData?.latestStatus })}
-                  </div>
-                </div>
-                {selectedProjectData?.seriesItems?.length ? (
-                  <ValueChart series={selectedProjectData.seriesItems} label={selectedProject.label} />
-                ) : (
-                  <div className="chart-empty">Sin tendencia temporal disponible.</div>
-                )}
-              </article>
-              <article className="api-card project-sheet">
-                <h3 className="api-card-title">Ficha técnica</h3>
-                <div className="detail-stack">
-                  <div className="detail-row">
-                    <span className="detail-key">Campus</span>
-                    <span className="detail-value">{selectedProject.campus}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-key">Gateway</span>
-                    <span className="detail-value">{selectedProject.gatewayId}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-key">Tipología</span>
-                    <span className="detail-value">{selectedProject.type}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-key">Cobertura</span>
-                    <span className="detail-value">{selectedProject.coverage}</span>
-                  </div>
-                  <div className="detail-row">
-                    <span className="detail-key">Última lectura</span>
-                    <span className="detail-value">{formatTs(selectedProjectData?.latestTs)}</span>
-                  </div>
-                </div>
-              </article>
-            </div>
-          </div>
-        </section>
-      </>
-    );
-  };
 
   const renderValidationView = () => (
     <>
@@ -2963,7 +3038,6 @@ function App() {
     if (routeId === "map") return renderMapView();
     if (routeId === "water") return renderWaterView();
     if (routeId === "solar") return renderSolarView();
-    if (routeId === "projects") return renderProjectsView();
     return renderValidationView();
   };
 

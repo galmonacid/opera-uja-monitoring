@@ -772,6 +772,10 @@
   background: var(--uja-gold);
 }
 
+.legend-item.irradiance::before {
+  background: var(--uja-gold);
+}
+
 .area-chart {
   width: 100%;
   height: auto;
@@ -806,8 +810,18 @@
 
 .value-chart {
   width: 100%;
-  height: 220px;
+  height: auto;
+  display: block;
   overflow: visible;
+  aspect-ratio: 120 / 64;
+}
+
+.solar-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+  aspect-ratio: 124 / 64;
 }
 
 .value-area {
@@ -833,6 +847,10 @@
   stroke: var(--uja-gold);
 }
 
+.line-irradiance {
+  stroke: var(--uja-gold);
+}
+
 .axis-line {
   stroke: rgba(35, 31, 32, 0.14);
   stroke-width: 0.5;
@@ -854,8 +872,8 @@
   text-anchor: end;
 }
 
-.axis-x .axis-label {
-  text-anchor: middle;
+.axis-label-y-right {
+  text-anchor: start;
 }
 
 .map-frame {
@@ -988,6 +1006,10 @@
 .solar-stack {
   display: grid;
   gap: var(--space-6);
+}
+
+.chart-card-solar {
+  min-width: 0;
 }
 
 .gateway-card {
