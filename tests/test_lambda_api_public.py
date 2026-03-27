@@ -304,6 +304,96 @@ def test_series_24h_by_rt_ids_supports_avg_aggregation():
     ]
 
 
+def test_query_timeseries_uses_mean_of_valid_samples_within_bin():
+    api = load_lambda_module()
+    api.current_balance_cutoff_ts = lambda: 2000000000
+    rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:01:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
+                {"ScalarValue": "100"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:11:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
+                {"ScalarValue": "200"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:04:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv02.p_ac_kw"},
+                {"ScalarValue": "50"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:13:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv02.p_ac_kw"},
+                {"ScalarValue": "70"},
+            ]
+        },
+    ]
+
+    api.query_timestream = lambda _query: rows
+
+    result = api.query_timeseries(
+        [
+            "uja.jaen.fv.endesa.inv01.p_ac_kw",
+            "uja.jaen.fv.endesa.inv02.p_ac_kw",
+        ],
+        interval_minutes=15,
+        analytics=True,
+    )
+
+    assert result == {
+        1735689600: 210.0,
+    }
+
+
+def test_query_timeseries_drops_invalid_irradiance_samples_before_bin_average():
+    api = load_lambda_module()
+    api.current_balance_cutoff_ts = lambda: 2000000000
+    rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:01:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.pergola_rad.g_wm2"},
+                {"ScalarValue": "600"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:06:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.pergola_rad.g_wm2"},
+                {"ScalarValue": "300000"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:11:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.auto.b5_rad.g_wm2"},
+                {"ScalarValue": "900"},
+            ]
+        },
+    ]
+
+    api.query_timestream = lambda _query: rows
+
+    result = api.get_series_24h_by_rt_ids(
+        {"aggregation": "avg", "interval_minutes": "15"},
+        {"rt_id": ["uja.jaen.fv.auto.pergola_rad.g_wm2", "uja.jaen.fv.auto.b5_rad.g_wm2"]},
+    )
+
+    assert result["unit"] == "W/m²"
+    assert result["series"] == [
+        {"ts": 1735689600, "value": 750.0},
+    ]
+
+
 def test_handler_series_24h_route():
     api = load_lambda_module()
     def fake_series(params):
@@ -687,8 +777,20 @@ def test_daily_water_aggregates_fallback_from_counters():
 def test_series_by_prefix():
     api = load_lambda_module()
     rows = [
-        {"Data": [{"ScalarValue": "2025-01-01 00:00:00.000000000"}, {"ScalarValue": "5"}]},
-        {"Data": [{"ScalarValue": "2025-01-01 00:15:00.000000000"}, {"ScalarValue": "7"}]},
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
+                {"ScalarValue": "5"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:15:00.000000000"},
+                {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
+                {"ScalarValue": "7"},
+            ]
+        },
     ]
 
     api.query_timestream = lambda _query: rows

@@ -918,11 +918,11 @@ const SolarDualAxisChart = ({
     [irradianceSeries]
   );
   const width = 124;
-  const height = 64;
+  const height = 44;
   const paddingLeft = 18;
   const paddingRight = 18;
   const paddingTop = 2;
-  const paddingBottom = 11;
+  const paddingBottom = 10;
   const plotHeight = height - paddingTop - paddingBottom;
   const plotWidth = width - paddingLeft - paddingRight;
   const ticksY = 4;

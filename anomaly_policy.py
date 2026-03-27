@@ -1,5 +1,6 @@
 import math
 
+MAX_VALID_IRRADIANCE_WM2 = 2000.0
 
 ALLOWED_NEGATIVE_RT_IDS = {
     "uja.jaen.fv.endesa.ct_total.p_kw",
@@ -24,6 +25,8 @@ def threshold_for_unit(unit, max_valid_value, max_valid_value_kwh):
     unit_value = str(unit or "").strip().lower()
     if unit_value == "kwh":
         return float(max_valid_value_kwh)
+    if unit_value in {"w/m²", "w/m2"}:
+        return MAX_VALID_IRRADIANCE_WM2
     return float(max_valid_value)
 
 

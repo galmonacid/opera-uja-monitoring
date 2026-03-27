@@ -1193,33 +1193,48 @@ def query_timeseries_by_select(
     where_clauses.append(f"measure_value::double >= {-MAX_VALID_VALUE}")
     query = f"""
 SELECT
-  bin(time, {interval_minutes}m) AS ts,
+  time,
   rt_id,
-  max_by(measure_value::double, time) AS value
+  measure_value::double AS value
 FROM "{TS_DATABASE}"."{TS_TABLE}"
 WHERE {" AND ".join(where_clauses)}
-GROUP BY rt_id, bin(time, {interval_minutes}m)
-ORDER BY ts, rt_id
+ORDER BY rt_id, time
 """
     rows = query_timestream(query)
+    resolved_rt_ids = sorted(
+        {
+            data[1].get("ScalarValue")
+            for row in rows
+            for data in [row.get("Data", [])]
+            if len(data) >= 2 and data[1].get("ScalarValue")
+        }
+    )
     if analytics:
-        resolved_rt_ids = sorted({data[1].get("ScalarValue") for row in rows for data in [row.get("Data", [])] if len(data) >= 2 and data[1].get("ScalarValue")})
-        anomaly_buckets = get_recent_anomaly_bucket_map(
+        anomaly_exact = get_recent_anomaly_exact_map(
             resolved_rt_ids,
             min_ts=get_recent_series_min_ts(),
-            interval_minutes=interval_minutes,
         )
-        series_maps = rows_to_timeseries_by_rt_maps(
+        series_maps = rows_to_binned_timeseries_by_rt_maps(
             rows,
+            interval_minutes=interval_minutes,
             analytics=True,
-            anomaly_buckets=anomaly_buckets,
+            anomaly_exact=anomaly_exact,
         )
         return aggregate_aligned_series_maps(
             list(series_maps.values()),
             interval_minutes=interval_minutes,
             aggregation=aggregation,
         )
-    return rows_to_timeseries_sum_map(rows)
+    series_maps = rows_to_binned_timeseries_by_rt_maps(
+        rows,
+        interval_minutes=interval_minutes,
+        analytics=False,
+    )
+    return aggregate_aligned_series_maps(
+        list(series_maps.values()),
+        interval_minutes=interval_minutes,
+        aggregation=aggregation,
+    )
 
 
 def query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
@@ -1437,34 +1452,14 @@ def rows_to_series_map(rows):
     return result
 
 
-def rows_to_timeseries_sum_map(rows):
-    result = {}
-    for row in rows:
-        data = row.get("Data", [])
-        if len(data) < 2:
-            continue
-        ts_value = data[0].get("ScalarValue")
-        ts_epoch = parse_ts(ts_value)
-        if ts_epoch == 0:
-            continue
-        if len(data) >= 3:
-            rt_id = data[1].get("ScalarValue")
-            value_raw = data[2].get("ScalarValue")
-        else:
-            rt_id = None
-            value_raw = data[1].get("ScalarValue")
-        if value_raw is None:
-            continue
-        value = float(value_raw)
-        if rt_id:
-            value = normalize_rt_value(rt_id, value)
-        result[ts_epoch] = result.get(ts_epoch, 0.0) + value
-    return result
-
-
-def rows_to_timeseries_by_rt_maps(rows, analytics=False, anomaly_buckets=None):
-    result = {}
-    anomaly_buckets = anomaly_buckets or {}
+def rows_to_binned_timeseries_by_rt_maps(
+    rows,
+    interval_minutes,
+    analytics=False,
+    anomaly_exact=None,
+):
+    anomaly_exact = anomaly_exact or {}
+    grouped = {}
     for row in rows:
         data = row.get("Data", [])
         if len(data) < 3:
@@ -1477,17 +1472,31 @@ def rows_to_timeseries_by_rt_maps(rows, analytics=False, anomaly_buckets=None):
         ts_epoch = parse_ts(ts_value)
         if ts_epoch == 0:
             continue
-        if analytics and ts_epoch in anomaly_buckets.get(rt_id, set()):
+        if analytics and ts_epoch in anomaly_exact.get(rt_id, set()):
             continue
         if analytics:
             valid, applied_value, _anomaly = sanitize_for_analytics_value(rt_id, value_raw)
             if not valid:
                 continue
-            value = applied_value
+            value = float(applied_value)
         else:
-            value = normalize_rt_value(rt_id, float(value_raw))
-        result.setdefault(rt_id, {})[ts_epoch] = float(value)
-    return result
+            value = float(normalize_rt_value(rt_id, float(value_raw)))
+        bucket_ts = bucket_timestamp(ts_epoch, interval_minutes)
+        bucket_state = grouped.setdefault(rt_id, {}).setdefault(
+            bucket_ts,
+            {"sum": 0.0, "count": 0},
+        )
+        bucket_state["sum"] += value
+        bucket_state["count"] += 1
+
+    return {
+        rt_id: {
+            ts: bucket["sum"] / bucket["count"]
+            for ts, bucket in sorted(ts_buckets.items())
+            if bucket["count"] > 0
+        }
+        for rt_id, ts_buckets in grouped.items()
+    }
 
 
 def infer_rt_unit(rt_id):
