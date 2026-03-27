@@ -11,6 +11,7 @@ try:
     from anomaly_policy import (
         NEGATIVE_TO_ZERO_RT_IDS,
         build_anomaly_event_key,
+        derive_rt_metadata,
         detect_anomaly,
         format_anomaly_value,
         normalize_sentinel_value,
@@ -21,6 +22,7 @@ except ModuleNotFoundError:
     from anomaly_policy import (
         NEGATIVE_TO_ZERO_RT_IDS,
         build_anomaly_event_key,
+        derive_rt_metadata,
         detect_anomaly,
         format_anomaly_value,
         normalize_sentinel_value,
@@ -205,6 +207,8 @@ def handler(event, context):
     if path.endswith("/anomalies"):
         return response(get_anomalies(params))
     if path.endswith("/series/24h"):
+        if (multi_params.get("rt_id") or params.get("rt_id")) and not params.get("scope"):
+            return response(get_series_24h_by_rt_ids(params, multi_params))
         if params.get("metric"):
             return response(get_series_24h_by_metric(params))
         if params.get("rt_prefix"):
@@ -498,6 +502,93 @@ def normalize_anomaly_item(item):
     }
 
 
+def query_all_anomalies_by_campus_domain(campus, domain, min_ts):
+    items = []
+    last_key = None
+    min_event_key = build_anomaly_event_key(min_ts, "", "")
+    while True:
+        kwargs = {
+            "IndexName": "campus_domain_event_key",
+            "KeyConditionExpression": Key("campus_domain").eq(f"{campus}#{domain}") & Key("event_key").gte(min_event_key),
+            "ScanIndexForward": False,
+        }
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        response = get_anomalies_table().query(**kwargs)
+        items.extend(normalize_anomaly_item(item) for item in response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+    return items
+
+
+def get_recent_anomaly_maps(rt_ids, min_ts, interval_minutes=None):
+    exact = {}
+    bucketed = {}
+    if not rt_ids:
+        return exact, bucketed
+
+    grouped = {}
+    for rt_id in sorted(set(rt_ids)):
+        metadata = derive_rt_metadata(rt_id)
+        key = (metadata["campus"], metadata["domain"])
+        grouped.setdefault(key, set()).add(rt_id)
+
+    for (campus, domain), scoped_rt_ids in grouped.items():
+        items = query_all_anomalies_by_campus_domain(campus, domain, min_ts=min_ts)
+        for item in items:
+            rt_id = item.get("rt_id")
+            if rt_id not in scoped_rt_ids:
+                continue
+            ts_event = int(item.get("ts_event", 0))
+            exact.setdefault(rt_id, set()).add(ts_event)
+            if interval_minutes:
+                bucketed.setdefault(rt_id, set()).add(bucket_timestamp(ts_event, interval_minutes))
+    return exact, bucketed
+
+
+def get_recent_anomaly_bucket_map(rt_ids, min_ts, interval_minutes):
+    return get_recent_anomaly_maps(rt_ids, min_ts, interval_minutes=interval_minutes)[1]
+
+
+def get_recent_anomaly_exact_map(rt_ids, min_ts):
+    return get_recent_anomaly_maps(rt_ids, min_ts, interval_minutes=None)[0]
+
+
+def get_recent_series_min_ts():
+    return int(datetime.now(tz=timezone.utc).timestamp()) - 26 * 3600
+
+
+def get_lookback_min_ts(lookback):
+    multiplier = 3600
+    raw = str(lookback or "24h").strip().lower()
+    if raw.endswith("d"):
+        multiplier = 86400
+        raw = raw[:-1]
+    elif raw.endswith("h"):
+        raw = raw[:-1]
+    try:
+        amount = int(raw)
+    except (TypeError, ValueError):
+        amount = 24
+    return int(datetime.now(tz=timezone.utc).timestamp()) - amount * multiplier
+
+
+def bucket_timestamp(ts_epoch, interval_minutes):
+    interval_seconds = max(int(interval_minutes), 1) * 60
+    return int(ts_epoch) - (int(ts_epoch) % interval_seconds)
+
+
+def parse_interval_minutes(interval):
+    raw = str(interval or "").strip().lower()
+    if raw.endswith("m"):
+        raw = raw[:-1]
+    try:
+        return max(int(raw), 1)
+    except (TypeError, ValueError):
+        return SERIES_INTERVAL_MINUTES
+
+
 def get_kpis(params):
     scope = params.get("scope")
     if not scope:
@@ -738,20 +829,27 @@ def get_metric_latest_items(campus, metric):
 
 def get_valid_latest_items_with_fallback(rt_ids, interval_minutes=SERIES_INTERVAL_MINUTES):
     latest_by_rt = {item["rt_id"]: item for item in batch_get_latest(rt_ids)}
+    anomaly_map = get_recent_anomaly_exact_map(
+        rt_ids,
+        min_ts=int(datetime.now(tz=timezone.utc).timestamp()) - get_balance_series_max_age_seconds(interval_minutes),
+    )
     resolved = []
     for rt_id in rt_ids:
         latest_item = latest_by_rt.get(rt_id)
         if latest_item:
-            valid, applied_value, _anomaly = sanitize_for_analytics_value(
-                rt_id,
-                latest_item.get("value"),
-                latest_item.get("unit"),
-            )
-            if valid:
-                item = dict(latest_item)
-                item["value"] = applied_value
-                resolved.append(item)
-                continue
+            if int(latest_item.get("ts_event", 0)) in anomaly_map.get(rt_id, set()):
+                latest_item = None
+            else:
+                valid, applied_value, _anomaly = sanitize_for_analytics_value(
+                    rt_id,
+                    latest_item.get("value"),
+                    latest_item.get("unit"),
+                )
+                if valid:
+                    item = dict(latest_item)
+                    item["value"] = applied_value
+                    resolved.append(item)
+                    continue
         fallback_item = query_latest_valid_timestream_sample(rt_id, interval_minutes=interval_minutes)
         if fallback_item:
             resolved.append(fallback_item)
@@ -760,6 +858,10 @@ def get_valid_latest_items_with_fallback(rt_ids, interval_minutes=SERIES_INTERVA
 
 def query_latest_valid_timestream_sample(rt_id, interval_minutes=SERIES_INTERVAL_MINUTES):
     lookback_seconds = get_balance_series_max_age_seconds(interval_minutes)
+    anomaly_map = get_recent_anomaly_exact_map(
+        [rt_id],
+        min_ts=int(datetime.now(tz=timezone.utc).timestamp()) - lookback_seconds,
+    )
     query = f"""
 SELECT
   time,
@@ -781,6 +883,8 @@ LIMIT 25
         if ts_value is None or value_raw is None:
             continue
         ts_epoch = parse_ts(ts_value)
+        if ts_epoch in anomaly_map.get(rt_id, set()):
+            continue
         valid, applied_value, _anomaly = sanitize_for_analytics_value(rt_id, value_raw)
         if not valid:
             continue
@@ -839,7 +943,8 @@ def get_series_24h_by_prefix(params):
     if not rt_prefix:
         return {"error": "missing_params"}
 
-    series = query_timeseries_by_prefix(rt_prefix)
+    interval_minutes = resolve_series_interval_minutes(params)
+    series = query_timeseries_by_prefix(rt_prefix, interval_minutes=interval_minutes)
     rows = [
         {"ts": ts, "value": float(value)}
         for ts, value in sorted(series.items())
@@ -847,8 +952,36 @@ def get_series_24h_by_prefix(params):
 
     return {
         "rt_prefix": rt_prefix,
-        "interval_minutes": SERIES_INTERVAL_MINUTES,
+        "interval_minutes": interval_minutes,
         "unit": "kW",
+        "series": rows,
+    }
+
+
+def get_series_24h_by_rt_ids(params, multi_params):
+    rt_ids = list(multi_params.get("rt_id") or [])
+    if not rt_ids and params.get("rt_id"):
+        rt_ids = [params["rt_id"]]
+    if not rt_ids:
+        return {"error": "missing_params"}
+
+    interval_minutes = resolve_series_interval_minutes(params)
+    aggregation = resolve_series_aggregation(params.get("aggregation"))
+    series_map = query_timeseries(
+        rt_ids,
+        interval_minutes=interval_minutes,
+        analytics=True,
+        aggregation=aggregation,
+    )
+    rows = [
+        {"ts": ts, "value": float(value)}
+        for ts, value in sorted(series_map.items())
+    ]
+    return {
+        "rt_ids": rt_ids,
+        "aggregation": aggregation,
+        "interval_minutes": interval_minutes,
+        "unit": infer_rt_unit(rt_ids[0]),
         "series": rows,
     }
 
@@ -884,7 +1017,11 @@ def sum_series_maps(series_maps):
     return result
 
 
-def sum_aligned_series_maps(series_maps, interval_minutes=SERIES_INTERVAL_MINUTES):
+def aggregate_aligned_series_maps(
+    series_maps,
+    interval_minutes=SERIES_INTERVAL_MINUTES,
+    aggregation="sum",
+):
     valid_maps = [series_map for series_map in series_maps if series_map]
     if not valid_maps:
         return {}
@@ -902,8 +1039,7 @@ def sum_aligned_series_maps(series_maps, interval_minutes=SERIES_INTERVAL_MINUTE
     result = {}
 
     for ts in all_ts:
-        total = 0.0
-        has_any = False
+        values = []
         for state in carried:
             series_map = state["series_map"]
             if ts in series_map:
@@ -911,12 +1047,25 @@ def sum_aligned_series_maps(series_maps, interval_minutes=SERIES_INTERVAL_MINUTE
                 state["last_value"] = float(series_map[ts])
             if not is_series_value_fresh(ts, state["last_ts"], interval_minutes=interval_minutes):
                 continue
-            total += float(state["last_value"])
-            has_any = True
-        if has_any:
-            result[ts] = total
+            values.append(float(state["last_value"]))
+        if not values:
+            continue
+        if aggregation == "avg":
+            result[ts] = sum(values) / len(values)
+        elif aggregation == "max":
+            result[ts] = max(values)
+        else:
+            result[ts] = sum(values)
 
     return result
+
+
+def sum_aligned_series_maps(series_maps, interval_minutes=SERIES_INTERVAL_MINUTES):
+    return aggregate_aligned_series_maps(
+        series_maps,
+        interval_minutes=interval_minutes,
+        aggregation="sum",
+    )
 
 
 def align_balance_series(demand_series, pv_series, interval_minutes=SERIES_INTERVAL_MINUTES):
@@ -978,23 +1127,37 @@ def resolve_series_interval_minutes(params):
     return interval_minutes
 
 
+def resolve_series_aggregation(raw_value):
+    aggregation = str(raw_value or "sum").lower()
+    if aggregation in {"avg", "max", "sum"}:
+        return aggregation
+    return "sum"
+
+
 def get_metric_unit(campus, metric):
     config = METRIC_SERIES_CONFIG.get((campus, metric), {})
     return config.get("unit", "kW")
 
 
-def query_timeseries(rt_ids, interval_minutes=SERIES_INTERVAL_MINUTES, analytics=False):
+def query_timeseries(
+    rt_ids,
+    interval_minutes=SERIES_INTERVAL_MINUTES,
+    analytics=False,
+    aggregation="sum",
+):
     return query_timeseries_by_select(
         rt_ids=rt_ids,
         interval_minutes=interval_minutes,
         analytics=analytics,
+        aggregation=aggregation,
     )
 
 
-def query_timeseries_by_prefix(rt_prefix):
+def query_timeseries_by_prefix(rt_prefix, interval_minutes=SERIES_INTERVAL_MINUTES):
     return query_timeseries_by_select(
         rt_prefix=rt_prefix,
         rt_like_patterns=["%.p_%"],
+        interval_minutes=interval_minutes,
     )
 
 
@@ -1004,6 +1167,7 @@ def query_timeseries_by_select(
     rt_like_patterns=None,
     interval_minutes=SERIES_INTERVAL_MINUTES,
     analytics=False,
+    aggregation="sum",
 ):
     where_clauses = [
         "time > ago(24h)",
@@ -1035,10 +1199,21 @@ ORDER BY ts, rt_id
 """
     rows = query_timestream(query)
     if analytics:
-        series_maps = rows_to_timeseries_by_rt_maps(rows, analytics=True)
-        return sum_aligned_series_maps(
+        resolved_rt_ids = sorted({data[1].get("ScalarValue") for row in rows for data in [row.get("Data", [])] if len(data) >= 2 and data[1].get("ScalarValue")})
+        anomaly_buckets = get_recent_anomaly_bucket_map(
+            resolved_rt_ids,
+            min_ts=get_recent_series_min_ts(),
+            interval_minutes=interval_minutes,
+        )
+        series_maps = rows_to_timeseries_by_rt_maps(
+            rows,
+            analytics=True,
+            anomaly_buckets=anomaly_buckets,
+        )
+        return aggregate_aligned_series_maps(
             list(series_maps.values()),
             interval_minutes=interval_minutes,
+            aggregation=aggregation,
         )
     return rows_to_timeseries_sum_map(rows)
 
@@ -1050,6 +1225,20 @@ def query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
         interval=interval,
         lookback=lookback,
     )
+    rt_ids = sorted(
+        {
+            data[1].get("ScalarValue")
+            for row in rows
+            for data in [row.get("Data", [])]
+            if len(data) >= 2 and data[1].get("ScalarValue")
+        }
+    )
+    interval_minutes = parse_interval_minutes(interval)
+    anomaly_buckets = get_recent_anomaly_bucket_map(
+        rt_ids,
+        min_ts=get_lookback_min_ts(lookback),
+        interval_minutes=interval_minutes,
+    )
     by_rt = {}
     totals = {}
     for row in rows:
@@ -1060,6 +1249,8 @@ def query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
         rt_id = data[1].get("ScalarValue")
         value_raw = data[2].get("ScalarValue")
         if ts_epoch == 0 or not rt_id or value_raw is None:
+            continue
+        if ts_epoch in anomaly_buckets.get(rt_id, set()):
             continue
         value = float(value_raw)
         prev_value = by_rt.get(rt_id)
@@ -1267,8 +1458,9 @@ def rows_to_timeseries_sum_map(rows):
     return result
 
 
-def rows_to_timeseries_by_rt_maps(rows, analytics=False):
+def rows_to_timeseries_by_rt_maps(rows, analytics=False, anomaly_buckets=None):
     result = {}
+    anomaly_buckets = anomaly_buckets or {}
     for row in rows:
         data = row.get("Data", [])
         if len(data) < 3:
@@ -1280,6 +1472,8 @@ def rows_to_timeseries_by_rt_maps(rows, analytics=False):
             continue
         ts_epoch = parse_ts(ts_value)
         if ts_epoch == 0:
+            continue
+        if analytics and ts_epoch in anomaly_buckets.get(rt_id, set()):
             continue
         if analytics:
             valid, applied_value, _anomaly = sanitize_for_analytics_value(rt_id, value_raw)

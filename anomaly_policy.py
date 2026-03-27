@@ -99,6 +99,23 @@ def sanitize_for_analytics(rt_id, value, unit=None, max_valid_value=1000000, max
     return False, None, anomaly
 
 
+def sanitize_for_ingest(rt_id, value, unit=None, max_valid_value=1000000, max_valid_value_kwh=1000000000):
+    anomaly = detect_anomaly(
+        rt_id,
+        value,
+        unit=unit,
+        max_valid_value=max_valid_value,
+        max_valid_value_kwh=max_valid_value_kwh,
+    )
+    if anomaly is None:
+        return True, float(value), None
+
+    if anomaly["anomaly_type"] == "negative_not_allowed" and rt_id in NEGATIVE_TO_ZERO_RT_IDS:
+        return True, 0.0, anomaly
+
+    return False, None, anomaly
+
+
 def format_anomaly_value(value):
     try:
         numeric = float(value)
@@ -113,4 +130,3 @@ def format_anomaly_value(value):
 
 def build_anomaly_event_key(ts_event, rt_id, anomaly_type):
     return f"{int(ts_event):013d}#{rt_id}#{anomaly_type}"
-

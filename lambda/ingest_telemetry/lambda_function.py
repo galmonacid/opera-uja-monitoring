@@ -17,6 +17,7 @@ try:
         detect_anomaly,
         format_anomaly_value,
         normalize_sentinel_value,
+        sanitize_for_ingest,
         threshold_for_unit,
     )
 except ModuleNotFoundError:
@@ -27,6 +28,7 @@ except ModuleNotFoundError:
         detect_anomaly,
         format_anomaly_value,
         normalize_sentinel_value,
+        sanitize_for_ingest,
         threshold_for_unit,
     )
 
@@ -149,26 +151,23 @@ def handler(event, context):
             "gateway_id": gateway_id,
             "source_key": source_key,
             "anomaly_events": [],
+            "persist": True,
         }
         if measurement.get("extract_anomaly"):
-            records_by_ts[ts_event][rt_id]["anomaly_events"].append(
-                build_anomaly_event(
-                    gateway_id=gateway_id,
-                    rt_id=rt_id,
-                    unit=unit,
-                    ts_event=ts_event,
-                    raw_value=measurement.get("raw_value"),
-                    applied_value=measurement["value"],
-                    anomaly=measurement["extract_anomaly"],
-                    detected_by="ingest",
-                )
+            record = records_by_ts[ts_event][rt_id]
+            record["persist"] = False
+            append_record_anomaly_event(
+                record,
+                anomaly=measurement["extract_anomaly"],
+                raw_value=measurement.get("raw_value"),
+                applied_value=None,
+                detected_by="ingest",
             )
 
     for ts_event, records_by_rt_id in records_by_ts.items():
         raw_values = raw_values_by_ts.get(ts_event, {})
         apply_adjustments(records_by_rt_id, raw_values)
         apply_rt_value_controls(records_by_rt_id)
-        annotate_runtime_anomalies(records_by_rt_id)
 
     all_records = []
     all_anomalies = []
@@ -176,6 +175,7 @@ def handler(event, context):
         all_records.extend(records_by_rt_id.values())
         for record in records_by_rt_id.values():
             all_anomalies.extend(record.get("anomaly_events", []))
+    persisted_records = [record for record in all_records if record.get("persist", True)]
 
     if not all_records:
         missing_keys = [k for k in source_keys if k not in mappings]
@@ -188,11 +188,11 @@ def handler(event, context):
         logger.warning("no mapped records to write")
         return {"status": "ignored", "reason": "no_mapped_records"}
 
-    write_latest_readings(all_records)
-    write_timestream_records(all_records)
+    write_latest_readings(persisted_records)
+    write_timestream_records(persisted_records)
     write_validation_anomalies(all_anomalies)
 
-    return {"status": "ok", "count": len(all_records)}
+    return {"status": "ok", "count": len(persisted_records)}
 
 
 def extract_payload(event):
@@ -264,15 +264,13 @@ def extract_measurements(payload):
             unit_norm = unit.lower() if isinstance(unit, str) else ""
             max_value = threshold_for_unit(unit_norm, MAX_VALID_VALUE, MAX_VALID_VALUE_KWH)
             extract_anomaly = None
-            value_f = raw_value_f
             if not math.isfinite(raw_value_f) or abs(raw_value_f) > max_value:
                 logger.warning(
-                    "out-of-range measurement normalized to 0: source_key=%s value=%s unit=%s",
+                    "out-of-range measurement discarded: source_key=%s value=%s unit=%s",
                     source_key,
                     value,
                     unit,
                 )
-                value_f = 0.0
                 extract_anomaly = detect_anomaly(
                     "__source__",
                     raw_value_f,
@@ -284,15 +282,16 @@ def extract_measurements(payload):
             measurements.append(
                 {
                     "source_key": source_key,
-                    "value": value_f,
+                    "value": raw_value_f,
                     "raw_value": raw_value_f,
                     "unit": unit,
                     "ts_event": ts_event,
                     "extract_anomaly": extract_anomaly,
                 }
             )
-            raw_values_by_ts.setdefault(ts_event, {})
-            raw_values_by_ts[ts_event][source_key] = raw_value_f
+            if extract_anomaly is None:
+                raw_values_by_ts.setdefault(ts_event, {})
+                raw_values_by_ts[ts_event][source_key] = raw_value_f
 
     return measurements, raw_values_by_ts
 
@@ -402,56 +401,43 @@ def normalize_rt_value(rt_id, value):
 
 def apply_rt_value_controls(records_by_rt_id):
     for record in records_by_rt_id.values():
+        if not record.get("persist", True):
+            continue
         original_value = float(record["value"])
-        normalized_value = normalize_rt_value(record["rt_id"], record["value"])
-        if normalized_value != original_value:
-            anomaly = detect_anomaly(
-                record["rt_id"],
-                original_value,
-                unit=record.get("unit"),
-                max_valid_value=MAX_VALID_VALUE,
-                max_valid_value_kwh=MAX_VALID_VALUE_KWH,
-            )
-            if anomaly:
-                record.setdefault("anomaly_events", []).append(
-                    build_anomaly_event(
-                        gateway_id=record["gateway_id"],
-                        rt_id=record["rt_id"],
-                        unit=record.get("unit"),
-                        ts_event=record["ts_event"],
-                        raw_value=original_value,
-                        applied_value=normalized_value,
-                        anomaly=anomaly,
-                        detected_by="ingest",
-                    )
-                )
-        record["value"] = normalized_value
-
-
-def annotate_runtime_anomalies(records_by_rt_id):
-    for record in records_by_rt_id.values():
-        anomaly = detect_anomaly(
+        should_persist, applied_value, anomaly = sanitize_for_ingest(
             record["rt_id"],
-            record["value"],
+            original_value,
             unit=record.get("unit"),
             max_valid_value=MAX_VALID_VALUE,
             max_valid_value_kwh=MAX_VALID_VALUE_KWH,
         )
-        if not anomaly:
-            continue
-        event = build_anomaly_event(
-            gateway_id=record["gateway_id"],
-            rt_id=record["rt_id"],
-            unit=record.get("unit"),
-            ts_event=record["ts_event"],
-            raw_value=record["value"],
-            applied_value=record["value"],
-            anomaly=anomaly,
-            detected_by="ingest",
-        )
-        existing = record.setdefault("anomaly_events", [])
-        if not any(item["event_key"] == event["event_key"] for item in existing):
-            existing.append(event)
+        if anomaly:
+            append_record_anomaly_event(
+                record,
+                anomaly=anomaly,
+                raw_value=original_value,
+                applied_value=applied_value,
+                detected_by="ingest",
+            )
+        record["persist"] = should_persist
+        if should_persist:
+            record["value"] = applied_value
+
+
+def append_record_anomaly_event(record, anomaly, raw_value, applied_value, detected_by):
+    event = build_anomaly_event(
+        gateway_id=record["gateway_id"],
+        rt_id=record["rt_id"],
+        unit=record.get("unit"),
+        ts_event=record["ts_event"],
+        raw_value=raw_value,
+        applied_value=applied_value,
+        anomaly=anomaly,
+        detected_by=detected_by,
+    )
+    existing = record.setdefault("anomaly_events", [])
+    if not any(item["event_key"] == event["event_key"] for item in existing):
+        existing.append(event)
 
 
 def build_anomaly_event(

@@ -8,15 +8,16 @@ from pathlib import Path
 import boto3
 from boto3.dynamodb.conditions import Key
 try:
-    from anomaly_policy import sanitize_for_analytics
+    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics
 except ModuleNotFoundError:
     sys.path.append(str(Path(__file__).resolve().parents[2]))
-    from anomaly_policy import sanitize_for_analytics
+    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics
 
 
 DDB_AGG_TABLE = os.getenv("DDB_AGG_TABLE", "aggregates")
 DDB_MAPPING_TABLE = os.getenv("DDB_MAPPING_TABLE", "gateway_variable_map")
 DDB_CONFIG_TABLE = os.getenv("DDB_CONFIG_TABLE", "aggregation_configs")
+DDB_ANOMALIES_TABLE = os.getenv("DDB_ANOMALIES_TABLE", "validation_anomalies")
 TS_DATABASE = os.getenv("TS_DATABASE", "uja_monitoring")
 TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
@@ -28,6 +29,7 @@ _ts_query = None
 _agg_table = None
 _mapping_table = None
 _config_table = None
+_anomalies_table = None
 
 
 def _get_region():
@@ -75,6 +77,13 @@ def get_config_table():
     if _config_table is None:
         _config_table = get_dynamodb().Table(DDB_CONFIG_TABLE)
     return _config_table
+
+
+def get_anomalies_table():
+    global _anomalies_table
+    if _anomalies_table is None:
+        _anomalies_table = get_dynamodb().Table(DDB_ANOMALIES_TABLE)
+    return _anomalies_table
 
 
 def handler(event, context):
@@ -229,7 +238,44 @@ def calculate_counter_consumption(rt_id, start, end):
     return max(end_value - start_value, 0.0)
 
 
+def build_anomaly_event_key_prefix(ts_epoch):
+    return f"{int(ts_epoch):013d}#"
+
+
+def query_anomaly_timestamps(rt_id, start, end):
+    metadata = derive_rt_metadata(rt_id)
+    start_ts = int(parse_time(start).timestamp())
+    end_ts = int(parse_time(end).timestamp())
+    items = []
+    last_key = None
+    min_event_key = build_anomaly_event_key_prefix(start_ts)
+    while True:
+        kwargs = {
+            "IndexName": "campus_domain_event_key",
+            "KeyConditionExpression": Key("campus_domain").eq(
+                f"{metadata['campus']}#{metadata['domain']}"
+            ) & Key("event_key").gte(min_event_key),
+        }
+        if last_key:
+            kwargs["ExclusiveStartKey"] = last_key
+        response = get_anomalies_table().query(**kwargs)
+        items.extend(response.get("Items", []))
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+
+    timestamps = set()
+    for item in items:
+        if item.get("rt_id") != rt_id:
+            continue
+        ts_event = int(item.get("ts_event", 0))
+        if start_ts <= ts_event <= end_ts:
+            timestamps.add(ts_event)
+    return timestamps
+
+
 def query_timestream(rt_id, start, end):
+    anomaly_timestamps = query_anomaly_timestamps(rt_id, start, end)
     query = (
         f"SELECT time, measure_value::double AS value "
         f"FROM \"{TS_DATABASE}\".\"{TS_TABLE}\" "
@@ -246,6 +292,8 @@ def query_timestream(rt_id, start, end):
         rows.extend(parse_rows(response))
     normalized_rows = []
     for ts, value in rows:
+        if int(ts.timestamp()) in anomaly_timestamps:
+            continue
         valid, applied_value, _anomaly = sanitize_for_analytics(
             rt_id,
             value,
