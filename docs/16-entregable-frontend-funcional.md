@@ -42,9 +42,13 @@ Ofrecer una visión ejecutiva y simultánea del estado energético de los dos á
 
 ### Fuentes de datos
 - `/v1/kpis?scope=las_lagunillas`
+  devuelve los KPIs instantáneos del scope `las_lagunillas`, calculados en backend sumando las fuentes de demanda y FV definidas para ese campus y derivando `red` y `autoconsumo`.
 - `/v1/kpis?scope=ctl_linares`
+  devuelve los KPIs instantáneos del scope `ctl_linares`, calculados con la suma de demanda de Linares y la FV instantánea de `ct_total`.
 - `/v1/series/24h?scope=las_lagunillas&interval_minutes=15`
+  devuelve la curva agregada de `Demanda` y `FV` de Las Lagunillas; cada punto representa un bin de 15 minutos y, en potencia, usa la media de muestras válidas del intervalo.
 - `/v1/series/24h?scope=ctl_linares&interval_minutes=15`
+  devuelve la curva agregada de `Demanda` y `FV` de CTL Linares con la misma lógica de agregación temporal.
 
 ### Cálculo
 #### Las Lagunillas
@@ -94,10 +98,14 @@ Permitir una explotación más operativa del balance energético por campus, com
 ### Fuentes de datos
 - KPIs y curvas:
   - `/v1/kpis?scope=...`
+    devuelve el estado instantáneo del campus calculado a partir del scope energético correspondiente.
   - `/v1/series/24h?scope=...&interval_minutes=15`
+    devuelve la serie agregada de `Demanda` y `FV` del campus en bins de 15 minutos.
 - Acumulados energéticos:
   - `/v1/aggregates/daily?campus=...&metric=energia_consumo&asset=total`
+    devuelve la energía diaria total del campus, obtenida por integración temporal de la potencia y agregada por día.
   - `/v1/aggregates/monthly?campus=...&metric=energia_consumo&asset=total`
+    devuelve la energía mensual total del campus, calculada como suma de los valores diarios o reconstruida desde ellos si es necesario.
 
 ### Cálculo
 - Los valores de `Demanda`, `FV`, `Red` y `Autoconsumo` usan exactamente las mismas reglas que en `Balance`.
@@ -128,7 +136,9 @@ Mostrar la distribución espacial de los puntos de demanda sobre el plano del ca
 
 ### Fuentes de datos
 - `/v1/realtime?campus=jaen`
+  devuelve las últimas lecturas válidas disponibles del campus de Jaén para los RT incluidos en la respuesta.
 - `/v1/realtime?campus=linares`
+  devuelve las últimas lecturas válidas disponibles del campus de Linares.
 
 ### Cálculo
 - Cada punto muestra el último valor válido disponible para su RT.
@@ -161,13 +171,19 @@ Ofrecer una lectura operativa del consumo de agua por campus, combinando tabla i
 ### Fuentes de datos
 - Lectura instantánea:
   - `/v1/realtime?gateway_id=gw_jaen_agua`
+    devuelve los últimos contadores válidos de agua asociados al gateway de Jaén.
   - `/v1/realtime?gateway_id=gw_linares_mix`
+    devuelve los últimos contadores válidos de agua de Linares presentes en el gateway mixto.
 - Tendencia:
   - `/v1/series/24h?campus=jaen&metric=agua_consumo&interval_minutes=15`
+    devuelve el consumo de agua por intervalo en Jaén; cada punto se calcula como diferencia entre el último contador válido de un bin y el del bin anterior.
   - `/v1/series/24h?campus=linares&metric=agua_consumo&interval_minutes=15`
+    devuelve el consumo de agua por intervalo en Linares con la misma lógica.
 - Totales:
   - `/v1/aggregates/daily?...metric=agua_consumo...`
+    devuelve el consumo total diario agregado a partir de los incrementos válidos de los contadores.
   - `/v1/aggregates/monthly?...metric=agua_consumo...`
+    devuelve el consumo total mensual calculado como suma de los diarios.
   - el anual se obtiene sumando la serie mensual disponible
 
 ### Cálculo
@@ -205,17 +221,26 @@ Agrupar en una única vista la explotación de generación fotovoltaica y autoco
 ### Fuentes de datos
 - Lectura instantánea:
   - `/v1/realtime?gateway_id=gw_endesa_jaen`
+    devuelve las últimas lecturas válidas del gateway Endesa de Jaén, incluyendo `ct_total`, inversores e irradiancias.
   - `/v1/realtime?gateway_id=gw_autoconsumo_jaen`
+    devuelve las últimas lecturas válidas del gateway de autoconsumo de Jaén.
   - `/v1/realtime?gateway_id=gw_endesa_linares`
+    devuelve las últimas lecturas válidas del gateway Endesa de Linares.
 - Curvas de potencia:
   - `/v1/series/24h?campus=jaen&metric=fv_endesa&interval_minutes=15`
+    devuelve la curva agregada de producción Endesa Jaén; en cada bin se usa la media de valores válidos y el agregado energético se basa en la producción definida para esa métrica.
   - `/v1/series/24h?campus=jaen&metric=fv_auto&interval_minutes=15`
+    devuelve la curva agregada de autoconsumo Jaén con bins de 15 minutos.
   - `/v1/series/24h?campus=linares&metric=fv_endesa&interval_minutes=15`
+    devuelve la curva agregada de FV Endesa Linares.
 - Irradiancia:
   - `/v1/series/24h?rt_id=...&aggregation=avg&interval_minutes=15`
+    devuelve la irradiancia agregada media de una o varias sondas, calculada promediando sus series válidas por bin.
 - Acumulados:
   - `/v1/aggregates/daily?...metric=fv_endesa|fv_auto...`
+    devuelve la producción diaria calculada por integración temporal de la potencia.
   - `/v1/aggregates/monthly?...metric=fv_endesa|fv_auto...`
+    devuelve la producción mensual como suma de los valores diarios.
 
 ### Cálculo
 #### FV Endesa Jaén
@@ -272,10 +297,15 @@ Proporcionar una vista técnica para revisar calidad de dato, disponibilidad y c
 
 ### Fuentes de datos
 - `/v1/realtime`
+  devuelve el último valor técnico disponible de cada RT consultado.
 - `/v1/series/24h`
+  devuelve la serie técnica de las últimas 24 horas, ya sea por scope, métrica, prefijo o RT explícito, según el panel consultado.
 - `/v1/aggregates/daily`
+  devuelve la agregación diaria persistida o reconstruida de la métrica solicitada.
 - `/v1/aggregates/monthly`
+  devuelve la agregación mensual persistida o reconstruida de la métrica solicitada.
 - `/v1/anomalies`
+  devuelve el registro técnico de anomalías detectadas en ingestión o backfill, con valor bruto y valor aplicado.
 
 ### Cálculo
 - `Último valor` muestra el dato técnico más reciente disponible por RT.
