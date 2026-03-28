@@ -104,32 +104,32 @@ const MAP_ENTRIES = [
     ["uja.jaen.energia.consumo.edificio_a3.p_kw", 40, 44],
     ["uja.jaen.energia.consumo.edificio_a4.p_kw", 31, 55],
     ["uja.jaen.energia.consumo.edificio_b1.p_kw", 87, 30],
-    ["uja.jaen.energia.consumo.edificio_b2.p_kw", 64, 44],
-    ["uja.jaen.energia.consumo.edificio_b3.p_kw", 58, 52],
+    ["uja.jaen.energia.consumo.edificio_b2.p_kw", 65, 43],
+    ["uja.jaen.energia.consumo.edificio_b3.p_kw", 57, 50],
     ["uja.jaen.energia.consumo.edificio_b4.p_kw", 45, 60],
     ["uja.jaen.energia.consumo.edificio_b5.p_kw", 36, 67],
     ["uja.jaen.energia.consumo.edificio_c1.p_kw", 73, 49],
     ["uja.jaen.energia.consumo.edificio_c2.p_kw", 61, 60],
-    ["uja.jaen.energia.consumo.edificio_c3.p_kw", 49, 70],
-    ["uja.jaen.energia.consumo.edificio_c5.p_kw", 36, 79],
-    ["uja.jaen.energia.consumo.edificio_c6.p_kw", 27, 85],
-    ["uja.jaen.energia.consumo.edificio_d1.p_kw", 90, 54],
-    ["uja.jaen.energia.consumo.edificio_d2.p_kw", 69, 67],
-    ["uja.jaen.energia.consumo.edificio_d3.p_kw", 56, 74],
-    ["uja.jaen.energia.consumo.edificio_d4.p_kw", 31, 95],
-    [CAMPUS_VHE_RT_ID, 26, 67],
-    ["uja.jaen.energia.consumo.um_c4.p_kw", 44, 87],
-    ["uja.jaen.energia.consumo.ae_magisterio.p_kw", 76, 95],
-    ["uja.jaen.energia.consumo.apartamentos_universitarios.p_kw", 71, 6],
-    ["uja.jaen.energia.consumo.polideportivo.p_kw", 62, 10],
-    ["uja.jaen.energia.consumo.residencia_domingo_savio.p_kw", 82, 4],
+    ["uja.jaen.energia.consumo.edificio_c3.p_kw", 54, 67],
+    ["uja.jaen.energia.consumo.edificio_c5.p_kw", 36, 86],
+    ["uja.jaen.energia.consumo.edificio_c6.p_kw", 23, 90],
+    ["uja.jaen.energia.consumo.edificio_d1.p_kw", 87, 51],
+    ["uja.jaen.energia.consumo.edificio_d2.p_kw", 74, 62],
+    ["uja.jaen.energia.consumo.edificio_d3.p_kw", 59, 72],
+    ["uja.jaen.energia.consumo.edificio_d4.p_kw", 31, 97],
+    [CAMPUS_VHE_RT_ID, 23, 65],
+    ["uja.jaen.energia.consumo.um_c4.p_kw", 43, 76],
+    ["uja.jaen.energia.consumo.ae_magisterio.p_kw", 65, 95],
+    ["uja.jaen.energia.consumo.apartamentos_universitarios.p_kw", 40, 9],
+    ["uja.jaen.energia.consumo.polideportivo.p_kw", 52, 18],
+    ["uja.jaen.energia.consumo.residencia_domingo_savio.p_kw", 65, 9],
   ]),
   ...buildSingleMapEntries("energy", "linares", [
-    ["uja.linares.energia.consumo.aulario_departamental.p_kw", 6, 20],
-    ["uja.linares.energia.consumo.lab_sg_t1.p_kw", 4, 29],
-    ["uja.linares.energia.consumo.lab_sg_t2.p_kw", 14, 25],
-    ["uja.linares.energia.consumo.urbanizacion.p_kw", 14, 12],
-    ["uja.linares.energia.consumo.polideportivo.p_kw", 21, 17],
+    ["uja.linares.energia.consumo.aulario_departamental.p_kw", 5, 29],
+    ["uja.linares.energia.consumo.lab_sg_t1.p_kw", 3, 40],
+    ["uja.linares.energia.consumo.lab_sg_t2.p_kw", 11, 40],
+    ["uja.linares.energia.consumo.urbanizacion.p_kw", 15, 25],
+    ["uja.linares.energia.consumo.polideportivo.p_kw", 14, 12],
   ]),
   ...buildSingleMapEntries("water", "jaen", [
     ["uja.jaen.agua.consumo.edificio_a0.v_m3", 83, 15],
@@ -139,18 +139,18 @@ const MAP_ENTRIES = [
     ["uja.jaen.agua.consumo.edificio_a4.v_m3", 31, 55],
     ["uja.jaen.agua.consumo.edificio_b1.v_m3", 87, 30],
     ["uja.jaen.agua.consumo.edificio_b2.v_m3", 64, 44],
-    ["uja.jaen.agua.consumo.edificio_b3.v_m3", 55, 52],
+    ["uja.jaen.agua.consumo.edificio_b3.v_m3", 57, 50],
     ["uja.jaen.agua.consumo.edificio_b4.v_m3", 45, 60],
     ["uja.jaen.agua.consumo.edificio_b5.v_m3", 36, 67],
-    ["uja.jaen.agua.consumo.edificio_c1.v_m3", 68, 55],
-    ["uja.jaen.agua.consumo.edificio_c2.v_m3", 61, 63],
-    ["uja.jaen.agua.consumo.edificio_c3.v_m3", 49, 70],
-    ["uja.jaen.agua.consumo.edificio_c5.v_m3", 36, 79],
-    ["uja.jaen.agua.consumo.edificio_c6.v_m3", 27, 85],
-    ["uja.jaen.agua.consumo.edificio_d1.v_m3", 90, 54],
-    ["uja.jaen.agua.consumo.edificio_d2.v_m3", 69, 67],
-    ["uja.jaen.agua.consumo.edificio_d3.v_m3", 56, 74],
-    ["uja.jaen.agua.consumo.edificio_d4.v_m3", 31, 95],
+    ["uja.jaen.agua.consumo.edificio_c1.v_m3", 73, 49],
+    ["uja.jaen.agua.consumo.edificio_c2.v_m3", 61, 60],
+    ["uja.jaen.agua.consumo.edificio_c3.v_m3", 54, 67],
+    ["uja.jaen.agua.consumo.edificio_c5.v_m3", 36, 86],
+    ["uja.jaen.agua.consumo.edificio_c6.v_m3", 23, 90],
+    ["uja.jaen.agua.consumo.edificio_d1.v_m3", 87, 51],
+    ["uja.jaen.agua.consumo.edificio_d2.v_m3", 74, 62],
+    ["uja.jaen.agua.consumo.edificio_d3.v_m3", 59, 72],
+    ["uja.jaen.agua.consumo.edificio_d4.v_m3", 31, 97],
     ["uja.jaen.agua.consumo.edificio_c1_garaje.v_m3", 70, 59],
     ["uja.jaen.agua.consumo.d1_caf.v_m3", 92, 58],
     ["uja.jaen.agua.consumo.c_futbol.v_m3", 82, 8],
@@ -477,10 +477,13 @@ const SOLAR_VIEW_CONFIG = [
 const MAP_LAYER_OPTIONS = [
   // { value: "all", label: "Todas las capas" },
   { value: "energy", label: "Demanda de energía" },
-  { value: "water", label: "Agua" },
-  { value: "solar", label: "Fotovoltaica" },
-  { value: "autoconsumo", label: "Autoconsumo" },
+  // { value: "water", label: "Agua" },
+  // { value: "solar", label: "Fotovoltaica" },
+  // { value: "autoconsumo", label: "Autoconsumo" },
 ];
+const ACTIVE_MAP_ENTRY_COUNT = MAP_ENTRIES.filter((entry) =>
+  MAP_LAYER_OPTIONS.some((option) => option.value === entry.layer)
+).length;
 
 const VALIDATION_TAB_OPTIONS = [
   { id: "latest", label: "Último valor" },
@@ -718,6 +721,7 @@ const AreaChart = ({
   series,
   intervalMinutes = ANALYTICS_SERIES_INTERVAL_MINUTES,
   unit = "kW",
+  density = "split",
 }) => {
   const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
   const chartSeries = useMemo(
@@ -738,12 +742,13 @@ const AreaChart = ({
     [series]
   );
 
+  const chartDensity = density === "single" ? "single" : "split";
   const width = 120;
-  const height = 44;
-  const paddingLeft = 18;
+  const height = chartDensity === "single" ? 40 : 44;
+  const paddingLeft = chartDensity === "single" ? 15 : 18;
   const paddingRight = 6;
   const paddingTop = 2;
-  const paddingBottom = 10;
+  const paddingBottom = chartDensity === "single" ? 9 : 10;
   const plotHeight = height - paddingTop - paddingBottom;
   const plotWidth = width - paddingLeft - paddingRight;
   const ticksY = 4;
@@ -760,7 +765,7 @@ const AreaChart = ({
 
   return (
     <svg
-      className="area-chart"
+      className={`area-chart density-${chartDensity}`}
       viewBox={`0 0 ${width} ${height}`}
       role="img"
       aria-label="Curva de demanda y generación fotovoltaica de las últimas 24 horas"
@@ -821,6 +826,7 @@ const ValueChart = ({
   label,
   unit = "kW",
   intervalMinutes = ANALYTICS_SERIES_INTERVAL_MINUTES,
+  density = "split",
 }) => {
   const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
   const chartSeries = useMemo(
@@ -831,12 +837,13 @@ const ValueChart = ({
         .sort((a, b) => a.ts - b.ts),
     [series]
   );
+  const chartDensity = density === "single" ? "single" : "split";
   const width = 120;
-  const height = 64;
-  const paddingLeft = 18;
+  const height = chartDensity === "single" ? 52 : 64;
+  const paddingLeft = chartDensity === "single" ? 15 : 18;
   const paddingRight = 6;
   const paddingTop = 2;
-  const paddingBottom = 11;
+  const paddingBottom = chartDensity === "single" ? 10 : 11;
   const plotHeight = height - paddingTop - paddingBottom;
   const plotWidth = width - paddingLeft - paddingRight;
   const ticksY = 4;
@@ -852,7 +859,7 @@ const ValueChart = ({
   const segments = buildTimeSegments(chartSeries, intervalMinutes);
 
   return (
-    <svg className="value-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label} últimas 24 horas`}>
+    <svg className={`value-chart density-${chartDensity}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label} últimas 24 horas`}>
       <g className="axis axis-y">
         {tickValues.map((value, idx) => {
           const y = paddingTop + (plotHeight / ticksY) * idx;
@@ -899,6 +906,7 @@ const SolarDualAxisChart = ({
   irradianceSeries,
   label,
   intervalMinutes = ANALYTICS_SERIES_INTERVAL_MINUTES,
+  density = "split",
 }) => {
   const [renderNow] = useState(() => Math.floor(Date.now() / 1000));
   const normalizedPower = useMemo(
@@ -917,12 +925,13 @@ const SolarDualAxisChart = ({
         .sort((a, b) => a.ts - b.ts),
     [irradianceSeries]
   );
+  const chartDensity = density === "single" ? "single" : "split";
   const width = 124;
-  const height = 44;
-  const paddingLeft = 18;
-  const paddingRight = 18;
+  const height = chartDensity === "single" ? 40 : 44;
+  const paddingLeft = chartDensity === "single" ? 15 : 18;
+  const paddingRight = chartDensity === "single" ? 15 : 18;
   const paddingTop = 2;
-  const paddingBottom = 10;
+  const paddingBottom = chartDensity === "single" ? 9 : 10;
   const plotHeight = height - paddingTop - paddingBottom;
   const plotWidth = width - paddingLeft - paddingRight;
   const ticksY = 4;
@@ -945,7 +954,7 @@ const SolarDualAxisChart = ({
   const irradianceSegments = buildTimeSegments(normalizedIrradiance, intervalMinutes);
 
   return (
-    <svg className="solar-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label} potencia e irradiancia últimas 24 horas`}>
+    <svg className={`solar-chart density-${chartDensity}`} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`${label} potencia e irradiancia últimas 24 horas`}>
       <g className="axis axis-y">
         {powerScale.tickValues.map((value, idx) => {
           const y = paddingTop + (plotHeight / ticksY) * idx;
@@ -2216,6 +2225,7 @@ function App() {
     } else if (panelStatus.kind === "error") {
       chartEmptyText = `Error: ${errorText}`;
     }
+    const chartDensity = filteredEnergyConfigs.length === 1 ? "single" : "split";
 
     return (
       <article key={scope.id} className={`dashboard-panel panel-${panelStatus.kind}`}>
@@ -2248,7 +2258,7 @@ function App() {
               <span className="legend-item pv">Curva Generación kW</span>
             </div>
             {isComplete && chartSeries.length ? (
-              <AreaChart series={chartSeries} unit="kW" />
+              <AreaChart series={chartSeries} unit="kW" density={chartDensity} />
             ) : (
               <div className="chart-empty">{chartEmptyText}</div>
             )}
@@ -2358,7 +2368,7 @@ function App() {
     map: {
       title: "Mapa de campus",
       subtitle:
-        "Vista cartográfica con capas activas y detalle del punto seleccionado.",
+        "Vista cartográfica operativa con la capa de demanda de energía y detalle del punto seleccionado.",
       primaryLabel: "Actualizar mapa",
       primaryAction: fetchRealtime,
     },
@@ -2521,8 +2531,8 @@ function App() {
       {
         href: "#/mapa",
         title: "Mapa campus",
-        copy: "Vista cartográfica con capas activas y detalle de puntos.",
-        status: `${MAP_ENTRIES.length} puntos cartográficos`,
+        copy: "Vista cartográfica operativa con la capa activa de demanda y detalle de puntos.",
+        status: `${ACTIVE_MAP_ENTRY_COUNT} puntos cartográficos visibles`,
       },
       {
         href: "#/agua",
@@ -2642,36 +2652,38 @@ function App() {
         <div className="section-header">
           <h2 className="section-title">Mapa operacional</h2>
           <p className="section-subtitle">
-            Seleccione una capa y consulte el detalle del punto debajo del plano.
+            Consulte el detalle del punto de demanda seleccionado debajo del plano.
           </p>
         </div>
         <div className="map-layout">
           <div className="map-frame map-workspace">
-            <img
-              src={campus}
-              alt="Plano del campus con puntos de lectura energética destacados"
-            />
-            {visibleMapEntries.map((entry) => {
-              const reading = getMapEntryReading(entry);
-              const valueText =
-                reading.value == null ? "--" : formatValue(reading.value, reading.unit);
-              const isActive = entry.id === selectedMapPoint;
-              return (
-                <button
-                  key={entry.id}
-                  className={`map-pin layer-${entry.layer} ${isActive ? "is-active" : ""}`}
-                  style={getMapEntryPosition(entry)}
-                  type="button"
-                  onClick={() => setSelectedMapPoint(entry.id)}
-                  aria-label={`${entry.detailLabel}: ${valueText}`}
-                >
-                  <span className="map-pin-icon" aria-hidden="true">
-                    {renderMapLayerIcon(entry.icon)}
-                  </span>
-                  <span className="map-pin-value">{valueText}</span>
-                </button>
-              );
-            })}
+            <div className="map-canvas">
+              <img
+                src={campus}
+                alt="Plano del campus con puntos de lectura energética destacados"
+              />
+              {visibleMapEntries.map((entry) => {
+                const reading = getMapEntryReading(entry);
+                const valueText =
+                  reading.value == null ? "--" : formatValue(reading.value, reading.unit);
+                const isActive = entry.id === selectedMapPoint;
+                return (
+                  <button
+                    key={entry.id}
+                    className={`map-pin layer-${entry.layer} ${isActive ? "is-active" : ""}`}
+                    style={getMapEntryPosition(entry)}
+                    type="button"
+                    onClick={() => setSelectedMapPoint(entry.id)}
+                    aria-label={`${entry.detailLabel}: ${valueText}`}
+                  >
+                    <span className="map-pin-icon" aria-hidden="true">
+                      {renderMapLayerIcon(entry.icon)}
+                    </span>
+                    <span className="map-pin-value">{valueText}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <article className="api-card map-detail-card">
             <h3 className="api-card-title">Detalle del punto</h3>
@@ -2799,13 +2811,14 @@ function App() {
                     <div className="api-card">
                       <h4 className="api-card-title">Tendencia y totales</h4>
                       {canRenderTrend ? (
-                        <ValueChart
-                          series={summary.seriesItems}
-                          label={`Agua ${config.label}`}
-                          unit={summary?.seriesUnit || "m3"}
-                          intervalMinutes={ANALYTICS_SERIES_INTERVAL_MINUTES}
-                        />
-                      ) : (
+                    <ValueChart
+                      series={summary.seriesItems}
+                      label={`Agua ${config.label}`}
+                      unit={summary?.seriesUnit || "m3"}
+                      intervalMinutes={ANALYTICS_SERIES_INTERVAL_MINUTES}
+                      density="single"
+                    />
+                  ) : (
                         <div className="chart-empty">Sin serie operativa disponible todavía.</div>
                       )}
                       <div className="detail-stack compact-detail-stack">
@@ -2922,6 +2935,7 @@ function App() {
                         irradianceSeries={summary.irradianceItems}
                         label={config.label}
                         intervalMinutes={ANALYTICS_SERIES_INTERVAL_MINUTES}
+                        density="single"
                       />
                     </div>
                   ) : (

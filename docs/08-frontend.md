@@ -27,8 +27,9 @@ Motivos:
    - KPIs por panel desde `/kpis?scope=...`
    - Gráfica de áreas 24h por panel desde `/series/24h?scope=...&interval_minutes=15`
 2. Mapa
-   - `campus.png` con overlays multicapa
+   - `campus.png` con la capa operativa visible de `Demanda de energía`
    - Valores instantáneos desde `/realtime`
+   - Panel inferior con detalle del punto seleccionado
 3. Agua
    - Tabla operativa por campus
    - Tendencia 24h desde `/series/24h?campus=...&metric=agua_consumo&interval_minutes=15`
@@ -51,7 +52,8 @@ Motivos:
   - Si backend marca `partial`, el panel muestra aviso visible y placeholders en lugar de curva agregada
 - Mapa principal:
   - mantiene el `campus.png`
-  - se usa como vista operativa de Las Lagunillas
+  - en esta entrega solo expone la capa `Demanda de energía`
+  - mantiene un panel de detalle para el punto seleccionado
 - Pantalla `#/validacion`:
   - 6 tarjetas, una por gateway requerido
   - bloque global `Anomalías detectadas` antes de los gateways
@@ -75,6 +77,8 @@ Motivos:
 
 ## Saneado analítico
 - Las gráficas operativas (`Balance`, `Energía`, `Agua`, `Fotovoltaica`) consumen series analíticas que excluyen muestras anómalas.
+- En potencia e irradiancia, cada bin visual de `15 min` usa la media de muestras válidas del intervalo.
+- En agua, el bin usa el último contador válido del intervalo y la curva se expresa como consumo incremental entre bins consecutivos.
 - En balance, si un contribuidor llega anómalo:
   - se trata como `missing`
   - se usa `last observation carried forward` dentro de la ventana de frescura
@@ -83,6 +87,7 @@ Motivos:
   - latest técnico sigue visible
   - la tabla de anomalías muestra `raw_value`, `applied_value`, `tipo` y `motivo`
 - En frontend, las líneas y áreas se segmentan para no unir huecos largos cuando faltan datos válidos.
+- Todas las horas visibles del portal se muestran en la zona horaria local del navegador del usuario.
 
 ## Runbook rapido (local)
 ```bash

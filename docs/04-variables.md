@@ -222,7 +222,7 @@ Gateway: `gw_autoconsumo_jaen`
 | uja.jaen.energia.consumo.total.p_kw | kW | Σ de las 25 potencias `uja.jaen.energia.consumo.*.p_kw` |
 | uja.linares.energia.consumo.total.p_kw | kW | `lab_sg_t1 + lab_sg_t2 + urbanizacion + aulario_departamental + polideportivo` |
 | uja.jaen.fv.endesa.total.p_kw | kW | Σ `uja.jaen.fv.endesa.inv01..inv12.p_ac_kw` |
-| uja.linares.fv.endesa.total.p_kw | kW | Σ `uja.linares.fv.endesa.inv01..inv03.p_ac_kw` |
+| uja.linares.fv.endesa.total.p_kw | kW | `uja.linares.fv.endesa.ct_total.p_kw` |
 | uja.jaen.fv.auto.total.p_kw | kW | `uja.jaen.fv.auto.ct_total.p_kw` |
 | uja.jaen.fv.total.p_kw | kW | `uja.jaen.fv.endesa.total.p_kw + uja.jaen.fv.auto.total.p_kw` |
 

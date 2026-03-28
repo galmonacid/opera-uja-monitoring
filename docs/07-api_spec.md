@@ -88,7 +88,7 @@ Respuesta por scope (modo dashboard principal):
   "label":"Campus Las Lagunillas",
   "status":"complete",
   "missing_sources":[],
-  "interval_minutes":5,
+  "interval_minutes":15,
   "unit":"kW",
   "series":[
     {"ts":173...,"demand":123.4,"pv":45.6},
@@ -99,7 +99,7 @@ Respuesta por scope (modo dashboard principal):
 Respuesta por defecto (sin `metric` ni `scope`, balance campus):
 {
   "campus":"jaen",
-  "interval_minutes":5,
+  "interval_minutes":15,
   "unit":"kW",
   "series":[
     {"ts":173...,"demand":123.4,"pv":45.6},
@@ -111,7 +111,7 @@ Respuesta con `metric`:
 {
   "campus":"jaen",
   "metric":"fv_auto",
-  "interval_minutes":5,
+  "interval_minutes":15,
   "unit":"kW",
   "series":[
     {"ts":173...,"value":72.8},
@@ -141,7 +141,9 @@ Notas:
 - `metric=fv_endesa` y sus agregados diarios/mensuales en Jaén siguen calculándose por suma de inversores, no por `ct_total`.
 - En modo `scope`, `ctl_linares` usa `lab_sg_t1`, `lab_sg_t2`, `urbanizacion`, `aulario_departamental`, `polideportivo` y FV desde `uja.linares.fv.endesa.ct_total.p_kw`.
 - `status` puede ser `complete`, `partial` o `empty`. Si faltan fuentes obligatorias, `missing_sources` lista los identificadores afectados y la serie agregada se devuelve vacía.
+- En potencia e irradiancia, cada bin devuelve la media de las muestras válidas dentro del intervalo solicitado.
 - Para `agua_consumo`, la serie 24h devuelve consumo por intervalo a partir de contadores acumulados (unidad `m3`).
+- Para `agua_consumo`, el bin usa el último contador válido del intervalo y la API transforma la serie a consumo incremental entre bins consecutivos.
 - Las vistas visuales del portal consumen `interval_minutes=15` como granularidad estándar.
 - Si `monthly` no está materializado todavía en DynamoDB, la API puede reconstruirlo a partir de `daily`.
 

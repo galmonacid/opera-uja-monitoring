@@ -23,7 +23,8 @@ en Campus de Jaén y Campus de Linares.
 13. `13-agentic-protocol.md` — Protocolo de desarrollo agentico
 14. `14-sample_payloads.md` — Samples de payload (redactados)
 15. `15-evidencias-gw-autoconsumo-jaen.md` — Evidencias backend/frontend (gateway FV autoconsumo Jaen)
-16. `environments_secrets.md` — Configuracion y secretos por entorno
+16. `16-entregable-frontend-funcional.md` — Entregable funcional del frontend para cliente
+17. `environments_secrets.md` — Configuracion y secretos por entorno
 
 ## Estado de completitud
 - Variables mapeadas: ✅ 102 definidas

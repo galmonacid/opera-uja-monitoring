@@ -405,7 +405,7 @@
 }
 
 .energy-flow-arrow-solar {
-  stroke: var(--uja-green);
+  stroke: var(--uja-green-dark);
 }
 
 .energy-flow-arrow-head {
@@ -439,15 +439,11 @@
 }
 
 .energy-flow-icon {
-  color: var(--uja-black);
-}
-
-.energy-flow-solar-icon {
   color: var(--uja-green-dark);
 }
 
 .energy-flow-solar-sun {
-  stroke: var(--uja-gold);
+  stroke: currentColor;
 }
 
 .energy-flow-node rect {
@@ -784,6 +780,10 @@
   overflow: visible;
 }
 
+.area-chart.density-single {
+  aspect-ratio: 108 / 36;
+}
+
 .chart-empty {
   min-height: 240px;
   display: grid;
@@ -816,12 +816,16 @@
   aspect-ratio: 120 / 64;
 }
 
+.value-chart.density-single {
+  aspect-ratio: 120 / 48;
+}
+
 .solar-chart {
   width: 100%;
   height: auto;
   display: block;
   overflow: visible;
-  aspect-ratio: 124 / 44;
+  aspect-ratio: 124 / 38;
 }
 
 .value-area {
@@ -868,6 +872,12 @@
   dominant-baseline: hanging;
 }
 
+.area-chart.density-single .axis-label,
+.value-chart.density-single .axis-label,
+.solar-chart.density-single .axis-label {
+  font-size: 2.8px;
+}
+
 .axis-label-y {
   text-anchor: end;
 }
@@ -877,7 +887,6 @@
 }
 
 .map-frame {
-  position: relative;
   overflow: hidden;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -885,8 +894,19 @@
   box-shadow: var(--shadow-soft);
 }
 
-.map-frame img {
+.map-canvas {
+  position: relative;
   width: 100%;
+  aspect-ratio: 1968 / 1159;
+}
+
+.map-frame img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .map-pin {
@@ -956,7 +976,7 @@
 }
 
 .map-workspace {
-  min-height: 620px;
+  min-height: 0;
 }
 
 .map-detail-card {
@@ -1284,9 +1304,25 @@
   }
 
   .map-pin {
-    min-width: 60px;
-    margin-left: 0.25rem;
-    padding: 0.25rem 0.4rem;
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    margin-left: 0;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+  }
+
+  .map-pin-value {
+    display: none;
+  }
+
+  .map-pin-icon,
+  .map-pin-icon svg {
+    width: 18px;
+    height: 18px;
   }
 
   .section-title {

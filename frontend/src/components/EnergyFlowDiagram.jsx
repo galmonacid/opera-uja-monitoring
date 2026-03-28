@@ -20,7 +20,7 @@ const ValuePill = ({ x, y, width, heading, value, className = "" }) => (
   </g>
 );
 
-const GridTowerIcon = () => (
+const GridPowerIcon = () => (
   <g
     className="energy-flow-icon energy-flow-grid-icon"
     fill="none"
@@ -28,15 +28,18 @@ const GridTowerIcon = () => (
     strokeLinecap="round"
     strokeLinejoin="round"
   >
-    <path d="M36 8 24 34h24L36 8Z" strokeWidth="4" />
-    <path d="M24 34 18 62h36L48 34" strokeWidth="4" />
-    <path d="M18 62 10 112h52L54 62" strokeWidth="4" />
-    <path d="M36 34v78" strokeWidth="4" />
-    <path d="M16 50h40M12 78h48" strokeWidth="4" />
-    <path d="M28 112h16" strokeWidth="4" />
-    <path d="M10 20 0 26M62 20 72 26" strokeWidth="3" />
-    <path d="M14 46 2 52M58 46 70 52" strokeWidth="3" />
-    <path d="M14 74 0 82M58 74 72 82" strokeWidth="3" />
+    <path d="M36 10v92" strokeWidth="4" />
+    <path d="M18 10h36L72 30H0L18 10Z" strokeWidth="4" />
+    <path d="M12 30v14M60 30v14" strokeWidth="4" />
+    <path d="M16 30h40" strokeWidth="4" />
+    <path d="M28 10l16 20M44 10 28 30" strokeWidth="4" />
+    <path d="M10 52h52L76 72H-4L10 52Z" strokeWidth="4" />
+    <path d="M8 52v16M64 52v16" strokeWidth="4" />
+    <path d="M18 52h36" strokeWidth="4" />
+    <path d="M22 52l14 20M50 52 36 72" strokeWidth="4" />
+    <path d="M18 72 8 118h56L54 72" strokeWidth="4" />
+    <path d="M20 88 52 110M52 88 20 110" strokeWidth="4" />
+    <path d="M8 118h56" strokeWidth="4" />
   </g>
 );
 
@@ -136,7 +139,7 @@ function EnergyFlowDiagram({
           heading="Potencia"
           value={gridValue} />
           <g transform="translate(40 0)">
-            <GridTowerIcon />
+            <GridPowerIcon />
           </g>
           <text className="energy-flow-group-label" x="80" y="150" textAnchor="middle">
             Energía de red
