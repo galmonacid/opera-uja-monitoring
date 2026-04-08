@@ -60,6 +60,9 @@ const MAP_LAYER_OFFSETS = {
   solar: { x: 1.2, y: -2 },
   autoconsumo: { x: -1.2, y: 2 },
 };
+const getWaterAssetFromRtId = (rtId) => rtId?.split(".")[4] || null;
+const getWaterMapAggregatePeriod = (periodFilter) =>
+  periodFilter === "monthly" ? "monthly" : "daily";
 
 const createMapEntry = ({
   id,
@@ -76,6 +79,10 @@ const createMapEntry = ({
   const normalizedRtIds = Array.isArray(rtIds) ? rtIds : [rtIds];
   const fallbackLabel = normalizedRtIds.length === 1 ? getMonitoringPointLabel(normalizedRtIds[0]) : id;
   const resolvedLabel = label || fallbackLabel;
+  const asset =
+    layer === "water" && normalizedRtIds.length === 1
+      ? getWaterAssetFromRtId(normalizedRtIds[0])
+      : null;
   return {
     id,
     layer,
@@ -87,6 +94,7 @@ const createMapEntry = ({
     icon: icon || layer,
     label: resolvedLabel,
     detailLabel: detailLabel || resolvedLabel,
+    asset,
   };
 };
 
@@ -1208,6 +1216,13 @@ function App() {
     });
     return initial;
   });
+  const [waterMapAggregates, setWaterMapAggregates] = useState({
+    status: "idle",
+    period: getWaterMapAggregatePeriod("actual"),
+    byCampus: {},
+    unitByCampus: {},
+    error: null,
+  });
 
   const routeId = resolveRouteId(routeHash);
 
@@ -1575,6 +1590,70 @@ function App() {
     }
   };
 
+  const fetchWaterMapAggregates = async (period) => {
+    const waterEntries = MAP_ENTRIES.filter((entry) => entry.layer === "water" && entry.asset);
+    const assetsByCampus = waterEntries.reduce((acc, entry) => {
+      if (!acc[entry.campus]) {
+        acc[entry.campus] = new Set();
+      }
+      acc[entry.campus].add(entry.asset);
+      return acc;
+    }, {});
+
+    try {
+      setWaterMapAggregates((prev) => ({
+        ...prev,
+        status: "loading",
+        period,
+        error: null,
+      }));
+
+      const requests = Object.entries(assetsByCampus).flatMap(([campus, assets]) =>
+        Array.from(assets).map(async (asset) => {
+          const payload = await fetchWithFallback(
+            `/aggregates/${period}?campus=${campus}&metric=agua_consumo&asset=${asset}`
+          );
+          return { campus, asset, payload };
+        })
+      );
+      const settled = await Promise.allSettled(requests);
+
+      const byCampus = {};
+      const unitByCampus = {};
+      let firstError = null;
+
+      settled.forEach((result) => {
+        if (result.status !== "fulfilled") {
+          if (!firstError) firstError = result.reason?.message || "api_error";
+          return;
+        }
+        const { campus, asset, payload } = result.value;
+        const value = getLastAggregateValue(payload.series || []);
+        if (value == null) return;
+        if (!byCampus[campus]) byCampus[campus] = {};
+        byCampus[campus][asset] = value;
+        if (!unitByCampus[campus]) {
+          unitByCampus[campus] = payload.unit || "m3";
+        }
+      });
+
+      setWaterMapAggregates({
+        status: "ready",
+        period,
+        byCampus,
+        unitByCampus,
+        error: firstError,
+      });
+    } catch (error) {
+      setWaterMapAggregates((prev) => ({
+        ...prev,
+        status: "error",
+        period,
+        error: error.message,
+      }));
+    }
+  };
+
   const refreshScopeData = (scope) => {
     fetchDashboardKpis(scope);
     fetchDashboardSeries(scope);
@@ -1686,6 +1765,14 @@ function App() {
     const interval = setInterval(refreshWaterHistory, 300000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (routeId !== "map" || mapLayer !== "water") return undefined;
+    const period = getWaterMapAggregatePeriod(periodFilter);
+    fetchWaterMapAggregates(period);
+    const interval = setInterval(() => fetchWaterMapAggregates(period), 300000);
+    return () => clearInterval(interval);
+  }, [routeId, mapLayer, periodFilter]);
 
   useEffect(() => {
     if (routeId !== "validation") return undefined;
@@ -1891,6 +1978,23 @@ function App() {
   }, [realtimeItems]);
 
   const getMapEntryReading = (entry) => {
+    if (entry.layer === "water") {
+      const campusAggregates = waterMapAggregates.byCampus?.[entry.campus] || {};
+      const assetValue =
+        entry.asset && Object.prototype.hasOwnProperty.call(campusAggregates, entry.asset)
+          ? campusAggregates[entry.asset]
+          : null;
+      return {
+        value: assetValue,
+        unit: waterMapAggregates.unitByCampus?.[entry.campus] || getDefaultMapUnit(entry.layer),
+        tsEvent: null,
+        availableCount: assetValue == null ? 0 : 1,
+        totalCount: 1,
+        isPartial: false,
+        isNoData: assetValue == null,
+      };
+    }
+
     const items = entry.rtIds
       .map((rtId) => realtimeMap.get(rtId))
       .filter(Boolean);
@@ -1903,6 +2007,7 @@ function App() {
         availableCount: 0,
         totalCount: entry.rtIds.length,
         isPartial: false,
+        isNoData: false,
       };
     }
 
@@ -1928,6 +2033,7 @@ function App() {
       availableCount: items.length,
       totalCount: entry.rtIds.length,
       isPartial: items.length < entry.rtIds.length,
+      isNoData: false,
     };
   };
 
@@ -2783,7 +2889,11 @@ function App() {
               {visibleMapEntries.map((entry) => {
                 const reading = getMapEntryReading(entry);
                 const valueText =
-                  reading.value == null ? "--" : formatValue(reading.value, reading.unit);
+                  reading.value == null
+                    ? reading.isNoData
+                      ? "sin dato"
+                      : "--"
+                    : formatValue(reading.value, reading.unit);
                 const isActive = entry.id === selectedMapPoint;
                 return (
                   <button
@@ -2822,7 +2932,9 @@ function App() {
                   <span className="detail-value">
                     {selectedMapReading
                       ? selectedMapReading.value == null
-                        ? "--"
+                        ? selectedMapReading.isNoData
+                          ? "sin dato"
+                          : "--"
                         : `${formatValue(selectedMapReading.value, selectedMapReading.unit)}${
                             selectedMapReading.isPartial ? " · parcial" : ""
                           }`
