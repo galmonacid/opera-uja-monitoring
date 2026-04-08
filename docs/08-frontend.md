@@ -14,6 +14,7 @@ Motivos:
 - UI: CSS custom + SVG inline
 - Charts: SVG propio (área/línea y doble eje para FV)
 - Consumo API: fetch
+- Flag de despliegue para mapa de agua: `VITE_WATER_MAP_SOURCE=backend_aggregate|client_offset|raw`
 
 ## Estructura en repo
 - App SPA en `frontend/`
@@ -74,6 +75,30 @@ Motivos:
 - `/kpis?scope=...`: cada 60s
 - `/series/24h?...interval_minutes=15`: cada 5 min
 - `/anomalies`: cada 60s cuando la vista `Validación` está activa
+
+## Estrategia operativa para mapa de agua (`WATER_MAP_SOURCE`)
+- Objetivo: controlar la transición de cálculo de agua en mapa entre frontend y backend sin bloquear despliegues.
+- Valores soportados:
+  - `backend_aggregate` (**default**): la API entrega la lectura lista para mapa; frontend solo presenta.
+  - `client_offset` (contingencia temporal): frontend aplica normalización local por `rt_id` usando offset inicial.
+  - `raw`: sin normalización adicional en frontend.
+- Configuración:
+  - Frontend: `VITE_WATER_MAP_SOURCE`.
+  - API (propagado por frontend en `realtime`): `water_map_source=<valor>` para permitir lectura homogénea backend/frontend durante coexistencia.
+
+### Rollback y ventana de coexistencia
+- Despliegue estándar: arrancar en `backend_aggregate`.
+- Rollback rápido (sin redeploy backend):
+  1. Cambiar variable frontend a `VITE_WATER_MAP_SOURCE=client_offset`.
+  2. Publicar build de Amplify.
+  3. Verificar en `#/mapa` capa agua y en `#/validacion` que no aparezcan desviaciones no esperadas.
+- Ventana de coexistencia recomendada: mantener `backend_aggregate` + fallback `client_offset` disponible durante **1–2 ciclos mensuales completos** de operación.
+
+### Criterio de retirada de `client_offset`
+- Retirar código `client_offset` cuando se cumplan simultáneamente:
+  - 1–2 cierres mensuales consecutivos sin incidencias atribuibles al cálculo de agua en mapa.
+  - Sin necesidad de rollback a `client_offset` en ese periodo.
+  - Validación operativa conforme en `Mapa`, `Agua` y `Validación`.
 
 ## Saneado analítico
 - Las gráficas operativas (`Balance`, `Energía`, `Agua`, `Fotovoltaica`) consumen series analíticas que excluyen muestras anómalas.

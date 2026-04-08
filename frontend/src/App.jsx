@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 import campus from "./assets/sections/campus.png";
@@ -12,6 +12,14 @@ const API_BASES = [
   import.meta.env.VITE_API_BASE,
   DEFAULT_API_BASE,
 ].filter(Boolean);
+const WATER_MAP_SOURCE_OPTIONS = new Set(["backend_aggregate", "client_offset", "raw"]);
+const DEFAULT_WATER_MAP_SOURCE = "backend_aggregate";
+const configuredWaterMapSource = String(
+  import.meta.env.VITE_WATER_MAP_SOURCE || DEFAULT_WATER_MAP_SOURCE
+).toLowerCase();
+const WATER_MAP_SOURCE = WATER_MAP_SOURCE_OPTIONS.has(configuredWaterMapSource)
+  ? configuredWaterMapSource
+  : DEFAULT_WATER_MAP_SOURCE;
 const ANALYTICS_SERIES_INTERVAL_MINUTES = 15;
 const ANOMALIES_LOOKBACK_HOURS = 72;
 const ANOMALIES_LIMIT = 200;
@@ -1179,6 +1187,7 @@ function App() {
     });
     return initial;
   });
+  const waterClientOffsetsRef = useRef(new Map());
 
   const routeId = resolveRouteId(routeHash);
 
@@ -1202,9 +1211,10 @@ function App() {
   const fetchRealtime = async () => {
     try {
       setRealtime((prev) => ({ ...prev, status: "loading", error: null }));
+      const realtimeQuery = new URLSearchParams({ water_map_source: WATER_MAP_SOURCE });
       const [jaenPayload, linaresPayload] = await Promise.all([
-        fetchWithFallback("/realtime?campus=jaen"),
-        fetchWithFallback("/realtime?campus=linares"),
+        fetchWithFallback(`/realtime?campus=jaen&${realtimeQuery.toString()}`),
+        fetchWithFallback(`/realtime?campus=linares&${realtimeQuery.toString()}`),
       ]);
       const mergedItems = new Map();
       [jaenPayload, linaresPayload].forEach((payload) => {
@@ -1841,10 +1851,26 @@ function App() {
       };
     }
 
-    const value =
+    let value =
       entry.aggregate === "sum"
         ? items.reduce((sum, item) => sum + Number(item.value || 0), 0)
         : Number(items[0].value || 0);
+
+    if (entry.layer === "water" && WATER_MAP_SOURCE === "client_offset") {
+      const normalizedItems = items.map((item) => {
+        const key = item.rt_id;
+        const currentValue = Number(item.value || 0);
+        if (!waterClientOffsetsRef.current.has(key)) {
+          waterClientOffsetsRef.current.set(key, currentValue);
+        }
+        const baseline = Number(waterClientOffsetsRef.current.get(key) || 0);
+        return Math.max(0, currentValue - baseline);
+      });
+      value =
+        entry.aggregate === "sum"
+          ? normalizedItems.reduce((sum, itemValue) => sum + itemValue, 0)
+          : normalizedItems[0];
+    }
 
     return {
       value,
@@ -2681,6 +2707,11 @@ function App() {
           <p className="section-subtitle">
             Consulte el detalle del punto de demanda seleccionado debajo del plano.
           </p>
+          {mapLayer === "water" || mapLayer === "all" ? (
+            <p className="section-subtitle">
+              Fuente agua activa: <strong>{WATER_MAP_SOURCE}</strong>.
+            </p>
+          ) : null}
         </div>
         <div className="map-layout">
           <div className="map-frame map-workspace">
