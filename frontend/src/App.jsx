@@ -313,7 +313,7 @@ const MAP_ENTRIES = [
 ];
 const DASHBOARD_SCOPES = [
   { id: "las_lagunillas", title: "Campus Las Lagunillas" },
-  { id: "ctl_linares", title: "Campus CTL Linares" },
+  { id: "ctl_linares", title: "Campus Científico Tecnológico de Linares" },
 ];
 const MISSING_SOURCE_LABELS = {
   las_lagunillas_demand: "demanda Las Lagunillas",
@@ -412,7 +412,7 @@ const ENERGY_VIEW_CONFIG = [
   {
     scopeId: "ctl_linares",
     campus: "linares",
-    label: "Campus CTL Linares",
+    label: "Campus Científico Tecnológico de Linares",
     gatewayId: "gw_linares_mix",
   },
 ];
