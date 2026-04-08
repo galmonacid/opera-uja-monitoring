@@ -329,14 +329,33 @@ def get_aggregates(params, period):
     elif not items:
         items = build_aggregate_fallback_items(campus, metric, period)
 
+    unit = items[0].get("unit") if items else infer_aggregate_unit(metric)
+    if asset == "all":
+        by_asset = {}
+        for item in items:
+            item_asset = item.get("asset", "total")
+            by_asset.setdefault(item_asset, []).append(
+                {"date": item["date"], "value": float(item["value"])}
+            )
+        assets = []
+        for item_asset, asset_series in by_asset.items():
+            asset_series.sort(key=lambda x: x["date"])
+            assets.append({"asset": item_asset, "series": asset_series})
+        assets.sort(key=lambda x: x["asset"])
+        return {
+            "campus": campus,
+            "metric": metric,
+            "period": period,
+            "unit": unit,
+            "assets": assets,
+        }
+
     series = []
     for item in items:
         if item.get("asset") != asset:
             continue
         series.append({"date": item["date"], "value": float(item["value"])})
-
     series.sort(key=lambda x: x["date"])
-    unit = items[0].get("unit") if items else infer_aggregate_unit(metric)
     return {
         "campus": campus,
         "metric": metric,

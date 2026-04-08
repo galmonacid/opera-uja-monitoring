@@ -43,6 +43,11 @@ const HOUR_FORMATTER = new Intl.DateTimeFormat("es-ES", {
   minute: "2-digit",
   hourCycle: "h23",
 });
+const WATER_READING_MODES = [
+  { value: "monthly", label: "Consumo mensual" },
+  { value: "yearly", label: "Consumo anual" },
+  { value: "raw", label: "Totalizador" },
+];
 
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
 const JAEN_ENDESA_CT_TOTAL_RT_ID = "uja.jaen.fv.endesa.ct_total.p_kw";
@@ -1095,6 +1100,7 @@ const renderMapLayerIcon = (layer) => {
 };
 
 const getDefaultMapUnit = (layer) => (layer === "water" ? "m3" : "kW");
+const getWaterAssetFromRtId = (rtId) => String(rtId || "").split(".")[4] || null;
 
 const clampPercent = (value) => Math.max(1, Math.min(97, value));
 
@@ -1124,6 +1130,17 @@ function App() {
   const [mapLayer, setMapLayer] = useState("energy");
   const [selectedMapPoint, setSelectedMapPoint] = useState(null);
   const [validationDomainFilter, setValidationDomainFilter] = useState("all");
+  const [waterReadingMode, setWaterReadingMode] = useState("monthly");
+  const [waterMapAggregates, setWaterMapAggregates] = useState(() => ({
+    jaen: {
+      monthly: { status: "idle", data: null, error: null },
+      yearly: { status: "idle", data: null, error: null },
+    },
+    linares: {
+      monthly: { status: "idle", data: null, error: null },
+      yearly: { status: "idle", data: null, error: null },
+    },
+  }));
   const [validationActiveTabs, setValidationActiveTabs] = useState(() =>
     Object.fromEntries(GATEWAYS.map((gateway) => [gateway.id, "latest"]))
   );
@@ -1579,6 +1596,10 @@ function App() {
     SOLAR_VIEW_CONFIG.forEach((config) => {
       fetchSolarIrradianceSeries(config);
     });
+    ["jaen", "linares"].forEach((campus) => {
+      fetchWaterMapAggregates(campus, "monthly");
+      fetchWaterMapAggregates(campus, "yearly");
+    });
   };
 
   const refreshWaterHistory = () => {
@@ -1819,11 +1840,62 @@ function App() {
 
   const realtimeItems = useMemo(() => realtime.data?.items || [], [realtime.data]);
 
+  const fetchWaterMapAggregates = async (campus, period) => {
+    try {
+      setWaterMapAggregates((prev) => ({
+        ...prev,
+        [campus]: {
+          ...prev[campus],
+          [period]: { ...prev[campus][period], status: "loading", error: null },
+        },
+      }));
+      const payload = await fetchWithFallback(
+        `/aggregates/${period}?campus=${campus}&metric=agua_consumo&asset=all`
+      );
+      setWaterMapAggregates((prev) => ({
+        ...prev,
+        [campus]: {
+          ...prev[campus],
+          [period]: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setWaterMapAggregates((prev) => ({
+        ...prev,
+        [campus]: {
+          ...prev[campus],
+          [period]: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
   const realtimeMap = useMemo(() => {
     const map = new Map();
     realtimeItems.forEach((item) => map.set(item.rt_id, item));
     return map;
   }, [realtimeItems]);
+
+  const waterMapAssetValues = useMemo(() => {
+    const result = { monthly: {}, yearly: {} };
+    (["jaen", "linares"]).forEach((campus) => {
+      (["monthly", "yearly"]).forEach((period) => {
+        const assets = waterMapAggregates[campus]?.[period]?.data?.assets || [];
+        const valueByAsset = {};
+        assets.forEach((assetItem) => {
+          const series = assetItem.series || [];
+          if (!series.length) return;
+          const latest = series[series.length - 1];
+          const numericValue = Number(latest?.value);
+          if (Number.isFinite(numericValue)) {
+            valueByAsset[assetItem.asset] = numericValue;
+          }
+        });
+        result[period][campus] = valueByAsset;
+      });
+    });
+    return result;
+  }, [waterMapAggregates]);
 
   const getMapEntryReading = (entry) => {
     const items = entry.rtIds
@@ -1841,10 +1913,20 @@ function App() {
       };
     }
 
+    const resolveItemValue = (item) => {
+      const rawValue = Number(item.value || 0);
+      if (entry.layer !== "water" || waterReadingMode === "raw") return rawValue;
+      const asset = getWaterAssetFromRtId(item.rt_id);
+      const campusAssetValues = waterMapAssetValues[waterReadingMode]?.[entry.campus] || {};
+      const aggregateValue = campusAssetValues[asset];
+      if (aggregateValue == null) return rawValue;
+      return aggregateValue;
+    };
+
     const value =
       entry.aggregate === "sum"
-        ? items.reduce((sum, item) => sum + Number(item.value || 0), 0)
-        : Number(items[0].value || 0);
+        ? items.reduce((sum, item) => sum + resolveItemValue(item), 0)
+        : resolveItemValue(items[0]);
 
     return {
       value,
@@ -2494,6 +2576,22 @@ function App() {
           </select>
         </label>
       );
+      controls.push(
+        <label key="water-mode" className="toolbar-field">
+          <span className="toolbar-label">Lectura agua</span>
+          <select
+            className="toolbar-select"
+            value={waterReadingMode}
+            onChange={(event) => setWaterReadingMode(event.target.value)}
+          >
+            {WATER_READING_MODES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
     }
 
     if (routeId === "validation") {
@@ -2517,7 +2615,7 @@ function App() {
 
     let note = "Vista operativa lista.";
     if (routeId === "map") {
-      note = `${visibleMapEntries.length} puntos visibles en la capa actual.`;
+      note = `${visibleMapEntries.length} puntos visibles en la capa actual. Agua en modo ${WATER_READING_MODES.find((item) => item.value === waterReadingMode)?.label?.toLowerCase()}.`;
     } else if (routeId === "validation") {
       note = `${filteredValidationGateways.length} gateways visibles en seguimiento.`;
     } else if (routeId === "solar") {

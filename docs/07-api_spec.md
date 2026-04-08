@@ -55,7 +55,7 @@ Respuesta:
 Query params:
 - campus
 - metric (energia_consumo, agua_consumo, fv_energia, fv_endesa, fv_auto, co2_evitar, etc.)
-- asset=total|edificio_a1|inv01|...
+- asset=total|edificio_a1|inv01|...|all
 
 Respuesta:
 {
@@ -66,6 +66,20 @@ Respuesta:
   "series":[
     {"date":"2025-09-30","value":...},
     ...
+  ]
+}
+
+Si `asset=all`:
+{
+  "campus":"jaen",
+  "metric":"agua_consumo",
+  "period":"monthly",
+  "unit":"m3",
+  "assets":[
+    {
+      "asset":"edificio_a1",
+      "series":[{"date":"2026-04","value":...}]
+    }
   ]
 }
 
