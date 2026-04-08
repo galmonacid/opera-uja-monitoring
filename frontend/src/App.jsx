@@ -2324,6 +2324,10 @@ function App() {
         <span className="summary-card-copy">Última actualización {formatTs(scopeSummary?.tsEvent)}</span>
         {scopeSummary?.chartSeries?.length ? (
           <div className="summary-chart">
+            <div className="chart-legend">
+              <span className="legend-item demand">Curva Demanda kW</span>
+              <span className="legend-item pv">Curva Generación kW</span>
+            </div>
             <AreaChart series={scopeSummary.chartSeries} unit="kW" />
           </div>
         ) : (

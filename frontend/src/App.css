@@ -529,6 +529,11 @@
   font-size: 0.875rem;
 }
 
+.summary-chart {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .summary-chart .area-chart,
 .summary-campus-card .area-chart {
   height: auto;
