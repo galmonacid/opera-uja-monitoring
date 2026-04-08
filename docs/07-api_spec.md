@@ -55,7 +55,8 @@ Respuesta:
 Query params:
 - campus
 - metric (energia_consumo, agua_consumo, fv_energia, fv_endesa, fv_auto, co2_evitar, etc.)
-- asset=total|edificio_a1|inv01|...
+- asset=total|edificio_a1|inv01|...|all
+- assets=edificio_a1,edificio_a2,inv01,... (lista separada por comas; se puede combinar con `asset`)
 
 Respuesta:
 {
@@ -67,6 +68,31 @@ Respuesta:
     {"date":"2025-09-30","value":...},
     ...
   ]
+}
+
+Respuesta (multi-asset con `asset=all` o `assets=...`):
+{
+  "campus":"jaen",
+  "metric":"agua_consumo",
+  "period":"monthly",
+  "unit":"m3",
+  "assets":["deposito_principal","edificio_a1","total"],
+  "series":[
+    {
+      "date":"2026-03",
+      "assets":{
+        "deposito_principal":...,
+        "edificio_a1":...,
+        "total":...
+      }
+    }
+  ],
+  "asset_values":{
+    "deposito_principal":...,
+    "edificio_a1":...,
+    "total":...
+  },
+  "asset_values_date":"2026-03"
 }
 
 ### GET /v1/series/24h
@@ -146,6 +172,8 @@ Notas:
 - Para `agua_consumo`, el bin usa el último contador válido del intervalo y la API transforma la serie a consumo incremental entre bins consecutivos.
 - Las vistas visuales del portal consumen `interval_minutes=15` como granularidad estándar.
 - Si `monthly` no está materializado todavía en DynamoDB, la API puede reconstruirlo a partir de `daily`.
+- Compatibilidad: `asset=total` mantiene el contrato anterior (`series` con `{date, value}` sin bloque `assets`).
+- Para mapa de agua, usar `metric=agua_consumo` + `period=monthly|yearly` + `asset=all` (o `assets=...`); `asset_values` devuelve directamente el mapa `asset -> value` de la fecha más reciente disponible.
 
 ### GET /v1/anomalies
 Registro técnico reciente de anomalías detectadas durante ingestión o backfill.

@@ -306,7 +306,7 @@ def get_anomalies(params):
 def get_aggregates(params, period):
     campus = params.get("campus")
     metric = params.get("metric")
-    asset = params.get("asset", "total")
+    aggregate_assets = resolve_aggregate_assets(params)
 
     if not campus or not metric:
         return {"error": "missing_params"}
@@ -329,21 +329,97 @@ def get_aggregates(params, period):
     elif not items:
         items = build_aggregate_fallback_items(campus, metric, period)
 
-    series = []
+    normalized_series = []
     for item in items:
-        if item.get("asset") != asset:
+        asset = item.get("asset")
+        if not should_include_asset(asset, aggregate_assets):
             continue
-        series.append({"date": item["date"], "value": float(item["value"])})
+        normalized_series.append(
+            {
+                "date": item["date"],
+                "asset": asset,
+                "value": float(item["value"]),
+            }
+        )
 
-    series.sort(key=lambda x: x["date"])
+    normalized_series.sort(key=lambda x: (x["date"], x["asset"]))
     unit = items[0].get("unit") if items else infer_aggregate_unit(metric)
-    return {
+    base_response = {
         "campus": campus,
         "metric": metric,
         "period": period,
         "unit": unit,
+    }
+
+    if aggregate_assets["mode"] == "single":
+        selected_asset = aggregate_assets["assets"][0]
+        series = [
+            {"date": item["date"], "value": item["value"]}
+            for item in normalized_series
+            if item["asset"] == selected_asset
+        ]
+        return {
+            **base_response,
+            "series": series,
+        }
+
+    grouped_series = {}
+    for item in normalized_series:
+        grouped_series.setdefault(item["date"], {})[item["asset"]] = item["value"]
+    series = [
+        {"date": date, "assets": assets}
+        for date, assets in sorted(grouped_series.items())
+    ]
+    response_payload = {
+        **base_response,
+        "assets": sorted(
+            {
+                asset
+                for series_item in series
+                for asset in series_item["assets"].keys()
+            }
+        ),
         "series": series,
     }
+    if metric == "agua_consumo" and period in ("monthly", "yearly") and series:
+        latest_series = max(series, key=lambda x: x["date"])
+        response_payload["asset_values"] = latest_series["assets"]
+        response_payload["asset_values_date"] = latest_series["date"]
+    return response_payload
+
+
+def resolve_aggregate_assets(params):
+    default_asset = "total"
+    raw_asset = (params.get("asset") or "").strip()
+    raw_assets = params.get("assets")
+
+    requested_assets = []
+    if raw_assets:
+        requested_assets.extend(
+            part.strip()
+            for part in raw_assets.split(",")
+            if part and part.strip()
+        )
+    if raw_asset and raw_asset.lower() != "all":
+        requested_assets.append(raw_asset)
+
+    if raw_asset.lower() == "all" or any(asset.lower() == "all" for asset in requested_assets):
+        return {"mode": "all", "assets": []}
+    if requested_assets:
+        deduped_assets = []
+        for asset in requested_assets:
+            if asset not in deduped_assets:
+                deduped_assets.append(asset)
+        if len(deduped_assets) == 1:
+            return {"mode": "single", "assets": deduped_assets}
+        return {"mode": "multi", "assets": deduped_assets}
+    return {"mode": "single", "assets": [default_asset]}
+
+
+def should_include_asset(asset, aggregate_assets):
+    if aggregate_assets["mode"] == "all":
+        return True
+    return asset in aggregate_assets["assets"]
 
 
 def normalize_aggregate_items(items, metric):
