@@ -8,10 +8,22 @@ from pathlib import Path
 import boto3
 from boto3.dynamodb.conditions import Key
 try:
-    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics, should_exclude_anomalous_sample
+    from anomaly_policy import (
+        build_anomaly_event_key,
+        derive_rt_metadata,
+        format_anomaly_value,
+        sanitize_for_analytics,
+        should_exclude_anomalous_sample,
+    )
 except ModuleNotFoundError:
     sys.path.append(str(Path(__file__).resolve().parents[2]))
-    from anomaly_policy import derive_rt_metadata, sanitize_for_analytics, should_exclude_anomalous_sample
+    from anomaly_policy import (
+        build_anomaly_event_key,
+        derive_rt_metadata,
+        format_anomaly_value,
+        sanitize_for_analytics,
+        should_exclude_anomalous_sample,
+    )
 
 
 DDB_AGG_TABLE = os.getenv("DDB_AGG_TABLE", "aggregates")
@@ -23,6 +35,7 @@ TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
 MAX_VALID_VALUE_KWH = float(os.getenv("MAX_VALID_VALUE_KWH", "1000000000"))
 CALC_VERSION = os.getenv("CALC_VERSION", "v1")
+COUNTER_RESET_NEGATIVE_THRESHOLD = float(os.getenv("COUNTER_RESET_NEGATIVE_THRESHOLD", "0"))
 
 _dynamodb = None
 _ts_query = None
@@ -211,7 +224,7 @@ def should_include_in_total(config, rt_id: str) -> bool:
 
 def calculate_daily_value(config, rt_id, start, end):
     if config.get("metric") == "agua_consumo":
-        return calculate_counter_consumption(rt_id, start, end)
+        return calculate_counter_consumption(config, rt_id, start, end)
     return integrate_energy(rt_id, start, end)
 
 
@@ -229,13 +242,70 @@ def integrate_energy(rt_id, start, end):
     return total_kwh
 
 
-def calculate_counter_consumption(rt_id, start, end):
+def calculate_counter_consumption(config, rt_id, start, end):
     rows = query_timestream(rt_id, start, end)
     if len(rows) < 2:
         return None
-    start_value = rows[0][1]
-    end_value = rows[-1][1]
-    return max(end_value - start_value, 0.0)
+
+    total_consumption = 0.0
+    anomalies = []
+    threshold = max(COUNTER_RESET_NEGATIVE_THRESHOLD, 0.0)
+
+    for prev, curr in zip(rows, rows[1:]):
+        prev_ts, prev_value = prev
+        curr_ts, curr_value = curr
+        delta = curr_value - prev_value
+        if delta >= 0:
+            total_consumption += delta
+            continue
+        if abs(delta) >= threshold:
+            anomalies.append(
+                build_counter_reset_anomaly_event(
+                    config=config,
+                    rt_id=rt_id,
+                    ts_event=int(curr_ts.timestamp()),
+                    previous_value=prev_value,
+                    current_value=curr_value,
+                    delta=delta,
+                    threshold=threshold,
+                )
+            )
+
+    write_validation_anomalies(anomalies)
+    return total_consumption
+
+
+def build_counter_reset_anomaly_event(
+    config,
+    rt_id,
+    ts_event,
+    previous_value,
+    current_value,
+    delta,
+    threshold,
+):
+    metadata = derive_rt_metadata(rt_id)
+    anomaly_type = "counter_reset_detected"
+    return {
+        "gateway_id": config.get("gateway_id"),
+        "event_key": build_anomaly_event_key(ts_event, rt_id, anomaly_type),
+        "campus_domain": f"{metadata['campus']}#{metadata['domain']}",
+        "campus": metadata["campus"],
+        "domain": metadata["domain"],
+        "rt_id": rt_id,
+        "unit": infer_rt_unit(rt_id) or "",
+        "raw_value": format_anomaly_value(current_value),
+        "applied_value": format_anomaly_value(previous_value),
+        "anomaly_type": anomaly_type,
+        "reason": (
+            "negative_delta_detected_between_samples; "
+            f"delta={delta:.6f}; threshold={threshold:.6f}"
+        ),
+        "threshold": format_anomaly_value(threshold),
+        "ts_event": int(ts_event),
+        "detected_by": "calc_daily",
+        "updated_at": int(time.time()),
+    }
 
 
 def build_anomaly_event_key_prefix(ts_epoch):
@@ -345,6 +415,20 @@ def build_item(pk, sk, value, config):
         "calc_version": CALC_VERSION,
         "gateway_id": config.get("gateway_id"),
     }
+
+
+def write_validation_anomalies(events):
+    if not events:
+        return
+
+    seen = set()
+    with get_anomalies_table().batch_writer() as batch:
+        for event in events:
+            dedupe_key = (event.get("gateway_id"), event.get("event_key"))
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            batch.put_item(Item=event)
 
 
 def write_items(items):
