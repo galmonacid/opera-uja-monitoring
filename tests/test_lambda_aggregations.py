@@ -201,3 +201,49 @@ def test_query_timestream_skips_negative_demand_anomaly():
     )
 
     assert [value for _, value in result] == [219.09, 324.58]
+
+
+def test_calculate_counter_consumption_sums_only_positive_deltas():
+    daily = load_daily_module()
+    daily.query_timestream = lambda _rt_id, _start, _end: [
+        (daily.parse_time("2026-03-06T00:00:00+00:00"), 100.0),
+        (daily.parse_time("2026-03-06T01:00:00+00:00"), 102.0),
+        (daily.parse_time("2026-03-06T02:00:00+00:00"), 99.0),
+        (daily.parse_time("2026-03-06T03:00:00+00:00"), 105.5),
+    ]
+    captured = {}
+    daily.write_validation_anomalies = lambda events: captured.setdefault("events", events)
+    daily.COUNTER_RESET_NEGATIVE_THRESHOLD = 0.0
+
+    value = daily.calculate_counter_consumption(
+        {"gateway_id": "gw_jaen_agua"},
+        "uja.jaen.agua.consumo.edificio_a0.v_m3",
+        "2026-03-06T00:00:00+00:00",
+        "2026-03-06T23:59:59+00:00",
+    )
+
+    assert value == 8.5
+    assert len(captured["events"]) == 1
+    assert captured["events"][0]["anomaly_type"] == "counter_reset_detected"
+
+
+def test_calculate_counter_consumption_respects_negative_threshold_for_anomaly_log():
+    daily = load_daily_module()
+    daily.query_timestream = lambda _rt_id, _start, _end: [
+        (daily.parse_time("2026-03-06T00:00:00+00:00"), 100.0),
+        (daily.parse_time("2026-03-06T01:00:00+00:00"), 99.8),
+        (daily.parse_time("2026-03-06T02:00:00+00:00"), 103.0),
+    ]
+    captured = {}
+    daily.write_validation_anomalies = lambda events: captured.setdefault("events", events)
+    daily.COUNTER_RESET_NEGATIVE_THRESHOLD = 1.0
+
+    value = daily.calculate_counter_consumption(
+        {"gateway_id": "gw_jaen_agua"},
+        "uja.jaen.agua.consumo.edificio_a1.v_m3",
+        "2026-03-06T00:00:00+00:00",
+        "2026-03-06T23:59:59+00:00",
+    )
+
+    assert value == 3.2
+    assert captured["events"] == []
