@@ -15,6 +15,8 @@ const API_BASES = [
 const ANALYTICS_SERIES_INTERVAL_MINUTES = 15;
 const ANOMALIES_LOOKBACK_HOURS = 72;
 const ANOMALIES_LIMIT = 200;
+const CO2_EMISSIONS_COEFFICIENT_TON_PER_KWH = 0.000331;
+const CARBON_FOOTPRINT_COEFFICIENT_KWH_PER_TREE = 30;
 
 const number = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
@@ -1681,6 +1683,16 @@ function App() {
     return series.reduce((sum, item) => sum + Number(item.value || 0), 0);
   };
 
+  const getEnvironmentalImpact = (annualKwh) => {
+    if (annualKwh == null) {
+      return { avoidedCo2Ton: null, equivalentTrees: null };
+    }
+    return {
+      avoidedCo2Ton: annualKwh * CO2_EMISSIONS_COEFFICIENT_TON_PER_KWH,
+      equivalentTrees: annualKwh / CARBON_FOOTPRINT_COEFFICIENT_KWH_PER_TREE,
+    };
+  };
+
   const getStatusKind = (status) => {
     if (status === "ready") return "complete";
     if (status === "loading") return "loading";
@@ -2601,6 +2613,7 @@ function App() {
             {filteredEnergyConfigs.map((config) => {
               const scopeSummary = dashboardOverview[config.scopeId];
               const energySummary = gatewayOverview[config.gatewayId];
+              const environmentalImpact = getEnvironmentalImpact(energySummary?.annualValue);
               const highlighted = pickMetricSnapshot({
                 currentLabel: "Demanda actual",
                 currentValue: scopeSummary?.demand,
@@ -2622,6 +2635,16 @@ function App() {
                   <span className="insight-note">
                     Autoconsumo {formatValue(scopeSummary?.autoconsumoPct, "%")}
                   </span>
+                  <div className="insight-environment">
+                    <span className="insight-environment-title">Impacto medioambiental</span>
+                    <span className="insight-environment-note">
+                      Emisiones evitadas acumuladas este año
+                    </span>
+                    <span className="insight-environment-value">
+                      {formatValue(environmentalImpact.avoidedCo2Ton, "tn/CO2")} (
+                      {formatValue(environmentalImpact.equivalentTrees, "árboles")})
+                    </span>
+                  </div>
                 </article>
               );
             })}
