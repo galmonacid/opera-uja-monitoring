@@ -313,14 +313,14 @@ const MAP_ENTRIES = [
 ];
 const DASHBOARD_SCOPES = [
   { id: "las_lagunillas", title: "Campus Las Lagunillas" },
-  { id: "ctl_linares", title: "Campus CTL Linares" },
+  { id: "ctl_linares", title: "Campus Científico Tecnológico de Linares" },
 ];
 const MISSING_SOURCE_LABELS = {
   las_lagunillas_demand: "demanda Las Lagunillas",
   jaen_fv_endesa_total: "FV Endesa Jaen",
   jaen_fv_auto_univer: "FV autoconsumo UNIVER",
   jaen_fv_auto_a0: "FV edificio A0",
-  ctl_linares_demand: "demanda CTL Linares",
+  ctl_linares_demand: "demanda Campus Científico Tecnológico de Linares",
   linares_fv_endesa_total: "FV Endesa Linares",
 };
 
@@ -412,7 +412,7 @@ const ENERGY_VIEW_CONFIG = [
   {
     scopeId: "ctl_linares",
     campus: "linares",
-    label: "Campus CTL Linares",
+    label: "Campus Científico Tecnológico de Linares",
     gatewayId: "gw_linares_mix",
   },
 ];
@@ -428,7 +428,7 @@ const WATER_VIEW_CONFIG = [
   {
     id: "linares",
     campus: "linares",
-    label: "CTL Linares",
+    label: "Campus Científico Tecnológico de Linares",
     gatewayId: "gw_linares_mix",
     prefix: "uja.linares.agua.",
   },
@@ -469,7 +469,7 @@ const SOLAR_VIEW_CONFIG = [
     label: "FV Endesa Linares",
     gatewayId: "gw_endesa_linares",
     kind: "Planta FV",
-    description: "Generación principal de CTL Linares.",
+    description: "Generación principal de Campus Científico Tecnológico de Linares.",
     irradianceRtIds: ["uja.linares.fv.endesa.rad01.g_wm2"],
   },
 ];
@@ -495,7 +495,7 @@ const VALIDATION_TAB_OPTIONS = [
 const CAMPUS_OPTIONS = [
   { value: "all", label: "Todos los campus" },
   { value: "jaen", label: "Las Lagunillas" },
-  { value: "linares", label: "CTL Linares" },
+  { value: "linares", label: "Campus Científico Tecnológico de Linares" },
 ];
 
 const PERIOD_OPTIONS = [
@@ -2354,7 +2354,7 @@ function App() {
     summary: {
       title: "Balance general",
       subtitle:
-        "Estado general de energía y producción en Las Lagunillas y CTL Linares.",
+        "Estado general de energía y producción en Las Lagunillas y Campus Científico Tecnológico de Linares.",
       primaryLabel: "Actualizar balance",
       primaryAction: refreshPortal,
     },
@@ -2560,7 +2560,7 @@ function App() {
           <div className="container">
             <div className="section-header">
               <h2 className="section-title">Balance energético por campus</h2>
-              <p className="section-subtitle">Seguimiento simultáneo de Las Lagunillas y CTL Linares.</p>
+              <p className="section-subtitle">Seguimiento simultáneo de Las Lagunillas y Campus Científico Tecnológico de Linares.</p>
             </div>
             <div className="summary-campus-grid">
               {summaryEnergyConfigs.map((config) => buildSummaryCampusCard(config))}
