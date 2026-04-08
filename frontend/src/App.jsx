@@ -502,8 +502,8 @@ const CAMPUS_OPTIONS = [
 
 const PERIOD_OPTIONS = [
   { value: "actual", label: "Actual" },
-  { value: "daily", label: "Diario" },
   { value: "monthly", label: "Mensual" },
+  { value: "yearly", label: "Anual" },
 ];
 
 const VALIDATION_DOMAIN_OPTIONS = [
@@ -1150,6 +1150,7 @@ function App() {
         series: { status: "idle", data: null, error: null },
         daily: { status: "idle", data: null, error: null },
         monthly: { status: "idle", data: null, error: null },
+        yearly: { status: "idle", data: null, error: null },
       };
     });
     return initial;
@@ -1166,6 +1167,7 @@ function App() {
         series: { status: "idle", data: null, error: null },
         daily: { status: "idle", data: null, error: null },
         monthly: { status: "idle", data: null, error: null },
+        yearly: { status: "idle", data: null, error: null },
       };
     });
     return initial;
@@ -1562,6 +1564,7 @@ function App() {
     fetchGatewaySeries(gateway);
     fetchGatewayAggregates(gateway, "daily");
     fetchGatewayAggregates(gateway, "monthly");
+    fetchGatewayAggregates(gateway, "yearly");
   };
 
   const refreshOperationalLatest = () => {
@@ -1575,6 +1578,7 @@ function App() {
       fetchGatewaySeries(gateway);
       fetchGatewayAggregates(gateway, "daily");
       fetchGatewayAggregates(gateway, "monthly");
+      fetchGatewayAggregates(gateway, "yearly");
     });
     SOLAR_VIEW_CONFIG.forEach((config) => {
       fetchSolarIrradianceSeries(config);
@@ -1586,6 +1590,7 @@ function App() {
       fetchWaterSeries(config);
       fetchWaterAggregates(config, "daily");
       fetchWaterAggregates(config, "monthly");
+      fetchWaterAggregates(config, "yearly");
     });
   };
 
@@ -1676,11 +1681,6 @@ function App() {
   const getLastAggregateValue = (series) => {
     if (!series?.length) return null;
     return series[series.length - 1].value ?? null;
-  };
-
-  const getAnnualValue = (series) => {
-    if (!series?.length) return null;
-    return series.reduce((sum, item) => sum + Number(item.value || 0), 0);
   };
 
   const getEnvironmentalImpact = (annualKwh) => {
@@ -1801,18 +1801,18 @@ function App() {
     currentLabel,
     currentValue,
     currentUnit,
-    dailyLabel,
-    dailyValue,
-    dailyUnit,
     monthlyLabel,
     monthlyValue,
     monthlyUnit,
+    yearlyLabel,
+    yearlyValue,
+    yearlyUnit,
   }) => {
-    if (periodFilter === "daily") {
-      return { label: dailyLabel, value: dailyValue, unit: dailyUnit };
-    }
     if (periodFilter === "monthly") {
       return { label: monthlyLabel, value: monthlyValue, unit: monthlyUnit };
+    }
+    if (periodFilter === "yearly") {
+      return { label: yearlyLabel, value: yearlyValue, unit: yearlyUnit };
     }
     return { label: currentLabel, value: currentValue, unit: currentUnit };
   };
@@ -1824,6 +1824,14 @@ function App() {
     realtimeItems.forEach((item) => map.set(item.rt_id, item));
     return map;
   }, [realtimeItems]);
+
+  const getBackendComputedMapValue = (entry, item) => {
+    if (entry.layer === "water") {
+      const backendValue = item.consumption_value ?? item.value;
+      return Number(backendValue || 0);
+    }
+    return Number(item.value || 0);
+  };
 
   const getMapEntryReading = (entry) => {
     const items = entry.rtIds
@@ -1843,8 +1851,8 @@ function App() {
 
     const value =
       entry.aggregate === "sum"
-        ? items.reduce((sum, item) => sum + Number(item.value || 0), 0)
-        : Number(items[0].value || 0);
+        ? items.reduce((sum, item) => sum + getBackendComputedMapValue(entry, item), 0)
+        : getBackendComputedMapValue(entry, items[0]);
 
     return {
       value,
@@ -1905,10 +1913,12 @@ function App() {
         seriesUnit: state.series?.data?.unit || "--",
         dailySeries: state.daily?.data?.series || [],
         monthlySeries: state.monthly?.data?.series || [],
+        yearlySeries: state.yearly?.data?.series || [],
         latestStatus: state.latest?.status || "idle",
         seriesStatus: state.series?.status || "idle",
         dailyStatus: state.daily?.status || "idle",
         monthlyStatus: state.monthly?.status || "idle",
+        yearlyStatus: state.yearly?.status || "idle",
         latestValue: displayLatest.primary.value,
         latestUnit: displayLatest.primary.unit,
         latestTs: displayLatest.primary.ts,
@@ -1920,8 +1930,8 @@ function App() {
         dailyUnit: state.daily?.data?.unit || "--",
         monthlyValue: getLastAggregateValue(state.monthly?.data?.series || []),
         monthlyUnit: state.monthly?.data?.unit || state.daily?.data?.unit || "--",
-        annualValue: getAnnualValue(state.monthly?.data?.series || []),
-        annualUnit: state.monthly?.data?.unit || state.daily?.data?.unit || "--",
+        annualValue: getLastAggregateValue(state.yearly?.data?.series || []),
+        annualUnit: state.yearly?.data?.unit || state.monthly?.data?.unit || state.daily?.data?.unit || "--",
       };
     });
     return result;
@@ -1942,8 +1952,8 @@ function App() {
         dailyUnit: metrics.daily?.data?.unit || "--",
         monthlyValue: getLastAggregateValue(metrics.monthly?.data?.series || []),
         monthlyUnit: metrics.monthly?.data?.unit || metrics.daily?.data?.unit || "--",
-        annualValue: getAnnualValue(metrics.monthly?.data?.series || []),
-        annualUnit: metrics.monthly?.data?.unit || metrics.daily?.data?.unit || "--",
+        annualValue: getLastAggregateValue(metrics.yearly?.data?.series || []),
+        annualUnit: metrics.yearly?.data?.unit || metrics.monthly?.data?.unit || metrics.daily?.data?.unit || "--",
       };
     });
     return result;
@@ -1962,6 +1972,7 @@ function App() {
         summary?.seriesStatus,
         summary?.dailyStatus,
         summary?.monthlyStatus,
+        summary?.yearlyStatus,
       ];
       if (statuses.includes("error")) {
         errors += 1;
@@ -2622,12 +2633,12 @@ function App() {
                 currentLabel: "Demanda actual",
                 currentValue: scopeSummary?.demand,
                 currentUnit: "kW",
-                dailyLabel: "Energía diaria",
-                dailyValue: energySummary?.dailyValue,
-                dailyUnit: energySummary?.dailyUnit,
                 monthlyLabel: "Energía mensual",
                 monthlyValue: energySummary?.monthlyValue,
                 monthlyUnit: energySummary?.monthlyUnit,
+                yearlyLabel: "Energía anual",
+                yearlyValue: energySummary?.annualValue,
+                yearlyUnit: energySummary?.annualUnit,
               });
               return (
                 <article key={config.scopeId} className="insight-card">
@@ -2784,12 +2795,12 @@ function App() {
                 currentLabel: "Puntos con lectura",
                 currentValue: rows.length,
                 currentUnit: "",
-                dailyLabel: "Consumo diario",
-                dailyValue: summary?.dailyValue,
-                dailyUnit: summary?.dailyUnit,
                 monthlyLabel: "Consumo mensual",
                 monthlyValue: summary?.monthlyValue,
                 monthlyUnit: summary?.monthlyUnit,
+                yearlyLabel: "Consumo anual",
+                yearlyValue: summary?.annualValue,
+                yearlyUnit: summary?.annualUnit,
               });
               return (
                 <article key={config.id} className="insight-card">
@@ -2897,12 +2908,12 @@ function App() {
                 currentLabel: "Potencia instantánea",
                 currentValue: summary?.latestValue,
                 currentUnit: summary?.latestUnit,
-                dailyLabel: "Producción diaria",
-                dailyValue: summary?.dailyValue,
-                dailyUnit: summary?.dailyUnit,
                 monthlyLabel: "Producción mensual",
                 monthlyValue: summary?.monthlyValue,
                 monthlyUnit: summary?.monthlyUnit,
+                yearlyLabel: "Producción anual",
+                yearlyValue: summary?.annualValue,
+                yearlyUnit: summary?.annualUnit,
               });
               return (
                 <article key={config.id} className="gateway-card">
