@@ -168,7 +168,7 @@ BALANCE_SCOPE_CONFIG = {
     },
     "ctl_linares": {
         "campus": "linares",
-        "label": "Campus CTL Linares",
+        "label": "Campus Científico Tecnológico de Linares",
         "demand_sources": [
             {
                 "id": "ctl_linares_demand",

@@ -23,7 +23,7 @@
   ### Objetivo
   Ofrecer una visión ejecutiva y simultánea del estado energético de los dos ámbitos operativos principales:
   - Campus Las Lagunillas
-  - Campus CTL Linares
+  - Campus Científico Tecnológico de Linares
 
   ### Contenido
   - Una tarjeta por campus.

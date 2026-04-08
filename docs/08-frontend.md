@@ -23,7 +23,7 @@ Motivos:
 
 ## Vistas operativas actuales
 1. Balance
-   - Dos paneles: `Campus Las Lagunillas` y `Campus CTL Linares`
+   - Dos paneles: `Campus Las Lagunillas` y `Campus Científico Tecnológico de Linares`
    - KPIs por panel desde `/kpis?scope=...`
    - Gráfica de áreas 24h por panel desde `/series/24h?scope=...&interval_minutes=15`
 2. Mapa
