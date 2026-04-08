@@ -43,6 +43,12 @@ const HOUR_FORMATTER = new Intl.DateTimeFormat("es-ES", {
   minute: "2-digit",
   hourCycle: "h23",
 });
+const WATER_COUNTER_OFFSETS_STORAGE_KEY = "uja.water.counter.offsets.v1";
+const WATER_OFFSET_MODES = [
+  { value: "monthly", label: "Delta mensual" },
+  { value: "annual", label: "Delta anual" },
+  { value: "raw", label: "Totalizador" },
+];
 
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
 const JAEN_ENDESA_CT_TOTAL_RT_ID = "uja.jaen.fv.endesa.ct_total.p_kw";
@@ -1095,6 +1101,27 @@ const renderMapLayerIcon = (layer) => {
 };
 
 const getDefaultMapUnit = (layer) => (layer === "water" ? "m3" : "kW");
+const isWaterRtId = (rtId) => rtId?.includes(".agua.") && rtId?.endsWith(".v_m3");
+
+const getWaterPeriodKey = (mode, date = new Date()) => {
+  const year = String(date.getUTCFullYear());
+  if (mode === "annual") return year;
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+};
+
+const buildWaterOffsetKey = (mode, periodKey, rtId) => `${mode}:${periodKey}:${rtId}`;
+
+const loadWaterCounterOffsets = () => {
+  try {
+    const raw = window.localStorage.getItem(WATER_COUNTER_OFFSETS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+};
 
 const clampPercent = (value) => Math.max(1, Math.min(97, value));
 
@@ -1124,6 +1151,8 @@ function App() {
   const [mapLayer, setMapLayer] = useState("energy");
   const [selectedMapPoint, setSelectedMapPoint] = useState(null);
   const [validationDomainFilter, setValidationDomainFilter] = useState("all");
+  const [waterOffsetMode, setWaterOffsetMode] = useState("monthly");
+  const [waterCounterOffsets, setWaterCounterOffsets] = useState(() => loadWaterCounterOffsets());
   const [validationActiveTabs, setValidationActiveTabs] = useState(() =>
     Object.fromEntries(GATEWAYS.map((gateway) => [gateway.id, "latest"]))
   );
@@ -1819,6 +1848,42 @@ function App() {
 
   const realtimeItems = useMemo(() => realtime.data?.items || [], [realtime.data]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        WATER_COUNTER_OFFSETS_STORAGE_KEY,
+        JSON.stringify(waterCounterOffsets)
+      );
+    } catch (error) {
+      // no-op
+    }
+  }, [waterCounterOffsets]);
+
+  useEffect(() => {
+    if (!realtimeItems.length) return;
+    const monthlyPeriod = getWaterPeriodKey("monthly");
+    const annualPeriod = getWaterPeriodKey("annual");
+    setWaterCounterOffsets((prev) => {
+      let next = prev;
+      realtimeItems.forEach((item) => {
+        if (!isWaterRtId(item.rt_id)) return;
+        const value = Number(item.value);
+        if (!Number.isFinite(value)) return;
+        const monthlyKey = buildWaterOffsetKey("monthly", monthlyPeriod, item.rt_id);
+        if (next[monthlyKey] == null) {
+          if (next === prev) next = { ...prev };
+          next[monthlyKey] = value;
+        }
+        const annualKey = buildWaterOffsetKey("annual", annualPeriod, item.rt_id);
+        if (next[annualKey] == null) {
+          if (next === prev) next = { ...prev };
+          next[annualKey] = value;
+        }
+      });
+      return next;
+    });
+  }, [realtimeItems]);
+
   const realtimeMap = useMemo(() => {
     const map = new Map();
     realtimeItems.forEach((item) => map.set(item.rt_id, item));
@@ -1841,10 +1906,20 @@ function App() {
       };
     }
 
+    const resolveItemValue = (item) => {
+      const rawValue = Number(item.value || 0);
+      if (entry.layer !== "water" || waterOffsetMode === "raw") return rawValue;
+      const periodKey = getWaterPeriodKey(waterOffsetMode);
+      const baseline = waterCounterOffsets[buildWaterOffsetKey(waterOffsetMode, periodKey, item.rt_id)];
+      if (baseline == null) return rawValue;
+      const delta = rawValue - Number(baseline);
+      return delta >= 0 ? delta : rawValue;
+    };
+
     const value =
       entry.aggregate === "sum"
-        ? items.reduce((sum, item) => sum + Number(item.value || 0), 0)
-        : Number(items[0].value || 0);
+        ? items.reduce((sum, item) => sum + resolveItemValue(item), 0)
+        : resolveItemValue(items[0]);
 
     return {
       value,
@@ -2494,6 +2569,22 @@ function App() {
           </select>
         </label>
       );
+      controls.push(
+        <label key="water-mode" className="toolbar-field">
+          <span className="toolbar-label">Lectura agua</span>
+          <select
+            className="toolbar-select"
+            value={waterOffsetMode}
+            onChange={(event) => setWaterOffsetMode(event.target.value)}
+          >
+            {WATER_OFFSET_MODES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      );
     }
 
     if (routeId === "validation") {
@@ -2517,7 +2608,7 @@ function App() {
 
     let note = "Vista operativa lista.";
     if (routeId === "map") {
-      note = `${visibleMapEntries.length} puntos visibles en la capa actual.`;
+      note = `${visibleMapEntries.length} puntos visibles en la capa actual. Agua en modo ${WATER_OFFSET_MODES.find((item) => item.value === waterOffsetMode)?.label?.toLowerCase()}.`;
     } else if (routeId === "validation") {
       note = `${filteredValidationGateways.length} gateways visibles en seguimiento.`;
     } else if (routeId === "solar") {
