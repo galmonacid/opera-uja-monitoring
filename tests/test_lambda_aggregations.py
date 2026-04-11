@@ -1,4 +1,5 @@
 import importlib.util
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -8,6 +9,22 @@ def load_daily_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     module.query_anomaly_timestamps = lambda rt_id, start, end: set()
+    return module
+
+
+def load_monthly_module():
+    module_path = Path("lambda/calc_monthly/lambda_function.py")
+    spec = importlib.util.spec_from_file_location("lambda_calc_monthly", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_yearly_module():
+    module_path = Path("lambda/calc_yearly/lambda_function.py")
+    spec = importlib.util.spec_from_file_location("lambda_calc_yearly", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
     return module
 
 
@@ -37,7 +54,7 @@ def test_normalize_config_defaults():
     assert config["gateway_id"] == "gw_jaen_energia"
 
 
-def test_daily_total_for_jaen_fv_auto_uses_only_ct_total():
+def test_daily_total_for_jaen_fv_auto_uses_counter_energy_delta():
     daily = load_daily_module()
     config = daily.normalize_config({
         "config_id": "jaen_fv_auto",
@@ -48,26 +65,23 @@ def test_daily_total_for_jaen_fv_auto_uses_only_ct_total():
         "system": "auto",
         "metric": "fv_auto",
     })
-    values = {
-        "uja.jaen.fv.auto.ct_total.p_kw": 100.0,
-        "uja.jaen.fv.auto.pergola.p_ac_kw": 10.0,
-        "uja.jaen.fv.auto.parking_p4.p_ac_kw": 8.0,
-    }
     captured = {}
 
     daily.fetch_configs = lambda: [config]
-    daily.fetch_rt_ids = lambda _config: list(values)
-    daily.integrate_energy = lambda rt_id, _start, _end: values[rt_id]
-    daily.write_items = lambda items: captured.setdefault("items", items)
+    daily.fetch_rt_ids = lambda _config: ["uja.jaen.fv.auto.ct_total.e_kwh"]
+    daily.calculate_counter_delta = lambda rt_id, _start, _end: 196.66 if rt_id.endswith(".e_kwh") else None
+    daily.write_items = lambda items: captured.setdefault("items", []).extend(items)
 
     result = daily.handler({"date": "2026-03-06"}, None)
 
     assert result["status"] == "ok"
     total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#total")
-    assert float(total_item["value"]) == 100.0
+    assert float(total_item["value"]) == 196.66
+    ct_total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#ct_total")
+    assert float(ct_total_item["value"]) == 196.66
 
 
-def test_daily_total_for_jaen_fv_endesa_uses_only_inverters():
+def test_daily_total_for_jaen_fv_endesa_uses_counter_energy_delta():
     daily = load_daily_module()
     config = daily.normalize_config({
         "config_id": "jaen_fv_endesa",
@@ -78,23 +92,20 @@ def test_daily_total_for_jaen_fv_endesa_uses_only_inverters():
         "system": "endesa",
         "metric": "fv_endesa",
     })
-    values = {
-        "uja.jaen.fv.endesa.ct_total.p_kw": 130.0,
-        "uja.jaen.fv.endesa.inv01.p_ac_kw": 60.0,
-        "uja.jaen.fv.endesa.inv02.p_ac_kw": 55.0,
-    }
     captured = {}
 
     daily.fetch_configs = lambda: [config]
-    daily.fetch_rt_ids = lambda _config: list(values)
-    daily.integrate_energy = lambda rt_id, _start, _end: values[rt_id]
-    daily.write_items = lambda items: captured.setdefault("items", items)
+    daily.fetch_rt_ids = lambda _config: ["uja.jaen.fv.endesa.ct_total.e_kwh"]
+    daily.calculate_counter_delta = lambda rt_id, _start, _end: 745.33 if rt_id.endswith(".e_kwh") else None
+    daily.write_items = lambda items: captured.setdefault("items", []).extend(items)
 
     result = daily.handler({"date": "2026-03-06"}, None)
 
     assert result["status"] == "ok"
     total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#total")
-    assert float(total_item["value"]) == 115.0
+    assert float(total_item["value"]) == 745.33
+    ct_total_item = next(item for item in captured["items"] if item["sk"] == "2026-03-06#ct_total")
+    assert float(ct_total_item["value"]) == 745.33
 
 
 def test_daily_water_uses_counter_delta():
@@ -245,5 +256,125 @@ def test_calculate_counter_consumption_respects_negative_threshold_for_anomaly_l
         "2026-03-06T23:59:59+00:00",
     )
 
-    assert value == 3.2
+    assert round(value, 6) == 3.2
     assert captured["events"] == []
+
+
+def test_closed_daily_window_uses_europe_madrid_boundaries():
+    daily = load_daily_module()
+    window = daily.closed_daily_window_utc(target_date="2026-04-09")
+
+    assert window["key"] == "2026-04-09"
+    assert window["start_utc"] == datetime(2026, 4, 8, 22, 0, tzinfo=timezone.utc)
+    assert window["end_utc"] == datetime(2026, 4, 9, 22, 0, tzinfo=timezone.utc)
+
+
+def test_last_closed_month_and_year_keys_use_local_calendar():
+    monthly = load_monthly_module()
+    yearly = load_yearly_module()
+    reference_now = datetime(2026, 4, 11, 12, 0, tzinfo=timezone.utc)
+
+    assert monthly.last_closed_month_key(now=reference_now) == "2026-03"
+    assert yearly.last_closed_year_key(now=reference_now) == "2025"
+
+
+def test_daily_handler_writes_per_config_and_returns_partial_on_error():
+    daily = load_daily_module()
+    energia_config = daily.normalize_config({
+        "config_id": "jaen_energia",
+        "gateway_id": "gw_jaen_energia",
+        "rt_id_prefix": "uja.jaen.energia.consumo.",
+        "campus": "jaen",
+        "domain": "energia",
+        "system": "consumo",
+        "metric": "energia_consumo",
+    })
+    fv_config = daily.normalize_config({
+        "config_id": "jaen_fv_endesa",
+        "gateway_id": "gw_endesa_jaen",
+        "rt_id_prefix": "uja.jaen.fv.endesa.",
+        "campus": "jaen",
+        "domain": "fv",
+        "system": "endesa",
+        "metric": "fv_endesa",
+    })
+    captured = []
+
+    daily.fetch_configs = lambda: [energia_config, fv_config]
+    daily.fetch_rt_ids = lambda config: (
+        ["uja.jaen.energia.consumo.edificio_a0.p_kw"]
+        if config["metric"] == "energia_consumo"
+        else ["uja.jaen.fv.endesa.ct_total.e_kwh"]
+    )
+
+    def fake_calculate(config, rt_id, _start, _end):
+        if config["metric"] == "energia_consumo":
+            return 12.5
+        raise RuntimeError(f"boom:{rt_id}")
+
+    daily.calculate_daily_value = fake_calculate
+    daily.write_items = lambda items: captured.append(list(items))
+
+    result = daily.handler({"date": "2026-03-06"}, None)
+
+    assert result["status"] == "partial"
+    assert result["count"] == 2
+    assert len(captured) == 1
+    assert captured[0][0]["sk"] == "2026-03-06#edificio_a0"
+    assert captured[0][1]["sk"] == "2026-03-06#total"
+
+
+def test_monthly_handler_uses_last_closed_month_by_default():
+    monthly = load_monthly_module()
+    config = monthly.normalize_config({
+        "config_id": "jaen_energia",
+        "gateway_id": "gw_jaen_energia",
+        "campus": "jaen",
+        "domain": "energia",
+        "system": "consumo",
+        "metric": "energia_consumo",
+    })
+    captured = {}
+
+    monthly.last_closed_month_key = lambda: "2026-03"
+    monthly.fetch_configs = lambda: [config]
+    monthly.query_pk = lambda _pk: [
+        {"sk": "2026-03-01#total", "value": 5.0, "unit": "kWh"},
+        {"sk": "2026-03-02#total", "value": 7.5, "unit": "kWh"},
+        {"sk": "2026-04-01#total", "value": 99.0, "unit": "kWh"},
+    ]
+    monthly.write_items = lambda items: captured.setdefault("items", []).extend(items)
+
+    result = monthly.handler({}, None)
+
+    assert result["status"] == "ok"
+    total_item = next(item for item in captured["items"] if item["sk"] == "2026-03#total")
+    assert float(total_item["value"]) == 12.5
+
+
+def test_yearly_handler_uses_last_closed_year_by_default():
+    yearly = load_yearly_module()
+    config = yearly.normalize_config({
+        "config_id": "jaen_energia",
+        "gateway_id": "gw_jaen_energia",
+        "campus": "jaen",
+        "domain": "energia",
+        "system": "consumo",
+        "metric": "energia_consumo",
+    })
+    captured = {}
+
+    yearly.last_closed_year_key = lambda: "2025"
+    yearly.fetch_configs = lambda: [config]
+    yearly.query_pk = lambda _pk: [
+        {"sk": "2025-01#total", "value": 10.0, "unit": "kWh"},
+        {"sk": "2025-02#total", "value": 11.5, "unit": "kWh"},
+        {"sk": "2026-01#total", "value": 99.0, "unit": "kWh"},
+    ]
+    yearly.write_items = lambda items: captured.setdefault("items", []).extend(items)
+
+    result = yearly.handler({}, None)
+
+    assert result["status"] == "ok"
+    total_item = next(item for item in captured["items"] if item["sk"] == "2025#total")
+    assert float(total_item["value"]) == 21.5

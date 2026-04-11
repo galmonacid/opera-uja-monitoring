@@ -1,4 +1,5 @@
 import importlib.util
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -411,6 +412,21 @@ def test_handler_series_24h_route():
     assert "ok" in response["body"]
 
 
+def test_handler_current_aggregate_route():
+    api = load_lambda_module()
+    api.get_current_aggregate = lambda params: {"ok": True, "params": params}
+
+    event = {
+        "path": "/v1/aggregates/current",
+        "queryStringParameters": {"campus": "jaen", "metric": "fv_endesa", "period": "daily"},
+        "multiValueQueryStringParameters": None,
+    }
+    response = api.handler(event, None)
+
+    assert response["statusCode"] == 200
+    assert "ok" in response["body"]
+
+
 def test_series_24h_scope_accepts_interval_override():
     api = load_lambda_module()
     captured = {}
@@ -687,6 +703,98 @@ def test_series_by_metric_water_uses_counter_deltas():
     assert result["metric"] == "agua_consumo"
     assert result["unit"] == "m3"
     assert [item["value"] for item in result["series"]] == [1.5, 1.5]
+
+
+def test_get_current_aggregate_for_fv_uses_counter_delta():
+    api = load_lambda_module()
+    api.current_period_window_utc = lambda period: {
+        "period": period,
+        "key": "2026-04-09",
+        "start_utc": datetime(2026, 4, 8, 22, 0, tzinfo=timezone.utc),
+        "end_utc": datetime(2026, 4, 9, 9, 25, tzinfo=timezone.utc),
+        "today_key": "2026-04-09",
+        "month_key": "2026-04",
+        "year_key": "2026",
+        "timezone": "Europe/Madrid",
+    }
+    api.calculate_current_counter_delta = lambda rt_id, start_utc, end_utc: (
+        745.33,
+        int(end_utc.timestamp()),
+    )
+
+    result = api.get_current_aggregate(
+        {"campus": "jaen", "metric": "fv_endesa", "period": "daily"}
+    )
+
+    assert result == {
+        "campus": "jaen",
+        "metric": "fv_endesa",
+        "period": "daily",
+        "unit": "kWh",
+        "timezone": "Europe/Madrid",
+        "period_start_ts": int(datetime(2026, 4, 8, 22, 0, tzinfo=timezone.utc).timestamp()),
+        "ts_event": int(datetime(2026, 4, 9, 9, 25, tzinfo=timezone.utc).timestamp()),
+        "value": 745.33,
+    }
+
+
+def test_get_current_aggregate_for_energy_monthly_uses_closed_daily_plus_live_day():
+    api = load_lambda_module()
+
+    def fake_window(period, now=None):
+        if period == "daily":
+            return {
+                "period": "daily",
+                "key": "2026-04-11",
+                "start_utc": datetime(2026, 4, 10, 22, 0, tzinfo=timezone.utc),
+                "end_utc": datetime(2026, 4, 11, 10, 0, tzinfo=timezone.utc),
+                "today_key": "2026-04-11",
+                "month_key": "2026-04",
+                "year_key": "2026",
+                "timezone": "Europe/Madrid",
+            }
+        return {
+            "period": "monthly",
+            "key": "2026-04",
+            "start_utc": datetime(2026, 3, 31, 22, 0, tzinfo=timezone.utc),
+            "end_utc": datetime(2026, 4, 11, 10, 0, tzinfo=timezone.utc),
+            "today_key": "2026-04-11",
+            "month_key": "2026-04",
+            "year_key": "2026",
+            "timezone": "Europe/Madrid",
+        }
+
+    api.current_period_window_utc = fake_window
+    api.query_pk_for_metric = lambda campus, metric, period: [
+        {"date": "2026-04-01", "asset": "total", "value": 20.0, "unit": "kWh"},
+        {"date": "2026-04-02", "asset": "total", "value": 30.0, "unit": "kWh"},
+        {"date": "2026-04-11", "asset": "total", "value": 999.0, "unit": "kWh"},
+    ]
+    api.integrate_power_window = lambda **_kwargs: (12.5, 1770000000)
+
+    result = api.get_current_aggregate(
+        {"campus": "jaen", "metric": "energia_consumo", "period": "monthly"}
+    )
+
+    assert result["value"] == 62.5
+    assert result["unit"] == "kWh"
+    assert result["timezone"] == "Europe/Madrid"
+    assert result["ts_event"] == 1770000000
+
+
+def test_query_timeseries_by_select_uses_kwh_limit_for_e_kwh_series():
+    api = load_lambda_module()
+    captured = {}
+
+    def fake_query(query):
+        captured["query"] = query
+        return []
+
+    api.query_timestream = fake_query
+    api.query_timeseries_by_select(rt_ids=["uja.jaen.fv.endesa.ct_total.e_kwh"])
+
+    assert f"measure_value::double <= {api.MAX_VALID_VALUE_KWH}" in captured["query"]
+    assert f"measure_value::double >= {-api.MAX_VALID_VALUE_KWH}" in captured["query"]
 
 
 def test_monthly_aggregates_fallback_to_daily():

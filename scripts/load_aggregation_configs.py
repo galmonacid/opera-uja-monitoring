@@ -16,6 +16,11 @@ REQUIRED_COLUMNS = {
     "unit",
     "enabled",
 }
+OPTIONAL_COLUMNS = {
+    "aggregation_mode",
+    "counter_rt_id",
+    "timezone",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -65,6 +70,10 @@ def main() -> None:
                 notes = (row.get("notes") or "").strip()
                 if notes:
                     item["notes"] = notes
+                for key in sorted(OPTIONAL_COLUMNS):
+                    value = (row.get(key) or "").strip()
+                    if value:
+                        item[key] = value
                 batch.put_item(Item=item)
                 count += 1
 

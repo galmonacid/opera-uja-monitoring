@@ -519,6 +519,12 @@ const PERIOD_OPTIONS = [
   { value: "daily", label: "Diario" },
   { value: "monthly", label: "Mensual" },
 ];
+const CURRENT_AGGREGATE_PERIODS = ["daily", "monthly", "yearly"];
+const CURRENT_AGGREGATE_SUPPORTED_METRICS = new Set([
+  "energia_consumo",
+  "fv_endesa",
+  "fv_auto",
+]);
 
 const VALIDATION_DOMAIN_OPTIONS = [
   { value: "all", label: "Todos los dominios" },
@@ -1191,6 +1197,17 @@ function App() {
     });
     return initial;
   });
+  const [currentAggregates, setCurrentAggregates] = useState(() => {
+    const initial = {};
+    GATEWAYS.forEach((gateway) => {
+      initial[gateway.id] = {
+        daily: { status: "idle", data: null, error: null },
+        monthly: { status: "idle", data: null, error: null },
+        yearly: { status: "idle", data: null, error: null },
+      };
+    });
+    return initial;
+  });
   const [anomalies, setAnomalies] = useState({
     status: "idle",
     data: { items: [], count: 0, lookback_hours: ANOMALIES_LOOKBACK_HOURS },
@@ -1492,6 +1509,46 @@ function App() {
     }
   };
 
+  const fetchGatewayCurrentAggregate = async (gateway, period) => {
+    if (!CURRENT_AGGREGATE_SUPPORTED_METRICS.has(gateway.aggregateMetric)) {
+      setCurrentAggregates((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { status: "na", data: null, error: null },
+        },
+      }));
+      return;
+    }
+    try {
+      setCurrentAggregates((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { ...prev[gateway.id][period], status: "loading", error: null },
+        },
+      }));
+      const payload = await fetchWithFallback(
+        `/aggregates/current?campus=${gateway.campus}&metric=${gateway.aggregateMetric}&period=${period}`
+      );
+      setCurrentAggregates((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setCurrentAggregates((prev) => ({
+        ...prev,
+        [gateway.id]: {
+          ...prev[gateway.id],
+          [period]: { status: "error", data: null, error: error.message },
+        },
+      }));
+    }
+  };
+
   const fetchAnomalies = async () => {
     try {
       setAnomalies((prev) => ({ ...prev, status: "loading", error: null }));
@@ -1670,6 +1727,9 @@ function App() {
     fetchGatewaySeries(gateway);
     fetchGatewayAggregates(gateway, "daily");
     fetchGatewayAggregates(gateway, "monthly");
+    CURRENT_AGGREGATE_PERIODS.forEach((period) => {
+      fetchGatewayCurrentAggregate(gateway, period);
+    });
   };
 
   const refreshOperationalLatest = () => {
@@ -1683,6 +1743,9 @@ function App() {
       fetchGatewaySeries(gateway);
       fetchGatewayAggregates(gateway, "daily");
       fetchGatewayAggregates(gateway, "monthly");
+      CURRENT_AGGREGATE_PERIODS.forEach((period) => {
+        fetchGatewayCurrentAggregate(gateway, period);
+      });
     });
     SOLAR_VIEW_CONFIG.forEach((config) => {
       fetchSolarIrradianceSeries(config);
@@ -2077,6 +2140,7 @@ function App() {
     const result = {};
     GATEWAYS.forEach((gateway) => {
       const state = validation[gateway.id] || {};
+      const current = currentAggregates[gateway.id] || {};
       const latestItems = state.latest?.data?.items || [];
       const displayLatest = getGatewayDisplayLatest(gateway, latestItems);
       result[gateway.id] = {
@@ -2097,16 +2161,22 @@ function App() {
         secondaryLatestUnit: displayLatest.secondary?.unit ?? "--",
         secondaryLatestLabel: displayLatest.secondary?.label ?? null,
         secondaryLatestTs: displayLatest.secondary?.ts ?? null,
-        dailyValue: getLastAggregateValue(state.daily?.data?.series || []),
-        dailyUnit: state.daily?.data?.unit || "--",
-        monthlyValue: getLastAggregateValue(state.monthly?.data?.series || []),
-        monthlyUnit: state.monthly?.data?.unit || state.daily?.data?.unit || "--",
-        annualValue: getAnnualValue(state.monthly?.data?.series || []),
-        annualUnit: state.monthly?.data?.unit || state.daily?.data?.unit || "--",
+        currentDailyStatus: current.daily?.status || "idle",
+        currentMonthlyStatus: current.monthly?.status || "idle",
+        currentYearlyStatus: current.yearly?.status || "idle",
+        dailyValue: current.daily?.data?.value ?? null,
+        dailyUnit: current.daily?.data?.unit || "--",
+        dailyTs: current.daily?.data?.ts_event || null,
+        monthlyValue: current.monthly?.data?.value ?? null,
+        monthlyUnit: current.monthly?.data?.unit || "--",
+        monthlyTs: current.monthly?.data?.ts_event || null,
+        annualValue: current.yearly?.data?.value ?? null,
+        annualUnit: current.yearly?.data?.unit || "--",
+        annualTs: current.yearly?.data?.ts_event || null,
       };
     });
     return result;
-  }, [validation]);
+  }, [currentAggregates, validation]);
 
   const waterOverview = useMemo(() => {
     const result = {};
@@ -2618,7 +2688,7 @@ function App() {
   const renderToolbar = () => {
     const controls = [];
     const addCampusControl = !["summary", "map"].includes(routeId);
-    const addPeriodControl = !["summary", "map", "validation"].includes(routeId);
+    const addPeriodControl = !["summary", "map", "solar", "validation"].includes(routeId);
 
     if (addCampusControl) {
       controls.push(
@@ -3096,17 +3166,6 @@ function App() {
           <div className="solar-stack">
             {filteredSolarConfigs.map((config) => {
               const summary = solarOverview[config.id];
-              const highlighted = pickMetricSnapshot({
-                currentLabel: "Potencia instantánea",
-                currentValue: summary?.latestValue,
-                currentUnit: summary?.latestUnit,
-                dailyLabel: "Producción diaria",
-                dailyValue: summary?.dailyValue,
-                dailyUnit: summary?.dailyUnit,
-                monthlyLabel: "Producción mensual",
-                monthlyValue: summary?.monthlyValue,
-                monthlyUnit: summary?.monthlyUnit,
-              });
               return (
                 <article key={config.id} className="gateway-card">
                   <div className="gateway-header">
@@ -3120,9 +3179,9 @@ function App() {
                   </div>
                   <div className="summary-metric-grid">
                     <div className="summary-metric">
-                      <span className="summary-metric-label">{highlighted.label}</span>
+                      <span className="summary-metric-label">Potencia instantánea</span>
                       <strong className="summary-metric-value">
-                        {formatValue(highlighted.value, highlighted.unit)}
+                        {formatValue(summary?.latestValue, summary?.latestUnit)}
                       </strong>
                     </div>
                     {summary?.secondaryLatestLabel ? (
@@ -3146,11 +3205,14 @@ function App() {
                       </strong>
                     </div>
                     <div className="summary-metric">
-                      <span className="summary-metric-label">Acumulado anual</span>
+                      <span className="summary-metric-label">Producción anual</span>
                       <strong className="summary-metric-value">
                         {formatValue(summary?.annualValue, summary?.annualUnit)}
                       </strong>
                     </div>
+                  </div>
+                  <div className="gateway-topic">
+                    Última lectura {formatTs(summary?.annualTs || summary?.monthlyTs || summary?.dailyTs || summary?.latestTs)}
                   </div>
                   {summary?.seriesItems?.length ? (
                     <div className="chart-card chart-card-solar">

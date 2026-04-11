@@ -30,10 +30,10 @@ Parameters:
     Default: telemetry_rt
   MemorySize:
     Type: Number
-    Default: 256
+    Default: 1024
   Timeout:
     Type: Number
-    Default: 60
+    Default: 300
   CalcVersion:
     Type: String
     Default: v1
