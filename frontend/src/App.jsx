@@ -1804,8 +1804,8 @@ function App() {
       return { avoidedCo2Ton: null, equivalentTrees: null };
     }
     return {
-      avoidedCo2Ton: annualKwh * CO2_EMISSIONS_COEFFICIENT_TON_PER_KWH,
-      equivalentTrees: annualKwh / CARBON_FOOTPRINT_COEFFICIENT_KWH_PER_TREE,
+      avoidedCo2Ton: Math.round(annualKwh * CO2_EMISSIONS_COEFFICIENT_TON_PER_KWH, 0),
+      equivalentTrees: Math.round(annualKwh / CARBON_FOOTPRINT_COEFFICIENT_KWH_PER_TREE, 0),
     };
   };
 
