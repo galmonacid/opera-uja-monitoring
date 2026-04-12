@@ -260,6 +260,23 @@ def test_calculate_counter_consumption_respects_negative_threshold_for_anomaly_l
     assert captured["events"] == []
 
 
+def test_calculate_counter_delta_uses_start_and_end_samples():
+    daily = load_daily_module()
+    start_sample = (daily.parse_time("2026-03-07T00:00:00+00:00"), 291000.0)
+    end_sample = (daily.parse_time("2026-03-07T23:59:00+00:00"), 291196.66)
+    daily.query_latest_valid_sample = lambda _rt_id, boundary, operator="<=": (
+        start_sample if operator == "<=" else end_sample
+    )
+
+    value = daily.calculate_counter_delta(
+        "uja.jaen.fv.auto.ct_total.e_kwh",
+        "2026-03-07T00:00:00+00:00",
+        "2026-03-07T23:59:59+00:00",
+    )
+
+    assert round(value, 6) == 196.66
+
+
 def test_closed_daily_window_uses_europe_madrid_boundaries():
     daily = load_daily_module()
     window = daily.closed_daily_window_utc(target_date="2026-04-09")

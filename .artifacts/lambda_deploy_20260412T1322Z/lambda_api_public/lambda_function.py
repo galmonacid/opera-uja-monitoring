@@ -439,12 +439,10 @@ def get_current_aggregate(params):
 
     window = current_period_window_utc(period)
     if config["mode"] == "counter_delta":
-        value, ts_event = calculate_current_counter_aggregate(
-            campus,
-            metric,
-            config,
-            period,
-            window,
+        value, ts_event = calculate_current_counter_delta(
+            config["rt_id"],
+            window["start_utc"],
+            window["end_utc"],
         )
     else:
         value, ts_event = calculate_current_power_integration(
@@ -1495,30 +1493,10 @@ ORDER BY rt_id, ts
     return query_timestream(query)
 
 
-def calculate_current_counter_aggregate(campus, metric, config, period, window):
-    historical_total = 0.0
-    if period in {"monthly", "yearly"}:
-        historical_total = sum_closed_daily_aggregate_values(
-            campus,
-            metric,
-            start_date=f"{window['month_key']}-01" if period == "monthly" else f"{window['year_key']}-01-01",
-            end_date=window["today_key"],
-        )
-    live_window = current_period_window_utc("daily", now=window["end_utc"])
-    live_total, ts_event = calculate_current_counter_delta(
-        config["rt_id"],
-        live_window["start_utc"] if period in {"monthly", "yearly"} else window["start_utc"],
-        window["end_utc"],
-    )
-    if live_total is None and historical_total == 0.0:
-        return (None, ts_event)
-    return (historical_total + (live_total or 0.0), ts_event)
-
-
 def calculate_current_counter_delta(rt_id, start_utc, end_utc):
     start_sample = query_latest_valid_sample_at_or_before(rt_id, start_utc, inclusive=True)
     if not start_sample:
-        start_sample = query_earliest_valid_sample_at_or_after(rt_id, start_utc, end_utc)
+        start_sample = query_earliest_valid_sample_at_or_after(rt_id, start_utc)
     end_sample = query_latest_valid_sample_at_or_before(rt_id, end_utc, inclusive=False)
     if not start_sample or not end_sample:
         return (None, None)
@@ -1560,11 +1538,8 @@ LIMIT 25
     return None
 
 
-def query_earliest_valid_sample_at_or_after(rt_id, start_utc, end_utc=None):
-    start_iso = start_utc.isoformat()
-    end_clause = ""
-    if end_utc is not None:
-        end_clause = f"\n  AND time < from_iso8601_timestamp('{end_utc.isoformat()}')"
+def query_earliest_valid_sample_at_or_after(rt_id, boundary_utc):
+    boundary_iso = boundary_utc.isoformat()
     query = f"""
 SELECT
   time,
@@ -1572,8 +1547,7 @@ SELECT
 FROM "{TS_DATABASE}"."{TS_TABLE}"
 WHERE measure_name = 'value'
   AND rt_id = '{rt_id}'
-  AND time >= from_iso8601_timestamp('{start_iso}')
-{end_clause}
+  AND time >= from_iso8601_timestamp('{boundary_iso}')
 ORDER BY time ASC
 LIMIT 25
 """

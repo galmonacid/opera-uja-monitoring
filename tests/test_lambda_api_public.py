@@ -717,9 +717,9 @@ def test_get_current_aggregate_for_fv_uses_counter_delta():
         "year_key": "2026",
         "timezone": "Europe/Madrid",
     }
-    api.calculate_current_counter_delta = lambda rt_id, start_utc, end_utc: (
+    api.calculate_current_counter_aggregate = lambda campus, metric, config, period, window: (
         745.33,
-        int(end_utc.timestamp()),
+        int(window["end_utc"].timestamp()),
     )
 
     result = api.get_current_aggregate(
@@ -736,6 +736,28 @@ def test_get_current_aggregate_for_fv_uses_counter_delta():
         "ts_event": int(datetime(2026, 4, 9, 9, 25, tzinfo=timezone.utc).timestamp()),
         "value": 745.33,
     }
+
+
+def test_calculate_current_counter_delta_falls_back_to_first_sample_within_period():
+    api = load_lambda_module()
+    start_utc = datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc)
+    end_utc = datetime(2026, 4, 12, 13, 0, tzinfo=timezone.utc)
+    api.query_latest_valid_sample_at_or_before = lambda rt_id, boundary_utc, inclusive=True: (
+        None if boundary_utc == start_utc else (int(end_utc.timestamp()), 6418196.41)
+    )
+    api.query_earliest_valid_sample_at_or_after = lambda rt_id, boundary_utc, end_boundary=None: (
+        int(datetime(2026, 2, 19, 19, 53, tzinfo=timezone.utc).timestamp()),
+        6290626.43,
+    )
+
+    value, ts_event = api.calculate_current_counter_delta(
+        "uja.jaen.fv.endesa.ct_total.e_kwh",
+        start_utc,
+        end_utc,
+    )
+
+    assert value == pytest.approx(127569.98)
+    assert ts_event == int(end_utc.timestamp())
 
 
 def test_get_current_aggregate_for_energy_monthly_uses_closed_daily_plus_live_day():

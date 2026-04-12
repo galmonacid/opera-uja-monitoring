@@ -1516,15 +1516,13 @@ def calculate_current_counter_aggregate(campus, metric, config, period, window):
 
 
 def calculate_current_counter_delta(rt_id, start_utc, end_utc):
+    samples = query_valid_counter_samples(rt_id, start_utc, end_utc)
     start_sample = query_latest_valid_sample_at_or_before(rt_id, start_utc, inclusive=True)
-    if not start_sample:
-        start_sample = query_earliest_valid_sample_at_or_after(rt_id, start_utc, end_utc)
-    end_sample = query_latest_valid_sample_at_or_before(rt_id, end_utc, inclusive=False)
-    if not start_sample or not end_sample:
+    if start_sample:
+        samples = [start_sample] + samples
+    if not samples:
         return (None, None)
-    _start_ts, start_value = start_sample
-    end_ts, end_value = end_sample
-    return (max(end_value - start_value, 0.0), end_ts)
+    return (sum_positive_counter_deltas(samples), samples[-1][0])
 
 
 def query_latest_valid_sample_at_or_before(rt_id, boundary_utc, inclusive=True):
@@ -1560,11 +1558,9 @@ LIMIT 25
     return None
 
 
-def query_earliest_valid_sample_at_or_after(rt_id, start_utc, end_utc=None):
+def query_valid_counter_samples(rt_id, start_utc, end_utc):
     start_iso = start_utc.isoformat()
-    end_clause = ""
-    if end_utc is not None:
-        end_clause = f"\n  AND time < from_iso8601_timestamp('{end_utc.isoformat()}')"
+    end_iso = end_utc.isoformat()
     query = f"""
 SELECT
   time,
@@ -1573,11 +1569,11 @@ FROM "{TS_DATABASE}"."{TS_TABLE}"
 WHERE measure_name = 'value'
   AND rt_id = '{rt_id}'
   AND time >= from_iso8601_timestamp('{start_iso}')
-{end_clause}
+  AND time < from_iso8601_timestamp('{end_iso}')
 ORDER BY time ASC
-LIMIT 25
 """
     rows = query_timestream(query)
+    samples = []
     for row in rows:
         data = row.get("Data", [])
         if len(data) < 2:
@@ -1592,8 +1588,21 @@ LIMIT 25
         ts_epoch = parse_ts(ts_value)
         if ts_epoch == 0:
             continue
-        return (ts_epoch, float(applied_value))
-    return None
+        samples.append((ts_epoch, float(applied_value)))
+    return samples
+
+
+def sum_positive_counter_deltas(samples):
+    if len(samples) < 2:
+        return 0.0
+    total = 0.0
+    prev_value = samples[0][1]
+    for _curr_ts, curr_value in samples[1:]:
+        delta = curr_value - prev_value
+        if delta > 0:
+            total += delta
+        prev_value = curr_value
+    return total
 
 
 def calculate_current_power_integration(campus, metric, config, period, window):

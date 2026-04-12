@@ -69,6 +69,13 @@ Resources:
       ParentId: !Ref ResourceAggregates
       PathPart: yearly
 
+  ResourceCurrent:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !Ref ResourceAggregates
+      PathPart: current
+
   ResourceSeries:
     Type: AWS::ApiGateway::Resource
     Properties:
@@ -150,6 +157,18 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
 
+  CurrentMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ResourceCurrent
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${LambdaName}/invocations"
+
   Series24hMethod:
     Type: AWS::ApiGateway::Method
     Properties:
@@ -182,6 +201,7 @@ Resources:
       - DailyMethod
       - MonthlyMethod
       - YearlyMethod
+      - CurrentMethod
       - Series24hMethod
       - AnomaliesMethod
     Properties:

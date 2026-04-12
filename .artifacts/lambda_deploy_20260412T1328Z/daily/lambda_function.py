@@ -343,13 +343,26 @@ def calculate_daily_value(config, rt_id, start, end):
 
 
 def calculate_counter_delta(rt_id, start, end):
+    samples = query_timestream(rt_id, start, end)
     start_sample = query_latest_valid_sample(rt_id, start, operator="<=")
-    end_sample = query_latest_valid_sample(rt_id, end, operator="<")
-    if not start_sample or not end_sample:
+    if start_sample:
+        samples = [start_sample] + samples
+    if not samples:
         return None
-    _start_ts, start_value = start_sample
-    _end_ts, end_value = end_sample
-    return max(end_value - start_value, 0.0)
+    return sum_positive_counter_deltas(samples)
+
+
+def sum_positive_counter_deltas(samples):
+    if len(samples) < 2:
+        return 0.0
+    total = 0.0
+    prev_value = samples[0][1]
+    for _curr_ts, curr_value in samples[1:]:
+        delta = curr_value - prev_value
+        if delta > 0:
+            total += delta
+        prev_value = curr_value
+    return total
 
 
 def query_latest_valid_sample(rt_id, boundary, operator="<="):

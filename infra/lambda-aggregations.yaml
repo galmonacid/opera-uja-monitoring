@@ -75,6 +75,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:PutItem
                 Resource:
                   - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAnomaliesTable}"
                   - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DdbAnomaliesTable}/index/campus_domain_event_key"
