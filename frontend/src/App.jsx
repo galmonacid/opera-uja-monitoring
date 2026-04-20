@@ -555,6 +555,16 @@ const resolveRouteId = (hash) => {
 const buildLocalDateFromParts = (year, month, day = 1) =>
   new Date(Number(year), Number(month) - 1, Number(day), 12, 0, 0);
 
+const getLatestAggregateAssetValues = (aggregateData) => {
+  if (!aggregateData) return {};
+  if (aggregateData.asset_values && typeof aggregateData.asset_values === "object") {
+    return aggregateData.asset_values;
+  }
+  const series = Array.isArray(aggregateData.series) ? aggregateData.series : [];
+  const latestSeries = series[series.length - 1];
+  return latestSeries?.assets && typeof latestSeries.assets === "object" ? latestSeries.assets : {};
+};
+
 const formatLocalHour = (ts) => {
   const value = Number(ts);
   if (!Number.isFinite(value)) return "--:--";
@@ -1508,7 +1518,11 @@ function App() {
         ...prev,
         [gateway.id]: {
           ...prev[gateway.id],
-          [period]: { status: "error", data: null, error: error.message },
+          [period]: {
+            status: "error",
+            data: prev[gateway.id]?.[period]?.data || null,
+            error: error.message,
+          },
         },
       }));
     }
@@ -1592,7 +1606,7 @@ function App() {
         },
       }));
       const payload = await fetchWithFallback(
-        `/aggregates/${period}?campus=${config.campus}&metric=agua_consumo&asset=total`
+        `/aggregates/${period}?campus=${config.campus}&metric=agua_consumo&asset=all`
       );
       setWaterMetrics((prev) => ({
         ...prev,
@@ -1636,7 +1650,11 @@ function App() {
         ...prev,
         [config.id]: {
           ...prev[config.id],
-          [period]: { status: "error", data: null, error: error.message },
+          [period]: {
+            status: "error",
+            data: prev[config.id]?.[period]?.data || null,
+            error: error.message,
+          },
         },
       }));
     }
@@ -2022,8 +2040,14 @@ function App() {
       const latest = gatewayOverview[config.gatewayId] || {};
       const metrics = waterMetrics[config.id] || {};
       const current = waterCurrentAggregates[config.id] || {};
-      const dailyAssetValues = current.daily?.data?.asset_values || {};
-      const monthlyAssetValues = current.monthly?.data?.asset_values || {};
+      const dailyAssetValues = {
+        ...getLatestAggregateAssetValues(metrics.daily?.data),
+        ...(current.daily?.data?.asset_values || {}),
+      };
+      const monthlyAssetValues = {
+        ...getLatestAggregateAssetValues(metrics.monthly?.data),
+        ...(current.monthly?.data?.asset_values || {}),
+      };
       const readingPointsCount = (latest.latestItems || []).filter((item) =>
         item.rt_id?.startsWith(config.prefix)
       ).length;

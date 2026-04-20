@@ -41,6 +41,9 @@ TS_TABLE = os.getenv("TS_TABLE", "telemetry_rt")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN", "*")
 MAX_VALID_VALUE = float(os.getenv("MAX_VALID_VALUE", "1000000"))
 MAX_VALID_VALUE_KWH = float(os.getenv("MAX_VALID_VALUE_KWH", "1000000000"))
+CURRENT_COUNTER_BULK_QUERY_THRESHOLD = int(
+    os.getenv("CURRENT_COUNTER_BULK_QUERY_THRESHOLD", "4")
+)
 LOCAL_TIMEZONE_NAME = os.getenv("LOCAL_TIMEZONE", "Europe/Madrid")
 LOCAL_TIMEZONE = ZoneInfo(LOCAL_TIMEZONE_NAME)
 
@@ -1652,6 +1655,9 @@ def calculate_current_counter_deltas_by_asset(rt_prefix, rt_like_patterns, start
     if not rt_ids:
         return ({}, None)
 
+    if len(rt_ids) > CURRENT_COUNTER_BULK_QUERY_THRESHOLD:
+        return calculate_current_counter_deltas_by_asset_bulk(rt_ids, start_utc, end_utc)
+
     asset_values = {}
     ts_events = []
     for rt_id in sorted(set(rt_ids)):
@@ -1665,6 +1671,53 @@ def calculate_current_counter_deltas_by_asset(rt_prefix, rt_like_patterns, start
             asset_values[asset] = float(value)
         if ts_event is not None:
             ts_events.append(ts_event)
+
+    if asset_values:
+        asset_values["total"] = sum(
+            value for asset, value in asset_values.items() if asset != "total"
+        )
+    return (asset_values, max(ts_events) if ts_events else None)
+
+
+def calculate_current_counter_deltas_by_asset_bulk(rt_ids, start_utc, end_utc):
+    unique_rt_ids = sorted(set(rt_ids))
+    start_samples = query_valid_boundary_samples_for_rt_ids(
+        rt_ids=unique_rt_ids,
+        boundary_utc=start_utc,
+        comparator="<=",
+        order_desc=True,
+    )
+    missing_start_rt_ids = [rt_id for rt_id in unique_rt_ids if rt_id not in start_samples]
+    if missing_start_rt_ids:
+        start_samples.update(
+            query_valid_boundary_samples_for_rt_ids(
+                rt_ids=missing_start_rt_ids,
+                boundary_utc=start_utc,
+                comparator=">=",
+                order_desc=False,
+                end_utc=end_utc,
+            )
+        )
+    end_samples = query_valid_boundary_samples_for_rt_ids(
+        rt_ids=unique_rt_ids,
+        boundary_utc=end_utc,
+        comparator="<",
+        order_desc=True,
+    )
+
+    asset_values = {}
+    ts_events = []
+    for rt_id in unique_rt_ids:
+        start_sample = start_samples.get(rt_id)
+        end_sample = end_samples.get(rt_id)
+        if not start_sample or not end_sample:
+            continue
+        _start_ts, start_value = start_sample
+        end_ts, end_value = end_sample
+        asset = extract_asset_from_rt_id(rt_id)
+        if asset:
+            asset_values[asset] = max(float(end_value) - float(start_value), 0.0)
+        ts_events.append(end_ts)
 
     if asset_values:
         asset_values["total"] = sum(
@@ -1740,6 +1793,85 @@ LIMIT 25
             continue
         return (ts_epoch, float(applied_value))
     return None
+
+
+def query_valid_boundary_samples_for_rt_ids(
+    rt_ids,
+    boundary_utc,
+    comparator,
+    order_desc,
+    end_utc=None,
+    limit_per_rt=25,
+):
+    if not rt_ids:
+        return {}
+
+    rows = query_boundary_candidate_samples_for_rt_ids(
+        rt_ids=rt_ids,
+        boundary_utc=boundary_utc,
+        comparator=comparator,
+        order_desc=order_desc,
+        end_utc=end_utc,
+        limit_per_rt=limit_per_rt,
+    )
+
+    selected = {}
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 3:
+            continue
+        rt_id = data[0].get("ScalarValue")
+        ts_value = data[1].get("ScalarValue")
+        value_raw = data[2].get("ScalarValue")
+        if not rt_id or rt_id in selected or ts_value is None or value_raw is None:
+            continue
+        valid, applied_value, _anomaly = sanitize_for_analytics_value(rt_id, value_raw)
+        if not valid:
+            continue
+        ts_epoch = parse_ts(ts_value)
+        if ts_epoch == 0:
+            continue
+        selected[rt_id] = (ts_epoch, float(applied_value))
+    return selected
+
+
+def query_boundary_candidate_samples_for_rt_ids(
+    rt_ids,
+    boundary_utc,
+    comparator,
+    order_desc,
+    end_utc=None,
+    limit_per_rt=25,
+):
+    if not rt_ids:
+        return []
+
+    ordered_rt_ids = sorted(set(rt_ids))
+    escaped_rt_ids = [str(rt_id).replace("'", "''") for rt_id in ordered_rt_ids]
+    quoted_rt_ids = ", ".join(f"'{rt_id}'" for rt_id in escaped_rt_ids)
+    boundary_iso = boundary_utc.isoformat()
+    order = "DESC" if order_desc else "ASC"
+    end_clause = ""
+    if end_utc is not None:
+        end_clause = f"\n    AND time < from_iso8601_timestamp('{end_utc.isoformat()}')"
+    query = f"""
+WITH ranked AS (
+  SELECT
+    rt_id,
+    time,
+    measure_value::double AS value,
+    row_number() OVER (PARTITION BY rt_id ORDER BY time {order}) AS rn
+  FROM "{TS_DATABASE}"."{TS_TABLE}"
+  WHERE measure_name = 'value'
+    AND rt_id IN ({quoted_rt_ids})
+    AND time {comparator} from_iso8601_timestamp('{boundary_iso}'){end_clause}
+)
+SELECT rt_id, time, value
+FROM ranked
+WHERE rn <= {int(limit_per_rt)}
+ORDER BY rt_id, time {order}
+"""
+    return query_timestream(query)
 
 
 def calculate_current_power_integration(campus, metric, config, period, window):

@@ -29,10 +29,10 @@ Parameters:
     Default: telemetry_rt
   MemorySize:
     Type: Number
-    Default: 256
+    Default: 512
   Timeout:
     Type: Number
-    Default: 30
+    Default: 45
 
 Resources:
   ApiRole:

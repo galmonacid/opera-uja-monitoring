@@ -1008,6 +1008,87 @@ def test_calculate_current_counter_delta_skips_invalid_end_sample():
     assert ts_event == int(datetime(2026, 4, 1, 23, 50, tzinfo=timezone.utc).timestamp())
 
 
+def test_calculate_current_counter_deltas_by_asset_uses_bulk_boundary_queries():
+    api = load_lambda_module()
+    api.CURRENT_COUNTER_BULK_QUERY_THRESHOLD = 1
+    start_utc = datetime(2026, 4, 1, 0, 0, tzinfo=timezone.utc)
+    end_utc = datetime(2026, 4, 2, 0, 0, tzinfo=timezone.utc)
+    api.scan_latest = lambda prefix: [
+        {"rt_id": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+        {"rt_id": "uja.jaen.agua.consumo.edificio_b1.v_m3"},
+    ]
+
+    captured = []
+
+    def fake_query(query):
+        captured.append(query)
+        if "time <= from_iso8601_timestamp('2026-04-01T00:00:00+00:00')" in query:
+            return [
+                {
+                    "Data": [
+                        {"ScalarValue": "uja.jaen.agua.consumo.edificio_b1.v_m3"},
+                        {"ScalarValue": "2026-03-31 23:55:00.000000000"},
+                        {"ScalarValue": "-1.0"},
+                    ]
+                }
+            ]
+        if (
+            "time >= from_iso8601_timestamp('2026-04-01T00:00:00+00:00')" in query
+            and "time < from_iso8601_timestamp('2026-04-02T00:00:00+00:00')" in query
+        ):
+            return [
+                {
+                    "Data": [
+                        {"ScalarValue": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+                        {"ScalarValue": "2026-04-01 00:05:00.000000000"},
+                        {"ScalarValue": "100.0"},
+                    ]
+                },
+                {
+                    "Data": [
+                        {"ScalarValue": "uja.jaen.agua.consumo.edificio_b1.v_m3"},
+                        {"ScalarValue": "2026-04-01 00:10:00.000000000"},
+                        {"ScalarValue": "200.0"},
+                    ]
+                },
+            ]
+        if "time < from_iso8601_timestamp('2026-04-02T00:00:00+00:00')" in query:
+            return [
+                {
+                    "Data": [
+                        {"ScalarValue": "uja.jaen.agua.consumo.edificio_a0.v_m3"},
+                        {"ScalarValue": "2026-04-01 23:55:00.000000000"},
+                        {"ScalarValue": "103.0"},
+                    ]
+                },
+                {
+                    "Data": [
+                        {"ScalarValue": "uja.jaen.agua.consumo.edificio_b1.v_m3"},
+                        {"ScalarValue": "2026-04-01 23:50:00.000000000"},
+                        {"ScalarValue": "205.0"},
+                    ]
+                },
+            ]
+        return []
+
+    api.query_timestream = fake_query
+
+    values, ts_event = api.calculate_current_counter_deltas_by_asset(
+        "uja.jaen.agua.consumo.",
+        ["%.v_m3"],
+        start_utc,
+        end_utc,
+    )
+
+    assert values == {
+        "edificio_a0": 3.0,
+        "edificio_b1": 5.0,
+        "total": 8.0,
+    }
+    assert ts_event == int(datetime(2026, 4, 1, 23, 55, tzinfo=timezone.utc).timestamp())
+    assert len(captured) == 3
+
+
 def test_query_timeseries_by_select_uses_kwh_limit_for_e_kwh_series():
     api = load_lambda_module()
     captured = {}
