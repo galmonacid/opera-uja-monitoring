@@ -141,6 +141,8 @@ describe("App toolbar", () => {
     const table = within(jaenCard).getByTestId("water-table-jaen");
     expect(metrics.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(chart.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(jaenCard).getByRole("heading", { name: "Las Lagunillas" })).toBeInTheDocument();
+    expect(within(jaenCard).queryByRole("heading", { name: "Agua Las Lagunillas" })).not.toBeInTheDocument();
   });
 
   it("keeps the map view without layer and water-reading selectors", () => {

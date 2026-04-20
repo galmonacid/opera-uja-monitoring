@@ -2317,8 +2317,14 @@ function App() {
           <span className="summary-metric-label">{metric.label}</span>
           <strong className="summary-metric-value">
             {metric.unit ? formatValue(metric.value, metric.unit) : number.format(metric.value || 0)}
+            {metric.inlineSecondary ? (
+              <>
+                {" "}
+                ({formatValue(metric.secondaryValue, metric.secondaryUnit)})
+              </>
+            ) : null}
           </strong>
-          {metric.secondaryUnit ? (
+          {metric.secondaryUnit && !metric.inlineSecondary ? (
             <span className="summary-metric-copy">
               {formatValue(metric.secondaryValue, metric.secondaryUnit)}
             </span>
@@ -2825,7 +2831,7 @@ function App() {
               >
                 <div className="gateway-header">
                   <div>
-                    <h3 className="gateway-title">Agua {config.label}</h3>
+                    <h3 className="gateway-title">{config.label}</h3>
                     <div className="gateway-topic">
                       KPIs del periodo en curso, curva operativa y tabla diaria por punto.
                     </div>
@@ -2847,7 +2853,7 @@ function App() {
                     </div>
                     <ValueChart
                       series={summary.seriesItems}
-                      label={`Agua ${config.label}`}
+                      label={config.label}
                       unit={summary?.seriesUnit || "m3"}
                       intervalMinutes={ANALYTICS_SERIES_INTERVAL_MINUTES}
                       density="single"

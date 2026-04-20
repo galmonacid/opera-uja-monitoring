@@ -68,6 +68,7 @@ describe("viewModels", () => {
             unit: "tn/CO2",
             secondaryValue: 180,
             secondaryUnit: "árboles",
+            inlineSecondary: true,
           },
         ],
         balanceMetrics: [

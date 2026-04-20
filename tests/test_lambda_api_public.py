@@ -929,6 +929,41 @@ def test_get_current_aggregate_for_water_single_asset_returns_only_requested_poi
     assert result["unit"] == "m3"
 
 
+def test_get_current_aggregate_for_water_daily_falls_back_to_today_aggregate_when_live_delta_is_empty():
+    api = load_lambda_module()
+    api.current_period_window_utc = lambda period, now=None: {
+        "period": period,
+        "key": "2026-04-11",
+        "start_utc": datetime(2026, 4, 10, 22, 0, tzinfo=timezone.utc),
+        "end_utc": datetime(2026, 4, 11, 10, 0, tzinfo=timezone.utc),
+        "today_key": "2026-04-11",
+        "month_key": "2026-04",
+        "year_key": "2026",
+        "timezone": "Europe/Madrid",
+    }
+    api.calculate_current_counter_deltas_by_asset = lambda *_args, **_kwargs: ({}, None)
+    api.query_pk_for_metric = lambda campus, metric, period: []
+    api.build_aggregate_fallback_items = lambda campus, metric, period: [
+        {"date": "2026-04-10", "asset": "edificio_a0", "value": 1.0, "unit": "m3"},
+        {"date": "2026-04-10", "asset": "total", "value": 1.0, "unit": "m3"},
+        {"date": "2026-04-11", "asset": "edificio_a0", "value": 2.25, "unit": "m3"},
+        {"date": "2026-04-11", "asset": "edificio_b1", "value": 1.75, "unit": "m3"},
+        {"date": "2026-04-11", "asset": "total", "value": 4.0, "unit": "m3"},
+    ]
+
+    result = api.get_current_aggregate(
+        {"campus": "jaen", "metric": "agua_consumo", "period": "daily", "asset": "all"}
+    )
+
+    assert result["asset_values"] == {
+        "edificio_a0": 2.25,
+        "edificio_b1": 1.75,
+        "total": 4.0,
+    }
+    assert result["assets"] == ["edificio_a0", "edificio_b1", "total"]
+    assert result["ts_event"] is None
+
+
 def test_calculate_current_counter_delta_skips_invalid_end_sample():
     api = load_lambda_module()
     start_utc = datetime(2026, 4, 1, 0, 0, tzinfo=timezone.utc)

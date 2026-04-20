@@ -909,7 +909,7 @@
 
 .axis-label {
   fill: var(--color-text-soft);
-  font-size: 3.4px;
+  font-size: 2.8px;
   text-anchor: start;
   dominant-baseline: hanging;
 }
@@ -917,7 +917,7 @@
 .area-chart.density-single .axis-label,
 .value-chart.density-single .axis-label,
 .solar-chart.density-single .axis-label {
-  font-size: 2.8px;
+  font-size: 2.3px;
 }
 
 .axis-label-y {

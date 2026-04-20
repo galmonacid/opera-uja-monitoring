@@ -1605,6 +1605,8 @@ def calculate_current_counter_asset_aggregates(campus, metric, config, period, w
         live_start_utc,
         window["end_utc"],
     )
+    if metric == "agua_consumo" and not live_values:
+        live_values = get_current_water_daily_fallback_values(campus, window["today_key"])
 
     combined = {}
     for asset in set(historical_values.keys()) | set(live_values.keys()):
@@ -1784,6 +1786,21 @@ def sum_closed_daily_aggregate_values_by_asset(campus, metric, start_date, end_d
         if start_date <= date_value < end_date:
             totals[asset] = totals.get(asset, 0.0) + float(item["value"])
     return totals
+
+
+def get_current_water_daily_fallback_values(campus, today_key):
+    if not today_key:
+        return {}
+
+    values = {}
+    for item in query_daily_aggregate_items_with_fallback(campus, "agua_consumo"):
+        if item.get("date") != today_key:
+            continue
+        asset = item.get("asset")
+        if not asset:
+            continue
+        values[asset] = float(item["value"])
+    return values
 
 
 def query_daily_aggregate_items_with_fallback(campus, metric):

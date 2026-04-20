@@ -43,6 +43,7 @@ export const buildEnergyCampusCards = ({
           unit: "tn/CO2",
           secondaryValue: environmentalImpact.equivalentTrees,
           secondaryUnit: "árboles",
+          inlineSecondary: true,
         },
       ],
       balanceMetrics: [
