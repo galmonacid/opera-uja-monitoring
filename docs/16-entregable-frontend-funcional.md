@@ -84,12 +84,13 @@
   - Banda superior de KPIs y acumulados por campus.
   - Panel operativo por campus.
   - Selector de campus: `Todos`, `Las Lagunillas`, `CTL Linares`.
-  - Selector de periodo: `Actual`, `Diario`, `Mensual`.
 
   ### Información que muestra
   - En la banda superior:
-    - Demanda actual o energía diaria/mensual, según el periodo seleccionado.
-    - Porcentaje de autoconsumo del campus.
+    - `Demanda actual`.
+    - `% de autoconsumo`.
+    - `Energía mensual` del mes en curso.
+    - `Impacto medioambiental anual` del año en curso: toneladas de CO2 equivalentes y árboles.
   - En cada panel operativo:
     - Gráfica de `Demanda` y `Generación FV` de las últimas 24 horas.
     - Cuatro bloques: `Demanda`, `Generación FV`, `Red` y `Autoconsumo`.
@@ -102,14 +103,15 @@
     - `/v1/series/24h?scope=...&interval_minutes=15`
       devuelve la serie agregada de `Demanda` y `FV` del campus en bins de 15 minutos.
   - Acumulados energéticos:
-    - `/v1/aggregates/daily?campus=...&metric=energia_consumo&asset=total`
-      devuelve la energía diaria total del campus, obtenida por integración temporal de la potencia y agregada por día.
-    - `/v1/aggregates/monthly?campus=...&metric=energia_consumo&asset=total`
-      devuelve la energía mensual total del campus, calculada como suma de los valores diarios o reconstruida desde ellos si es necesario.
+    - `/v1/aggregates/current?campus=...&metric=energia_consumo&period=monthly`
+      devuelve la energía acumulada del mes en curso.
+    - `/v1/aggregates/current?campus=...&metric=energia_consumo&period=yearly`
+      devuelve la energía acumulada del año en curso, usada para derivar el impacto medioambiental.
 
   ### Cálculo
   - Los valores de `Demanda`, `FV`, `Red` y `Autoconsumo` usan exactamente las mismas reglas que en `Balance`.
-  - La energía diaria y mensual se obtiene a partir de agregados energéticos del campus.
+  - La energía mensual y anual mostradas en la banda superior se obtienen del agregado actual del periodo en curso.
+  - El impacto medioambiental anual se deriva del acumulado energético anual mediante los coeficientes configurados en frontend.
   - La gráfica de 24 horas representa la evolución de `Demanda` y `FV` con bins de `15 minutos`.
 
   ## 5. Sección `Mapa`
@@ -125,14 +127,12 @@
   ### Información que muestra
   - Valor instantáneo del punto seleccionado.
   - Nombre amigable del elemento.
-  - Capa activa.
   - Última lectura.
   - En móvil, el valor se consulta principalmente en el panel de detalle para preservar la legibilidad.
 
   ### Alcance de esta entrega
   - En esta entrega solo está activa la capa `Demanda de energía`.
-  - Las capas de `Agua`, `Fotovoltaica` y `Autoconsumo` quedan deshabilitadas en el frontend.
-  - El modelo interno del mapa conserva la posibilidad de activarlas en una fase posterior, pero no se exponen al usuario final en esta versión.
+  - No se muestra selector de capa ni selector de lectura de agua.
 
   ### Fuentes de datos
   - `/v1/realtime?campus=jaen`
@@ -154,16 +154,15 @@
   - Tarjetas de resumen por campus.
   - Tabla operativa de puntos de agua.
   - Gráfica de tendencia de 24 horas.
-  - Totales `Diario`, `Mensual` y `Anual`.
+  - Totales `Diario` y `Mensual` del periodo en curso.
   - Selector de campus.
-  - Selector de periodo.
 
   ### Información que muestra
   - Número de puntos con lectura por campus.
-  - Consumo diario, mensual y anual.
+  - Consumo diario y mensual del periodo en curso.
   - Tabla con:
     - Punto
-    - Valor actual
+    - Consumo diario
     - Unidad
     - Última lectura
   - Gráfica de consumo por intervalo.
@@ -180,17 +179,17 @@
     - `/v1/series/24h?campus=linares&metric=agua_consumo&interval_minutes=15`
       devuelve el consumo de agua por intervalo en Linares con la misma lógica.
   - Totales:
-    - `/v1/aggregates/daily?...metric=agua_consumo...`
-      devuelve el consumo total diario agregado a partir de los incrementos válidos de los contadores.
-    - `/v1/aggregates/monthly?...metric=agua_consumo...`
-      devuelve el consumo total mensual calculado como suma de los diarios.
-    - el anual se obtiene sumando la serie mensual disponible
+    - `/v1/aggregates/current?campus=...&metric=agua_consumo&period=daily&asset=all`
+      devuelve el consumo diario acumulado del día en curso, incluyendo el desglose por punto y el total de campus.
+    - `/v1/aggregates/current?campus=...&metric=agua_consumo&period=monthly&asset=all`
+      devuelve el consumo mensual acumulado del mes en curso, incluyendo el total del campus.
 
   ### Cálculo
   - Los puntos de agua son contadores acumulados.
   - El consumo del intervalo se calcula como:
     `contador del bin actual - contador del bin anterior`
-  - El diario, mensual y anual se construyen sumando esos consumos incrementales agregados.
+  - El consumo diario y mensual del periodo en curso se calcula como:
+    `último contador válido disponible - contador válido al inicio del periodo`
 
   ## 7. Sección `Fotovoltaica`
 

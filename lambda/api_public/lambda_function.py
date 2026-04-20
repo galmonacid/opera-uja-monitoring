@@ -138,6 +138,18 @@ CURRENT_AGGREGATE_CONFIG = {
         "rt_like_patterns": ["%.p_kw"],
         "unit": "kWh",
     },
+    ("jaen", "agua_consumo"): {
+        "mode": "counter_delta_assets",
+        "rt_prefix": "uja.jaen.agua.consumo.",
+        "rt_like_patterns": ["%.v_m3"],
+        "unit": "m3",
+    },
+    ("linares", "agua_consumo"): {
+        "mode": "counter_delta_assets",
+        "rt_prefix": "uja.linares.agua.consumo.",
+        "rt_like_patterns": ["%.v_m3"],
+        "unit": "m3",
+    },
     ("jaen", "fv_endesa"): {
         "mode": "counter_delta",
         "rt_id": "uja.jaen.fv.endesa.ct_total.e_kwh",
@@ -427,6 +439,7 @@ def get_current_aggregate(params):
     campus = params.get("campus")
     metric = params.get("metric")
     period = params.get("period")
+    aggregate_assets = resolve_aggregate_assets(params)
 
     if not campus or not metric or not period:
         return {"error": "missing_params"}
@@ -438,6 +451,15 @@ def get_current_aggregate(params):
         return {"error": "unsupported_metric"}
 
     window = current_period_window_utc(period)
+    if config["mode"] == "counter_delta_assets":
+        return get_current_counter_asset_aggregate(
+            campus,
+            metric,
+            config,
+            period,
+            window,
+            aggregate_assets,
+        )
     if config["mode"] == "counter_delta":
         value, ts_event = calculate_current_counter_aggregate(
             campus,
@@ -464,6 +486,54 @@ def get_current_aggregate(params):
         "period_start_ts": int(window["start_utc"].timestamp()),
         "ts_event": ts_event,
         "value": None if value is None else float(value),
+    }
+
+
+def get_current_counter_asset_aggregate(campus, metric, config, period, window, aggregate_assets):
+    asset_values, ts_event = calculate_current_counter_asset_aggregates(
+        campus,
+        metric,
+        config,
+        period,
+        window,
+    )
+
+    base_response = {
+        "campus": campus,
+        "metric": metric,
+        "period": period,
+        "unit": config.get("unit", infer_aggregate_unit(metric)),
+        "timezone": window["timezone"],
+        "period_start_ts": int(window["start_utc"].timestamp()),
+        "ts_event": ts_event,
+    }
+    if aggregate_assets["mode"] == "single":
+        asset = aggregate_assets["assets"][0]
+        value = asset_values.get(asset)
+        return {
+            **base_response,
+            "asset": asset,
+            "value": None if value is None else float(value),
+        }
+
+    filtered_values = {}
+    if aggregate_assets["mode"] == "all":
+        filtered_values = {
+            asset: float(value)
+            for asset, value in sorted(asset_values.items())
+            if value is not None
+        }
+    else:
+        filtered_values = {
+            asset: float(asset_values[asset])
+            for asset in aggregate_assets["assets"]
+            if asset in asset_values and asset_values[asset] is not None
+        }
+
+    return {
+        **base_response,
+        "assets": sorted(filtered_values.keys()),
+        "asset_values": filtered_values,
     }
 
 
@@ -1515,6 +1585,45 @@ def calculate_current_counter_aggregate(campus, metric, config, period, window):
     return (historical_total + (live_total or 0.0), ts_event)
 
 
+def calculate_current_counter_asset_aggregates(campus, metric, config, period, window):
+    historical_values = {}
+    if period in {"monthly", "yearly"}:
+        historical_values = sum_closed_daily_aggregate_values_by_asset(
+            campus,
+            metric,
+            start_date=f"{window['month_key']}-01" if period == "monthly" else f"{window['year_key']}-01-01",
+            end_date=window["today_key"],
+        )
+
+    live_window = current_period_window_utc("daily", now=window["end_utc"])
+    live_start_utc = (
+        live_window["start_utc"] if period in {"monthly", "yearly"} else window["start_utc"]
+    )
+    live_values, ts_event = calculate_current_counter_deltas_by_asset(
+        config.get("rt_prefix"),
+        config.get("rt_like_patterns"),
+        live_start_utc,
+        window["end_utc"],
+    )
+
+    combined = {}
+    for asset in set(historical_values.keys()) | set(live_values.keys()):
+        historical = historical_values.get(asset, 0.0)
+        live = live_values.get(asset, 0.0)
+        combined[asset] = historical + live
+
+    if "total" not in combined:
+        total_value = sum(
+            value for asset, value in combined.items() if asset != "total" and value is not None
+        )
+        if total_value > 0:
+            combined["total"] = total_value
+
+    if not combined:
+        return ({}, ts_event)
+    return (combined, ts_event)
+
+
 def calculate_current_counter_delta(rt_id, start_utc, end_utc):
     start_sample = query_latest_valid_sample_at_or_before(rt_id, start_utc, inclusive=True)
     if not start_sample:
@@ -1525,6 +1634,41 @@ def calculate_current_counter_delta(rt_id, start_utc, end_utc):
     _start_ts, start_value = start_sample
     end_ts, end_value = end_sample
     return (max(end_value - start_value, 0.0), end_ts)
+
+
+def calculate_current_counter_deltas_by_asset(rt_prefix, rt_like_patterns, start_utc, end_utc):
+    if not rt_prefix:
+        return ({}, None)
+
+    items = scan_latest(rt_prefix)
+    rt_ids = [
+        item["rt_id"]
+        for item in items
+        if item.get("rt_id", "").startswith(rt_prefix)
+        and infer_rt_unit(item.get("rt_id")) == "m3"
+    ]
+    if not rt_ids:
+        return ({}, None)
+
+    asset_values = {}
+    ts_events = []
+    for rt_id in sorted(set(rt_ids)):
+        if rt_like_patterns and not any(
+            fnmatchcase(rt_id, pattern.replace("%", "*")) for pattern in rt_like_patterns
+        ):
+            continue
+        value, ts_event = calculate_current_counter_delta(rt_id, start_utc, end_utc)
+        asset = extract_asset_from_rt_id(rt_id)
+        if asset and value is not None:
+            asset_values[asset] = float(value)
+        if ts_event is not None:
+            ts_events.append(ts_event)
+
+    if asset_values:
+        asset_values["total"] = sum(
+            value for asset, value in asset_values.items() if asset != "total"
+        )
+    return (asset_values, max(ts_events) if ts_events else None)
 
 
 def query_latest_valid_sample_at_or_before(rt_id, boundary_utc, inclusive=True):
@@ -1619,7 +1763,7 @@ def calculate_current_power_integration(campus, metric, config, period, window):
 
 def sum_closed_daily_aggregate_values(campus, metric, start_date, end_date):
     total = 0.0
-    for item in query_pk_for_metric(campus, metric, "daily"):
+    for item in query_daily_aggregate_items_with_fallback(campus, metric):
         if item.get("asset") != "total":
             continue
         date_value = item.get("date")
@@ -1628,6 +1772,32 @@ def sum_closed_daily_aggregate_values(campus, metric, start_date, end_date):
         if start_date <= date_value < end_date:
             total += float(item["value"])
     return total
+
+
+def sum_closed_daily_aggregate_values_by_asset(campus, metric, start_date, end_date):
+    totals = {}
+    for item in query_daily_aggregate_items_with_fallback(campus, metric):
+        asset = item.get("asset")
+        date_value = item.get("date")
+        if not asset or not date_value:
+            continue
+        if start_date <= date_value < end_date:
+            totals[asset] = totals.get(asset, 0.0) + float(item["value"])
+    return totals
+
+
+def query_daily_aggregate_items_with_fallback(campus, metric):
+    items = query_pk_for_metric(campus, metric, "daily")
+    if not items:
+        fallback_items = build_aggregate_fallback_items(campus, metric, "daily")
+        if fallback_items:
+            existing_keys = {(item["date"], item.get("asset")) for item in items}
+            items.extend(
+                item
+                for item in fallback_items
+                if (item["date"], item.get("asset")) not in existing_keys
+            )
+    return items
 
 
 def integrate_power_window(rt_prefix=None, rt_like_patterns=None, rt_ids=None, start_utc=None, end_utc=None):

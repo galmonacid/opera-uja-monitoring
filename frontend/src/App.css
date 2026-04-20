@@ -514,6 +514,11 @@
   gap: var(--space-3);
 }
 
+.section-card-stack {
+  display: grid;
+  gap: var(--space-6);
+}
+
 .summary-metric {
   display: grid;
   gap: var(--space-1);
@@ -535,6 +540,11 @@
   color: var(--color-text);
   font-size: 1rem;
   font-weight: 700;
+}
+
+.summary-metric-copy {
+  color: var(--color-text-soft);
+  font-size: 0.8125rem;
 }
 
 .summary-highlight {
@@ -1074,6 +1084,21 @@
   box-shadow: var(--shadow-soft);
 }
 
+.section-campus-card {
+  align-content: start;
+}
+
+.gateway-card-actions {
+  display: grid;
+  justify-items: end;
+  gap: var(--space-2);
+}
+
+.section-card-metrics {
+  display: grid;
+  gap: var(--space-3);
+}
+
 .anomaly-card {
   margin-bottom: var(--space-6);
 }
@@ -1178,6 +1203,10 @@
 .project-layout {
   display: grid;
   gap: var(--space-4);
+}
+
+.section-detail-card {
+  align-content: start;
 }
 
 .api-card {
@@ -1316,6 +1345,10 @@
   .gateway-panel-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .gateway-card-actions {
+    justify-items: start;
   }
 
   .gateway-tab {

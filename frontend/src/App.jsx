@@ -4,6 +4,11 @@ import "./App.css";
 import campus from "./assets/sections/campus.png";
 import EnergyFlowDiagram from "./components/EnergyFlowDiagram";
 import {
+  buildEnergyCampusCards,
+  buildWaterCampusCards,
+  buildWaterRows as buildWaterRowsViewModel,
+} from "./viewModels";
+import {
   getMonitoringPointLabel,
 } from "./data/monitoringPoints";
 
@@ -43,26 +48,12 @@ const HOUR_FORMATTER = new Intl.DateTimeFormat("es-ES", {
   minute: "2-digit",
   hourCycle: "h23",
 });
-const WATER_COUNTER_OFFSETS_STORAGE_KEY = "uja.water.counter.offsets.v1";
-const WATER_OFFSET_MODES = [
-  { value: "monthly", label: "Delta mensual" },
-  { value: "annual", label: "Delta anual" },
-  { value: "raw", label: "Totalizador" },
-];
 
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
 const JAEN_ENDESA_CT_TOTAL_RT_ID = "uja.jaen.fv.endesa.ct_total.p_kw";
 const JAEN_ENDESA_INVERTER_RT_PREFIX = "uja.jaen.fv.endesa.inv";
 
-const MAP_LAYER_OFFSETS = {
-  energy: { x: 0, y: 0 },
-  water: { x: 1.2, y: 2 },
-  solar: { x: 1.2, y: -2 },
-  autoconsumo: { x: -1.2, y: 2 },
-};
 const getWaterAssetFromRtId = (rtId) => rtId?.split(".")[4] || null;
-const getWaterMapAggregatePeriod = (periodFilter) =>
-  periodFilter === "monthly" ? "monthly" : "daily";
 
 const createMapEntry = ({
   id,
@@ -514,14 +505,10 @@ const CAMPUS_OPTIONS = [
   { value: "linares", label: "Campus Científico Tecnológico de Linares" },
 ];
 
-const PERIOD_OPTIONS = [
-  { value: "actual", label: "Actual" },
-  { value: "daily", label: "Diario" },
-  { value: "monthly", label: "Mensual" },
-];
 const CURRENT_AGGREGATE_PERIODS = ["daily", "monthly", "yearly"];
 const CURRENT_AGGREGATE_SUPPORTED_METRICS = new Set([
   "energia_consumo",
+  "agua_consumo",
   "fv_endesa",
   "fv_auto",
 ]);
@@ -1115,27 +1102,6 @@ const renderMapLayerIcon = (layer) => {
 };
 
 const getDefaultMapUnit = (layer) => (layer === "water" ? "m3" : "kW");
-const isWaterRtId = (rtId) => rtId?.includes(".agua.") && rtId?.endsWith(".v_m3");
-
-const getWaterPeriodKey = (mode, date = new Date()) => {
-  const year = String(date.getUTCFullYear());
-  if (mode === "annual") return year;
-  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
-};
-
-const buildWaterOffsetKey = (mode, periodKey, rtId) => `${mode}:${periodKey}:${rtId}`;
-
-const loadWaterCounterOffsets = () => {
-  try {
-    const raw = window.localStorage.getItem(WATER_COUNTER_OFFSETS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch (error) {
-    return {};
-  }
-};
 
 const clampPercent = (value) => Math.max(1, Math.min(97, value));
 
@@ -1161,12 +1127,8 @@ const IconAutoconsumo = () => (
 function App() {
   const [routeHash, setRouteHash] = useState(() => window.location.hash || "#/");
   const [campusFilter, setCampusFilter] = useState("all");
-  const [periodFilter, setPeriodFilter] = useState("actual");
-  const [mapLayer, setMapLayer] = useState("energy");
   const [selectedMapPoint, setSelectedMapPoint] = useState(null);
   const [validationDomainFilter, setValidationDomainFilter] = useState("all");
-  const [waterOffsetMode, setWaterOffsetMode] = useState("monthly");
-  const [waterCounterOffsets, setWaterCounterOffsets] = useState(() => loadWaterCounterOffsets());
   const [validationActiveTabs, setValidationActiveTabs] = useState(() =>
     Object.fromEntries(GATEWAYS.map((gateway) => [gateway.id, "latest"]))
   );
@@ -1224,6 +1186,16 @@ function App() {
     });
     return initial;
   });
+  const [waterCurrentAggregates, setWaterCurrentAggregates] = useState(() => {
+    const initial = {};
+    WATER_VIEW_CONFIG.forEach((config) => {
+      initial[config.id] = {
+        daily: { status: "idle", data: null, error: null },
+        monthly: { status: "idle", data: null, error: null },
+      };
+    });
+    return initial;
+  });
   const [solarMetrics, setSolarMetrics] = useState(() => {
     const initial = {};
     SOLAR_VIEW_CONFIG.forEach((config) => {
@@ -1232,13 +1204,6 @@ function App() {
       };
     });
     return initial;
-  });
-  const [waterMapAggregates, setWaterMapAggregates] = useState({
-    status: "idle",
-    period: getWaterMapAggregatePeriod("actual"),
-    byCampus: {},
-    unitByCampus: {},
-    error: null,
   });
 
   const routeId = resolveRouteId(routeHash);
@@ -1647,66 +1612,32 @@ function App() {
     }
   };
 
-  const fetchWaterMapAggregates = async (period) => {
-    const waterEntries = MAP_ENTRIES.filter((entry) => entry.layer === "water" && entry.asset);
-    const assetsByCampus = waterEntries.reduce((acc, entry) => {
-      if (!acc[entry.campus]) {
-        acc[entry.campus] = new Set();
-      }
-      acc[entry.campus].add(entry.asset);
-      return acc;
-    }, {});
-
+  const fetchWaterCurrentAggregate = async (config, period) => {
     try {
-      setWaterMapAggregates((prev) => ({
+      setWaterCurrentAggregates((prev) => ({
         ...prev,
-        status: "loading",
-        period,
-        error: null,
+        [config.id]: {
+          ...prev[config.id],
+          [period]: { ...prev[config.id][period], status: "loading", error: null },
+        },
       }));
-
-      const requests = Object.entries(assetsByCampus).flatMap(([campus, assets]) =>
-        Array.from(assets).map(async (asset) => {
-          const payload = await fetchWithFallback(
-            `/aggregates/${period}?campus=${campus}&metric=agua_consumo&asset=${asset}`
-          );
-          return { campus, asset, payload };
-        })
+      const payload = await fetchWithFallback(
+        `/aggregates/current?campus=${config.campus}&metric=agua_consumo&period=${period}&asset=all`
       );
-      const settled = await Promise.allSettled(requests);
-
-      const byCampus = {};
-      const unitByCampus = {};
-      let firstError = null;
-
-      settled.forEach((result) => {
-        if (result.status !== "fulfilled") {
-          if (!firstError) firstError = result.reason?.message || "api_error";
-          return;
-        }
-        const { campus, asset, payload } = result.value;
-        const value = getLastAggregateValue(payload.series || []);
-        if (value == null) return;
-        if (!byCampus[campus]) byCampus[campus] = {};
-        byCampus[campus][asset] = value;
-        if (!unitByCampus[campus]) {
-          unitByCampus[campus] = payload.unit || "m3";
-        }
-      });
-
-      setWaterMapAggregates({
-        status: "ready",
-        period,
-        byCampus,
-        unitByCampus,
-        error: firstError,
-      });
-    } catch (error) {
-      setWaterMapAggregates((prev) => ({
+      setWaterCurrentAggregates((prev) => ({
         ...prev,
-        status: "error",
-        period,
-        error: error.message,
+        [config.id]: {
+          ...prev[config.id],
+          [period]: { status: "ready", data: payload, error: null },
+        },
+      }));
+    } catch (error) {
+      setWaterCurrentAggregates((prev) => ({
+        ...prev,
+        [config.id]: {
+          ...prev[config.id],
+          [period]: { status: "error", data: null, error: error.message },
+        },
       }));
     }
   };
@@ -1757,6 +1688,8 @@ function App() {
       fetchWaterSeries(config);
       fetchWaterAggregates(config, "daily");
       fetchWaterAggregates(config, "monthly");
+      fetchWaterCurrentAggregate(config, "daily");
+      fetchWaterCurrentAggregate(config, "monthly");
     });
   };
 
@@ -1830,14 +1763,6 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (routeId !== "map" || mapLayer !== "water") return undefined;
-    const period = getWaterMapAggregatePeriod(periodFilter);
-    fetchWaterMapAggregates(period);
-    const interval = setInterval(() => fetchWaterMapAggregates(period), 300000);
-    return () => clearInterval(interval);
-  }, [routeId, mapLayer, periodFilter]);
-
-  useEffect(() => {
     if (routeId !== "validation") return undefined;
     fetchAnomalies();
     const interval = setInterval(fetchAnomalies, 60000);
@@ -1851,16 +1776,6 @@ function App() {
   }, []);
 
   const formatValue = (value, unit) => (value == null ? "--" : `${number.format(value)} ${unit}`);
-
-  const getLastAggregateValue = (series) => {
-    if (!series?.length) return null;
-    return series[series.length - 1].value ?? null;
-  };
-
-  const getAnnualValue = (series) => {
-    if (!series?.length) return null;
-    return series.reduce((sum, item) => sum + Number(item.value || 0), 0);
-  };
 
   const getEnvironmentalImpact = (annualKwh) => {
     if (annualKwh == null) {
@@ -1976,63 +1891,7 @@ function App() {
     return fallback;
   };
 
-  const pickMetricSnapshot = ({
-    currentLabel,
-    currentValue,
-    currentUnit,
-    dailyLabel,
-    dailyValue,
-    dailyUnit,
-    monthlyLabel,
-    monthlyValue,
-    monthlyUnit,
-  }) => {
-    if (periodFilter === "daily") {
-      return { label: dailyLabel, value: dailyValue, unit: dailyUnit };
-    }
-    if (periodFilter === "monthly") {
-      return { label: monthlyLabel, value: monthlyValue, unit: monthlyUnit };
-    }
-    return { label: currentLabel, value: currentValue, unit: currentUnit };
-  };
-
   const realtimeItems = useMemo(() => realtime.data?.items || [], [realtime.data]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(
-        WATER_COUNTER_OFFSETS_STORAGE_KEY,
-        JSON.stringify(waterCounterOffsets)
-      );
-    } catch (error) {
-      // no-op
-    }
-  }, [waterCounterOffsets]);
-
-  useEffect(() => {
-    if (!realtimeItems.length) return;
-    const monthlyPeriod = getWaterPeriodKey("monthly");
-    const annualPeriod = getWaterPeriodKey("annual");
-    setWaterCounterOffsets((prev) => {
-      let next = prev;
-      realtimeItems.forEach((item) => {
-        if (!isWaterRtId(item.rt_id)) return;
-        const value = Number(item.value);
-        if (!Number.isFinite(value)) return;
-        const monthlyKey = buildWaterOffsetKey("monthly", monthlyPeriod, item.rt_id);
-        if (next[monthlyKey] == null) {
-          if (next === prev) next = { ...prev };
-          next[monthlyKey] = value;
-        }
-        const annualKey = buildWaterOffsetKey("annual", annualPeriod, item.rt_id);
-        if (next[annualKey] == null) {
-          if (next === prev) next = { ...prev };
-          next[annualKey] = value;
-        }
-      });
-      return next;
-    });
-  }, [realtimeItems]);
 
   const realtimeMap = useMemo(() => {
     const map = new Map();
@@ -2041,23 +1900,6 @@ function App() {
   }, [realtimeItems]);
 
   const getMapEntryReading = (entry) => {
-    if (entry.layer === "water") {
-      const campusAggregates = waterMapAggregates.byCampus?.[entry.campus] || {};
-      const assetValue =
-        entry.asset && Object.prototype.hasOwnProperty.call(campusAggregates, entry.asset)
-          ? campusAggregates[entry.asset]
-          : null;
-      return {
-        value: assetValue,
-        unit: waterMapAggregates.unitByCampus?.[entry.campus] || getDefaultMapUnit(entry.layer),
-        tsEvent: null,
-        availableCount: assetValue == null ? 0 : 1,
-        totalCount: 1,
-        isPartial: false,
-        isNoData: assetValue == null,
-      };
-    }
-
     const items = entry.rtIds
       .map((rtId) => realtimeMap.get(rtId))
       .filter(Boolean);
@@ -2074,20 +1916,10 @@ function App() {
       };
     }
 
-    const resolveItemValue = (item) => {
-      const rawValue = Number(item.value || 0);
-      if (entry.layer !== "water" || waterOffsetMode === "raw") return rawValue;
-      const periodKey = getWaterPeriodKey(waterOffsetMode);
-      const baseline = waterCounterOffsets[buildWaterOffsetKey(waterOffsetMode, periodKey, item.rt_id)];
-      if (baseline == null) return rawValue;
-      const delta = rawValue - Number(baseline);
-      return delta >= 0 ? delta : rawValue;
-    };
-
     const value =
       entry.aggregate === "sum"
-        ? items.reduce((sum, item) => sum + resolveItemValue(item), 0)
-        : resolveItemValue(items[0]);
+        ? items.reduce((sum, item) => sum + Number(item.value || 0), 0)
+        : Number(items[0].value || 0);
 
     return {
       value,
@@ -2101,17 +1933,9 @@ function App() {
   };
 
   const getMapEntryPosition = (entry) => {
-    if (mapLayer !== "all") {
-      return {
-        left: `${clampPercent(entry.x)}%`,
-        top: `${clampPercent(entry.y)}%`,
-      };
-    }
-
-    const offset = MAP_LAYER_OFFSETS[entry.layer] || { x: 0, y: 0 };
     return {
-      left: `${clampPercent(entry.x + offset.x)}%`,
-      top: `${clampPercent(entry.y + offset.y)}%`,
+      left: `${clampPercent(entry.x)}%`,
+      top: `${clampPercent(entry.y)}%`,
     };
   };
 
@@ -2178,27 +2002,49 @@ function App() {
     return result;
   }, [currentAggregates, validation]);
 
+  const energyCurrentOverview = useMemo(() => {
+    const result = {};
+    ENERGY_VIEW_CONFIG.forEach((config) => {
+      const summary = gatewayOverview[config.gatewayId] || {};
+      result[config.scopeId] = {
+        monthlyValue: summary.monthlyValue ?? null,
+        monthlyUnit: summary.monthlyUnit || "--",
+        yearlyValue: summary.annualValue ?? null,
+        yearlyUnit: summary.annualUnit || "--",
+      };
+    });
+    return result;
+  }, [gatewayOverview]);
+
   const waterOverview = useMemo(() => {
     const result = {};
     WATER_VIEW_CONFIG.forEach((config) => {
       const latest = gatewayOverview[config.gatewayId] || {};
       const metrics = waterMetrics[config.id] || {};
+      const current = waterCurrentAggregates[config.id] || {};
+      const dailyAssetValues = current.daily?.data?.asset_values || {};
+      const monthlyAssetValues = current.monthly?.data?.asset_values || {};
+      const readingPointsCount = (latest.latestItems || []).filter((item) =>
+        item.rt_id?.startsWith(config.prefix)
+      ).length;
       result[config.id] = {
         latestItems: latest.latestItems || [],
         latestStatus: latest.latestStatus || "idle",
         seriesItems: metrics.series?.data?.series || [],
         seriesUnit: metrics.series?.data?.unit || "--",
         seriesStatus: metrics.series?.status || "idle",
-        dailyValue: getLastAggregateValue(metrics.daily?.data?.series || []),
-        dailyUnit: metrics.daily?.data?.unit || "--",
-        monthlyValue: getLastAggregateValue(metrics.monthly?.data?.series || []),
-        monthlyUnit: metrics.monthly?.data?.unit || metrics.daily?.data?.unit || "--",
-        annualValue: getAnnualValue(metrics.monthly?.data?.series || []),
-        annualUnit: metrics.monthly?.data?.unit || metrics.daily?.data?.unit || "--",
+        readingPointsCount,
+        dailyValue: dailyAssetValues.total ?? null,
+        dailyUnit: current.daily?.data?.unit || "--",
+        dailyAssetValues,
+        dailyStatus: current.daily?.status || "idle",
+        monthlyValue: monthlyAssetValues.total ?? null,
+        monthlyUnit: current.monthly?.data?.unit || current.daily?.data?.unit || "--",
+        monthlyStatus: current.monthly?.status || "idle",
       };
     });
     return result;
-  }, [gatewayOverview, waterMetrics]);
+  }, [gatewayOverview, waterCurrentAggregates, waterMetrics]);
 
   const validationSummary = useMemo(() => {
     let errors = 0;
@@ -2268,9 +2114,8 @@ function App() {
   }, [anomalies.data]);
 
   const visibleMapEntries = useMemo(() => {
-    if (mapLayer === "all") return MAP_ENTRIES;
-    return MAP_ENTRIES.filter((entry) => entry.layer === mapLayer);
-  }, [mapLayer]);
+    return MAP_ENTRIES.filter((entry) => entry.layer === "energy");
+  }, []);
 
   useEffect(() => {
     if (routeId !== "map") return;
@@ -2465,20 +2310,33 @@ function App() {
     );
   };
 
-  const buildDashboardPanel = (scope) => {
+  const renderSummaryMetricGrid = (metrics) => (
+    <div className="summary-metric-grid">
+      {metrics.map((metric) => (
+        <div key={metric.id} className="summary-metric">
+          <span className="summary-metric-label">{metric.label}</span>
+          <strong className="summary-metric-value">
+            {metric.unit ? formatValue(metric.value, metric.unit) : number.format(metric.value || 0)}
+          </strong>
+          {metric.secondaryUnit ? (
+            <span className="summary-metric-copy">
+              {formatValue(metric.secondaryValue, metric.secondaryUnit)}
+            </span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+
+  const buildEnergyCampusCard = (config) => {
+    const scope = DASHBOARD_SCOPES.find((item) => item.id === config.scopeId) || config;
     const state = dashboard[scope.id] || {};
     const panelStatus = resolveDashboardStatus(state.kpis || {}, state.series || {});
     const isComplete = panelStatus.kind === "complete";
     const warningText = buildMissingSourcesText(state.kpis || {}, state.series || {});
     const errorText = state.kpis?.error || state.series?.error || "api_error";
-    const title = state.kpis?.data?.label || state.series?.data?.label || scope.title;
+    const title = state.kpis?.data?.label || state.series?.data?.label || scope.title || config.label;
     const chartSeries = isComplete ? state.series?.data?.series || [] : [];
-    const demand = isComplete ? readKpiValue(state.kpis?.data, "demanda_kw") : null;
-    const pv = isComplete ? readKpiValue(state.kpis?.data, "fv_kw") : null;
-    const grid = isComplete ? readKpiValue(state.kpis?.data, "red_kw") : null;
-    const autoconsumoPct = isComplete
-      ? readKpiValue(state.kpis?.data, "autoconsumo_pct")
-      : null;
 
     let chartEmptyText = "Sin datos para las últimas 24 horas.";
     if (panelStatus.kind === "loading") {
@@ -2490,23 +2348,45 @@ function App() {
     }
     const chartDensity = filteredEnergyConfigs.length === 1 ? "single" : "split";
 
+    const card = buildEnergyCampusCards({
+      configs: [config],
+      dashboardOverview,
+      currentAggregates: energyCurrentOverview,
+      getEnvironmentalImpact,
+    })[0];
+
     return (
-      <article key={scope.id} className={`dashboard-panel panel-${panelStatus.kind}`}>
-        <div className="dashboard-panel-header">
+      <article
+        key={scope.id}
+        className={`gateway-card section-campus-card panel-${panelStatus.kind}`}
+        data-testid={`energy-card-${config.scopeId}`}
+      >
+        <div className="gateway-header">
           <div>
-            <h3 className="dashboard-panel-title">{title}</h3>
+            <h3 className="gateway-title">{title}</h3>
+            <div className="gateway-topic">
+              Balance operativo del campus con KPIs, curva de 24 horas y bloque de operación.
+            </div>
+          </div>
+          <div className="gateway-card-actions">
             <div className={`dashboard-status status-${panelStatus.kind}`}>
               {panelStatus.label}
             </div>
+            <button
+              className="action-button action-button-secondary action-button-compact"
+              type="button"
+              aria-label={`Actualizar ${title}`}
+              onClick={() => refreshScopeData(scope)}
+            >
+              Actualizar
+            </button>
           </div>
-          <button
-            className="action-button action-button-secondary action-button-compact"
-            type="button"
-            aria-label={`Actualizar ${title}`}
-            onClick={() => refreshScopeData(scope)}
-          >
-            Actualizar
-          </button>
+        </div>
+        <div className="gateway-topic">
+          Última actualización {formatTs(state.kpis?.data?.ts_event || state.series?.data?.ts_event)}
+        </div>
+        <div className="section-card-metrics" data-testid={`energy-metrics-${config.scopeId}`}>
+          {renderSummaryMetricGrid(card.topMetrics)}
         </div>
         {warningText && panelStatus.kind === "partial" ? (
           <div className="dashboard-warning">{warningText}</div>
@@ -2514,48 +2394,20 @@ function App() {
         {panelStatus.kind === "error" ? (
           <div className="dashboard-warning warning-error">Error: {errorText}</div>
         ) : null}
-        <div className="balance-grid">
-          <div className="chart-card">
+        {isComplete && chartSeries.length ? (
+          <div className="chart-card" data-testid={`energy-chart-${config.scopeId}`}>
             <div className="chart-legend">
               <span className="legend-item demand">Curva Demanda kW</span>
               <span className="legend-item pv">Curva Generación kW</span>
             </div>
-            {isComplete && chartSeries.length ? (
-              <AreaChart series={chartSeries} unit="kW" density={chartDensity} />
-            ) : (
-              <div className="chart-empty">{chartEmptyText}</div>
-            )}
+            <AreaChart series={chartSeries} unit="kW" density={chartDensity} />
           </div>
-          <div className="infographic">
-            <div className="metric-card demand">
-              <div className="metric-icon">
-                <IconDemand />
-              </div>
-              <div className="metric-label">Demanda</div>
-              <div className="metric-value">{formatValue(demand, "kW")}</div>
-            </div>
-            <div className="metric-card pv">
-              <div className="metric-icon">
-                <IconSolar />
-              </div>
-              <div className="metric-label">Generación FV</div>
-              <div className="metric-value">{formatValue(pv, "kW")}</div>
-            </div>
-            <div className="metric-card grid">
-              <div className="metric-icon">
-                <IconGrid />
-              </div>
-              <div className="metric-label">Red</div>
-              <div className="metric-value">{formatValue(grid, "kW")}</div>
-            </div>
-            <div className="metric-card autoconsumo">
-              <div className="metric-icon">
-                <IconAutoconsumo />
-              </div>
-              <div className="metric-label">Autoconsumo</div>
-              <div className="metric-value">{formatValue(autoconsumoPct, "%")}</div>
-            </div>
-          </div>
+        ) : (
+          <div className="chart-empty" data-testid={`energy-chart-${config.scopeId}`}>{chartEmptyText}</div>
+        )}
+        <div className="api-card section-detail-card" data-testid={`energy-detail-${config.scopeId}`}>
+          <h4 className="api-card-title">Balance operativo</h4>
+          {renderSummaryMetricGrid(card.balanceMetrics)}
         </div>
       </article>
     );
@@ -2600,22 +2452,18 @@ function App() {
     );
   };
 
-  const buildWaterRows = (latestItems, config) => {
-    const rows = (latestItems || [])
-      .filter((item) => item.rt_id?.startsWith(config.prefix))
-      .map((item) => ({
-        sortLabel: getMonitoringPointLabel(item.rt_id),
-        cells: [
-          getMonitoringPointLabel(item.rt_id),
-          number.format(item.value),
-          item.unit || "m3",
-          formatTs(item.ts_event),
-        ],
-      }))
-      .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, "es"))
-      .map((item) => item.cells);
-    return rows;
-  };
+  const buildWaterRows = (latestItems, config, dailyAssetValues) =>
+    buildWaterRowsViewModel({
+      latestItems,
+      prefix: config.prefix,
+      dailyAssetValues,
+      getLabel: getMonitoringPointLabel,
+    }).map((item) => [
+      item.pointLabel,
+      item.dailyValue == null ? "--" : number.format(item.dailyValue),
+      item.unit || "m3",
+      formatTs(item.tsEvent),
+    ]);
 
   const pageMeta = {
     summary: {
@@ -2628,7 +2476,7 @@ function App() {
     energy: {
       title: "Explotación energética",
       subtitle:
-        "Vista operativa para demanda, red, generación y acumulados por campus.",
+        "Vista operativa para demanda, autoconsumo e impacto ambiental por campus.",
       primaryLabel: "Actualizar energía",
       primaryAction: refreshDashboard,
     },
@@ -2642,7 +2490,7 @@ function App() {
     water: {
       title: "Monitorización de agua",
       subtitle:
-        "Sección tabular y analítica para consumo de agua por campus y punto de medida.",
+        "Consumo diario y mensual por campus, con detalle operativo por punto de lectura.",
       primaryLabel: "Actualizar agua",
       primaryAction: refreshWaterData,
     },
@@ -2684,11 +2532,20 @@ function App() {
     ? visibleMapEntries.find((entry) => entry.id === selectedMapPoint) || null
     : null;
   const selectedMapReading = selectedMapData ? getMapEntryReading(selectedMapData) : null;
+  const energyCampusCards = buildEnergyCampusCards({
+    configs: filteredEnergyConfigs,
+    dashboardOverview,
+    currentAggregates: energyCurrentOverview,
+    getEnvironmentalImpact,
+  });
+  const waterCampusCards = buildWaterCampusCards({
+    configs: filteredWaterConfigs,
+    waterOverview,
+  });
 
   const renderToolbar = () => {
     const controls = [];
     const addCampusControl = !["summary", "map"].includes(routeId);
-    const addPeriodControl = !["summary", "map", "solar", "validation"].includes(routeId);
 
     if (addCampusControl) {
       controls.push(
@@ -2700,60 +2557,6 @@ function App() {
             onChange={(event) => setCampusFilter(event.target.value)}
           >
             {CAMPUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      );
-    }
-
-    if (addPeriodControl) {
-      controls.push(
-        <label key="period" className="toolbar-field">
-          <span className="toolbar-label">Periodo</span>
-          <select
-            className="toolbar-select"
-            value={periodFilter}
-            onChange={(event) => setPeriodFilter(event.target.value)}
-          >
-            {PERIOD_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      );
-    }
-
-    if (routeId === "map") {
-      controls.push(
-        <label key="layer" className="toolbar-field">
-          <span className="toolbar-label">Capa</span>
-          <select
-            className="toolbar-select"
-            value={mapLayer}
-            onChange={(event) => setMapLayer(event.target.value)}
-          >
-            {MAP_LAYER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      );
-      controls.push(
-        <label key="water-mode" className="toolbar-field">
-          <span className="toolbar-label">Lectura agua</span>
-          <select
-            className="toolbar-select"
-            value={waterOffsetMode}
-            onChange={(event) => setWaterOffsetMode(event.target.value)}
-          >
-            {WATER_OFFSET_MODES.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -2784,7 +2587,7 @@ function App() {
 
     let note = "Vista operativa lista.";
     if (routeId === "map") {
-      note = `${visibleMapEntries.length} puntos visibles en la capa actual. Agua en modo ${WATER_OFFSET_MODES.find((item) => item.value === waterOffsetMode)?.label?.toLowerCase()}.`;
+      note = `${visibleMapEntries.length} puntos visibles en demanda de energía.`;
     } else if (routeId === "validation") {
       note = `${filteredValidationGateways.length} gateways visibles en seguimiento.`;
     } else if (routeId === "solar") {
@@ -2873,71 +2676,23 @@ function App() {
   };
 
   const renderEnergyView = () => (
-    <>
-      <section className="section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Banda de KPIs y acumulados</h2>
-            <p className="section-subtitle">Balance actual y acumulados por campus.</p>
-          </div>
-          <div className="insight-grid">
-            {filteredEnergyConfigs.map((config) => {
-              const scopeSummary = dashboardOverview[config.scopeId];
-              const energySummary = gatewayOverview[config.gatewayId];
-              const environmentalImpact = getEnvironmentalImpact(energySummary?.annualValue);
-              const highlighted = pickMetricSnapshot({
-                currentLabel: "Demanda actual",
-                currentValue: scopeSummary?.demand,
-                currentUnit: "kW",
-                dailyLabel: "Energía diaria",
-                dailyValue: energySummary?.dailyValue,
-                dailyUnit: energySummary?.dailyUnit,
-                monthlyLabel: "Energía mensual",
-                monthlyValue: energySummary?.monthlyValue,
-                monthlyUnit: energySummary?.monthlyUnit,
-              });
-              return (
-                <article key={config.scopeId} className="insight-card">
-                  <span className="insight-label">{scopeSummary?.title || config.label}</span>
-                  <strong className="insight-value">
-                    {formatValue(highlighted.value, highlighted.unit)}
-                  </strong>
-                  <span className="insight-note">{highlighted.label}</span>
-                  <span className="insight-note">
-                    Autoconsumo {formatValue(scopeSummary?.autoconsumoPct, "%")}
-                  </span>
-                  <div className="insight-environment">
-                    <span className="insight-environment-title">Impacto medioambiental</span>
-                    <span className="insight-environment-note">
-                      Emisiones evitadas acumuladas este año
-                    </span>
-                    <span className="insight-environment-value">
-                      {formatValue(environmentalImpact.avoidedCo2Ton, "tn/CO2")} (
-                      {formatValue(environmentalImpact.equivalentTrees, "árboles")})
-                    </span>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+    <section className="section">
+      <div className="container">
+        <div className="section-header">
+          <h2 className="section-title">Explotación energética por campus</h2>
+          <p className="section-subtitle">
+            Cada campus concentra KPIs, curva de demanda y balance operativo dentro de una única
+            tarjeta.
+          </p>
         </div>
-      </section>
-
-      <section className="section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Paneles operativos por campus</h2>
-            <p className="section-subtitle">Curvas y métricas de operación por campus.</p>
-          </div>
-          <div className="dashboard-panels">
-            {filteredEnergyConfigs.map((config) => {
-              const scope = DASHBOARD_SCOPES.find((item) => item.id === config.scopeId);
-              return scope ? buildDashboardPanel(scope) : null;
-            })}
-          </div>
+        <div className="section-card-stack">
+          {energyCampusCards.map((configCard) => {
+            const config = filteredEnergyConfigs.find((item) => item.scopeId === configCard.scopeId);
+            return config ? buildEnergyCampusCard(config) : null;
+          })}
         </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 
   const renderMapView = () => (
@@ -3039,78 +2794,57 @@ function App() {
   );
 
   const renderWaterView = () => (
-    <>
-      <section className="section">
-        <div className="container">
-          <div className="section-header">
-            <h2 className="section-title">Consumo y acumulados de agua</h2>
-            <p className="section-subtitle">
-              La tabla pasa a ser protagonista y se combina con totales por campus y curva
-              cuando el backend ya la sirve.
-            </p>
-          </div>
-          <div className="insight-grid">
-            {filteredWaterConfigs.map((config) => {
-              const summary = waterOverview[config.id];
-              const rows = buildWaterRows(summary?.latestItems || [], config);
-              const highlighted = pickMetricSnapshot({
-                currentLabel: "Puntos con lectura",
-                currentValue: rows.length,
-                currentUnit: "",
-                dailyLabel: "Consumo diario",
-                dailyValue: summary?.dailyValue,
-                dailyUnit: summary?.dailyUnit,
-                monthlyLabel: "Consumo mensual",
-                monthlyValue: summary?.monthlyValue,
-                monthlyUnit: summary?.monthlyUnit,
-              });
-              return (
-                <article key={config.id} className="insight-card">
-                  <span className="insight-label">{config.label}</span>
-                  <strong className="insight-value">
-                    {highlighted.unit
-                      ? formatValue(highlighted.value, highlighted.unit)
-                      : number.format(highlighted.value || 0)}
-                  </strong>
-                  <span className="insight-note">{highlighted.label}</span>
-                  <span className="insight-note">
-                    Anual {formatValue(summary?.annualValue, summary?.annualUnit)}
-                  </span>
-                </article>
-              );
-            })}
-          </div>
+    <section className="section">
+      <div className="container">
+        <div className="section-header">
+          <h2 className="section-title">Consumo de agua por campus</h2>
+          <p className="section-subtitle">
+            Cada campus agrupa KPIs, curva operativa y tabla de puntos dentro de una tarjeta
+            autocontenida.
+          </p>
         </div>
-      </section>
-
-      <section className="section">
-        <div className="container">
-          <div className="water-stack">
-            {filteredWaterConfigs.map((config) => {
-              const summary = waterOverview[config.id];
-              const rows = buildWaterRows(summary?.latestItems || [], config);
-              const canRenderTrend = Boolean(summary?.seriesItems?.length);
-              return (
-                <article key={config.id} className="gateway-card">
-                  <div className="gateway-header">
-                    <div>
-                      <h3 className="gateway-title">Agua {config.label}</h3>
-                      <div className="gateway-topic">
-                        Lectura instantánea y acumulados por campus.
-                      </div>
-                    </div>
-                    <div className={`dashboard-status status-${getStatusKind(summary?.latestStatus)}`}>
-                      {renderStatus({ status: summary?.latestStatus })}
+        <div className="section-card-stack">
+          {filteredWaterConfigs.map((config) => {
+            const summary = waterOverview[config.id];
+            const card = waterCampusCards.find((item) => item.id === config.id);
+            const rows = buildWaterRows(
+              summary?.latestItems || [],
+              config,
+              summary?.dailyAssetValues || {}
+            );
+            const canRenderTrend = Boolean(summary?.seriesItems?.length);
+            const latestWaterTs = Math.max(
+              ...(summary?.latestItems || []).map((item) => Number(item.ts_event || 0)),
+              0
+            );
+            return (
+              <article
+                key={config.id}
+                className="gateway-card section-campus-card"
+                data-testid={`water-card-${config.id}`}
+              >
+                <div className="gateway-header">
+                  <div>
+                    <h3 className="gateway-title">Agua {config.label}</h3>
+                    <div className="gateway-topic">
+                      KPIs del periodo en curso, curva operativa y tabla diaria por punto.
                     </div>
                   </div>
-                  <div className="water-detail-grid">
-                    <div className="api-card">
-                      <h4 className="api-card-title">Tabla operativa</h4>
-                      {renderTable(["Punto", "Actual", "Unidad", "Última lectura"], rows)}
+                  <div className={`dashboard-status status-${getStatusKind(summary?.latestStatus)}`}>
+                    {renderStatus({ status: summary?.latestStatus })}
+                  </div>
+                </div>
+                <div className="gateway-topic">
+                  Última lectura {latestWaterTs > 0 ? formatTs(latestWaterTs) : "--"}
+                </div>
+                <div className="section-card-metrics" data-testid={`water-metrics-${config.id}`}>
+                  {card ? renderSummaryMetricGrid(card.topMetrics) : null}
+                </div>
+                {canRenderTrend ? (
+                  <div className="chart-card" data-testid={`water-chart-${config.id}`}>
+                    <div className="chart-legend">
+                      <span className="legend-item demand">Consumo m3</span>
                     </div>
-                    <div className="api-card">
-                      <h4 className="api-card-title">Tendencia y totales</h4>
-                      {canRenderTrend ? (
                     <ValueChart
                       series={summary.seriesItems}
                       label={`Agua ${config.label}`}
@@ -3118,38 +2852,22 @@ function App() {
                       intervalMinutes={ANALYTICS_SERIES_INTERVAL_MINUTES}
                       density="single"
                     />
-                  ) : (
-                        <div className="chart-empty">Sin serie operativa disponible todavía.</div>
-                      )}
-                      <div className="detail-stack compact-detail-stack">
-                        <div className="detail-row">
-                          <span className="detail-key">Diario</span>
-                          <span className="detail-value">
-                            {formatValue(summary?.dailyValue, summary?.dailyUnit)}
-                          </span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-key">Mensual</span>
-                          <span className="detail-value">
-                            {formatValue(summary?.monthlyValue, summary?.monthlyUnit)}
-                          </span>
-                        </div>
-                        <div className="detail-row">
-                          <span className="detail-key">Anual</span>
-                          <span className="detail-value">
-                            {formatValue(summary?.annualValue, summary?.annualUnit)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
                   </div>
-                </article>
-              );
-            })}
-          </div>
+                ) : (
+                  <div className="chart-empty" data-testid={`water-chart-${config.id}`}>
+                    Sin serie operativa disponible todavía.
+                  </div>
+                )}
+                <div className="api-card section-detail-card" data-testid={`water-table-${config.id}`}>
+                  <h4 className="api-card-title">Tabla operativa</h4>
+                  {renderTable(["Punto", "Consumo diario", "Unidad", "Última lectura"], rows)}
+                </div>
+              </article>
+            );
+          })}
         </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 
   const renderSolarView = () => (

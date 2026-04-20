@@ -804,6 +804,175 @@ def test_get_current_aggregate_for_energy_monthly_uses_closed_daily_plus_live_da
     assert result["ts_event"] == 1770000000
 
 
+def test_get_current_aggregate_for_water_daily_total_uses_asset_deltas():
+    api = load_lambda_module()
+    api.current_period_window_utc = lambda period, now=None: {
+        "period": period,
+        "key": "2026-04-11",
+        "start_utc": datetime(2026, 4, 10, 22, 0, tzinfo=timezone.utc),
+        "end_utc": datetime(2026, 4, 11, 10, 0, tzinfo=timezone.utc),
+        "today_key": "2026-04-11",
+        "month_key": "2026-04",
+        "year_key": "2026",
+        "timezone": "Europe/Madrid",
+    }
+    api.calculate_current_counter_asset_aggregates = lambda campus, metric, config, period, window: (
+        {"edificio_a0": 3.5, "edificio_b1": 2.0, "total": 5.5},
+        1770000000,
+    )
+
+    result = api.get_current_aggregate(
+        {"campus": "jaen", "metric": "agua_consumo", "period": "daily"}
+    )
+
+    assert result == {
+        "campus": "jaen",
+        "metric": "agua_consumo",
+        "period": "daily",
+        "unit": "m3",
+        "timezone": "Europe/Madrid",
+        "period_start_ts": int(datetime(2026, 4, 10, 22, 0, tzinfo=timezone.utc).timestamp()),
+        "ts_event": 1770000000,
+        "asset": "total",
+        "value": 5.5,
+    }
+
+
+def test_get_current_aggregate_for_water_monthly_asset_all_returns_values_by_point():
+    api = load_lambda_module()
+
+    def fake_window(period, now=None):
+        if period == "daily":
+            return {
+                "period": "daily",
+                "key": "2026-04-11",
+                "start_utc": datetime(2026, 4, 10, 22, 0, tzinfo=timezone.utc),
+                "end_utc": datetime(2026, 4, 11, 10, 0, tzinfo=timezone.utc),
+                "today_key": "2026-04-11",
+                "month_key": "2026-04",
+                "year_key": "2026",
+                "timezone": "Europe/Madrid",
+            }
+        return {
+            "period": "monthly",
+            "key": "2026-04",
+            "start_utc": datetime(2026, 3, 31, 22, 0, tzinfo=timezone.utc),
+            "end_utc": datetime(2026, 4, 11, 10, 0, tzinfo=timezone.utc),
+            "today_key": "2026-04-11",
+            "month_key": "2026-04",
+            "year_key": "2026",
+            "timezone": "Europe/Madrid",
+        }
+
+    api.current_period_window_utc = fake_window
+    api.query_pk_for_metric = lambda campus, metric, period: [
+        {"date": "2026-04-01", "asset": "edificio_a0", "value": 2.0, "unit": "m3"},
+        {"date": "2026-04-01", "asset": "edificio_b1", "value": 3.0, "unit": "m3"},
+        {"date": "2026-04-01", "asset": "total", "value": 5.0, "unit": "m3"},
+        {"date": "2026-04-02", "asset": "edificio_a0", "value": 3.0, "unit": "m3"},
+        {"date": "2026-04-02", "asset": "edificio_b1", "value": 4.0, "unit": "m3"},
+        {"date": "2026-04-02", "asset": "total", "value": 7.0, "unit": "m3"},
+        {"date": "2026-04-11", "asset": "total", "value": 999.0, "unit": "m3"},
+    ]
+    api.scan_latest = lambda prefix, gateway_id=None: [
+        {"rt_id": "uja.jaen.agua.consumo.edificio_a0.v_m3", "value": 120.0, "unit": "m3", "ts_event": 1770000000},
+        {"rt_id": "uja.jaen.agua.consumo.edificio_b1.v_m3", "value": 220.0, "unit": "m3", "ts_event": 1770000000},
+    ]
+
+    def fake_delta(rt_id, start_utc, end_utc):
+        if rt_id == "uja.jaen.agua.consumo.edificio_a0.v_m3":
+            return (1.5, 1770000000)
+        if rt_id == "uja.jaen.agua.consumo.edificio_b1.v_m3":
+            return (2.0, 1770000000)
+        return (None, None)
+
+    api.calculate_current_counter_delta = fake_delta
+
+    result = api.get_current_aggregate(
+        {"campus": "jaen", "metric": "agua_consumo", "period": "monthly", "asset": "all"}
+    )
+
+    assert result["assets"] == ["edificio_a0", "edificio_b1", "total"]
+    assert result["asset_values"] == {
+        "edificio_a0": 6.5,
+        "edificio_b1": 9.0,
+        "total": 15.5,
+    }
+    assert result["unit"] == "m3"
+    assert result["timezone"] == "Europe/Madrid"
+    assert result["ts_event"] == 1770000000
+
+
+def test_get_current_aggregate_for_water_single_asset_returns_only_requested_point():
+    api = load_lambda_module()
+    api.current_period_window_utc = lambda period, now=None: {
+        "period": period,
+        "key": "2026-04-11",
+        "start_utc": datetime(2026, 4, 10, 22, 0, tzinfo=timezone.utc),
+        "end_utc": datetime(2026, 4, 11, 10, 0, tzinfo=timezone.utc),
+        "today_key": "2026-04-11",
+        "month_key": "2026-04",
+        "year_key": "2026",
+        "timezone": "Europe/Madrid",
+    }
+    api.calculate_current_counter_asset_aggregates = lambda campus, metric, config, period, window: (
+        {"edificio_a0": 3.5, "edificio_b1": 2.0, "total": 5.5},
+        1770000000,
+    )
+
+    result = api.get_current_aggregate(
+        {"campus": "jaen", "metric": "agua_consumo", "period": "daily", "asset": "edificio_a0"}
+    )
+
+    assert result["asset"] == "edificio_a0"
+    assert result["value"] == 3.5
+    assert result["unit"] == "m3"
+
+
+def test_calculate_current_counter_delta_skips_invalid_end_sample():
+    api = load_lambda_module()
+    start_utc = datetime(2026, 4, 1, 0, 0, tzinfo=timezone.utc)
+    end_utc = datetime(2026, 4, 2, 0, 0, tzinfo=timezone.utc)
+
+    def fake_query(query):
+        if "time <= from_iso8601_timestamp('2026-04-01T00:00:00+00:00')" in query:
+            return [
+                {
+                    "Data": [
+                        {"ScalarValue": "2026-04-01 00:00:00.000000000"},
+                        {"ScalarValue": "100.0"},
+                    ]
+                }
+            ]
+        if "time < from_iso8601_timestamp('2026-04-02T00:00:00+00:00')" in query:
+            return [
+                {
+                    "Data": [
+                        {"ScalarValue": "2026-04-01 23:55:00.000000000"},
+                        {"ScalarValue": "-10.0"},
+                    ]
+                },
+                {
+                    "Data": [
+                        {"ScalarValue": "2026-04-01 23:50:00.000000000"},
+                        {"ScalarValue": "103.0"},
+                    ]
+                },
+            ]
+        return []
+
+    api.query_timestream = fake_query
+
+    value, ts_event = api.calculate_current_counter_delta(
+        "uja.jaen.agua.consumo.edificio_a0.v_m3",
+        start_utc,
+        end_utc,
+    )
+
+    assert value == 3.0
+    assert ts_event == int(datetime(2026, 4, 1, 23, 50, tzinfo=timezone.utc).timestamp())
+
+
 def test_query_timeseries_by_select_uses_kwh_limit_for_e_kwh_series():
     api = load_lambda_module()
     captured = {}

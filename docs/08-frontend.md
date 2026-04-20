@@ -31,7 +31,8 @@ Motivos:
    - Valores instantáneos desde `/realtime`
    - Panel inferior con detalle del punto seleccionado
 3. Agua
-   - Tabla operativa por campus
+   - Tarjetas de puntos de lectura, consumo diario y consumo mensual por campus
+   - Tabla operativa por campus con consumo diario por punto
    - Tendencia 24h desde `/series/24h?campus=...&metric=agua_consumo&interval_minutes=15`
 4. Fotovoltaica
    - Vista unificada de FV Endesa y autoconsumo
@@ -53,7 +54,16 @@ Motivos:
 - Mapa principal:
   - mantiene el `campus.png`
   - en esta entrega solo expone la capa `Demanda de energía`
+  - no muestra selectores de capa ni de lectura de agua
   - mantiene un panel de detalle para el punto seleccionado
+- Vista `Energía`:
+  - mantiene filtro de campus
+  - elimina selector de periodo
+  - muestra 3 tarjetas fijas por campus: `Demanda actual + % autoconsumo`, `Energía mensual`, `Impacto medioambiental anual`
+- Vista `Agua`:
+  - mantiene filtro de campus
+  - elimina selector de periodo
+  - consume `/aggregates/current?metric=agua_consumo&period=daily|monthly&asset=all` para el resumen y la tabla por punto
 - Pantalla `#/validacion`:
   - 6 tarjetas, una por gateway requerido
   - bloque global `Anomalías detectadas` antes de los gateways
@@ -94,6 +104,7 @@ Motivos:
 cd frontend
 npm install
 npm run dev
+npm test
 ```
 
 ## Amplify (build)

@@ -95,6 +95,45 @@ Respuesta (multi-asset con `asset=all` o `assets=...`):
   "asset_values_date":"2026-03"
 }
 
+### GET /v1/aggregates/current
+Devuelve el acumulado del periodo en curso sin esperar al cierre diario/mensual/anual.
+
+Query params:
+- campus
+- metric=energia_consumo|agua_consumo|fv_endesa|fv_auto
+- period=daily|monthly|yearly
+- asset=total|edificio_a1|inv01|...|all
+- assets=edificio_a1,edificio_a2,... (opcional; solo en métricas multi-asset)
+
+Respuesta simple:
+{
+  "campus":"jaen",
+  "metric":"energia_consumo",
+  "period":"monthly",
+  "unit":"kWh",
+  "timezone":"Europe/Madrid",
+  "period_start_ts":1711922400,
+  "ts_event":1712829600,
+  "value":12345.6
+}
+
+Respuesta multi-asset (agua con `asset=all` o `assets=...`):
+{
+  "campus":"jaen",
+  "metric":"agua_consumo",
+  "period":"daily",
+  "unit":"m3",
+  "timezone":"Europe/Madrid",
+  "period_start_ts":1712786400,
+  "ts_event":1712829600,
+  "assets":["edificio_a0","edificio_b1","total"],
+  "asset_values":{
+    "edificio_a0":1.5,
+    "edificio_b1":2.75,
+    "total":4.25
+  }
+}
+
 ### GET /v1/series/24h
 Serie temporal (24h) para grafica de balance energetico.
 
@@ -173,7 +212,9 @@ Notas:
 - Las vistas visuales del portal consumen `interval_minutes=15` como granularidad estándar.
 - Si `monthly` no está materializado todavía en DynamoDB, la API puede reconstruirlo a partir de `daily`.
 - Compatibilidad: `asset=total` mantiene el contrato anterior (`series` con `{date, value}` sin bloque `assets`).
-- Para mapa de agua, usar `metric=agua_consumo` + `period=monthly|yearly` + `asset=all` (o `assets=...`); `asset_values` devuelve directamente el mapa `asset -> value` de la fecha más reciente disponible.
+- Para `aggregates/current`, `agua_consumo` soporta `asset=total`, `asset=<asset>` y `asset=all`.
+- En `agua_consumo`, `aggregates/current` devuelve el consumo del periodo en curso por diferencia entre contador válido al inicio del periodo y la última muestra válida disponible.
+- En `agua_consumo`, la respuesta multi-asset expone `asset_values` con los valores por punto y `total` como suma del campus.
 
 ### GET /v1/anomalies
 Registro técnico reciente de anomalías detectadas durante ingestión o backfill.
