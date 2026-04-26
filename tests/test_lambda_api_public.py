@@ -588,8 +588,35 @@ def test_scan_latest_filters_by_gateway_id():
     result = api.scan_latest("uja.jaen.fv.auto.", gateway_id="gw_autoconsumo_jaen")
 
     assert len(result) == 1
-    assert result[0]["gateway_id"] == "gw_autoconsumo_jaen"
-    assert result[0]["rt_id"] == "uja.jaen.fv.auto.ct_total.p_kw"
+
+
+def test_get_realtime_supports_gateway_only_filter():
+    api = load_lambda_module()
+
+    captured = {}
+
+    def fake_scan_latest(prefix, gateway_id=None):
+        captured["prefix"] = prefix
+        captured["gateway_id"] = gateway_id
+        return [
+            {
+                "rt_id": "uja.linares.fv.endesa.ct_total.p_kw",
+                "value": 4.13,
+                "unit": "kW",
+                "ts_event": 1777045980,
+                "gateway_id": "gw_endesa_linares",
+            }
+        ]
+
+    api.scan_latest = fake_scan_latest
+
+    result = api.get_realtime({"gateway_id": "gw_endesa_linares"}, {})
+
+    assert captured == {"prefix": "", "gateway_id": "gw_endesa_linares"}
+    assert result["ts"] == 1777045980
+    assert len(result["items"]) == 1
+    assert result["items"][0]["gateway_id"] == "gw_endesa_linares"
+    assert result["items"][0]["rt_id"] == "uja.linares.fv.endesa.ct_total.p_kw"
 
 
 def test_scan_latest_clamps_negative_ct_total_to_zero():
@@ -1395,7 +1422,59 @@ def test_scope_series_returns_partial_when_univer_is_missing():
 
     assert result["status"] == "partial"
     assert result["missing_sources"] == ["jaen_fv_auto_univer"]
-    assert result["series"] == []
+    assert result["series"] == [{"ts": 1735689600, "demand": 10.0, "pv": 5.0}]
+
+
+def test_scope_series_keeps_demand_when_linares_pv_series_is_missing():
+    api = load_lambda_module()
+    demand_rows = [
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
+                {"ScalarValue": "uja.linares.energia.consumo.lab_sg_t1.p_kw"},
+                {"ScalarValue": "30"},
+            ]
+        },
+        {
+            "Data": [
+                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
+                {"ScalarValue": "uja.linares.energia.consumo.lab_sg_t1.p_kw"},
+                {"ScalarValue": "28"},
+            ]
+        },
+    ]
+
+    def fake_batch_get(rt_ids, gateway_id=None):
+        assert gateway_id is None
+        key = set(rt_ids)
+        if key == set(api.CTL_LINARES_DEMAND_RT_IDS):
+            return [
+                {"rt_id": rt_id, "value": 2.0, "unit": "kW", "ts_event": 1100}
+                for rt_id in api.CTL_LINARES_DEMAND_RT_IDS
+            ]
+        if rt_ids == ["uja.linares.fv.endesa.ct_total.p_kw"]:
+            return [{"rt_id": rt_ids[0], "value": 6.0, "unit": "kW", "ts_event": 1100}]
+        return []
+
+    def fake_query(query):
+        if "uja.linares.energia.consumo.lab_sg_t1.p_kw" in query:
+            return demand_rows
+        if "uja.linares.fv.endesa.ct_total.p_kw" in query:
+            return []
+        return []
+
+    api.batch_get_latest = fake_batch_get
+    api.query_timestream = fake_query
+
+    result = api.get_series_24h({"scope": "ctl_linares"})
+
+    assert result["scope"] == "ctl_linares"
+    assert result["status"] == "partial"
+    assert result["missing_sources"] == ["linares_fv_endesa_total"]
+    assert result["series"] == [
+        {"ts": 1735689600, "demand": 30.0, "pv": None},
+        {"ts": 1735689900, "demand": 28.0, "pv": None},
+    ]
 
 
 def test_scope_series_uses_locf_for_recent_balance_gap():
@@ -1470,6 +1549,7 @@ def test_scope_series_uses_locf_for_recent_balance_gap():
     result = api.get_series_24h({"scope": "las_lagunillas"})
 
     assert result["series"] == [
+        {"ts": 1735731300, "demand": 10.0, "pv": None},
         {"ts": 1735731600, "demand": 10.0, "pv": 8.0},
     ]
 
@@ -1545,7 +1625,10 @@ def test_scope_series_drops_stale_balance_points_beyond_freshness_limit():
 
     result = api.get_series_24h({"scope": "las_lagunillas"})
 
-    assert result["series"] == []
+    assert result["series"] == [
+        {"ts": 1735730400, "demand": 10.0, "pv": None},
+        {"ts": 1735731600, "demand": None, "pv": 8.0},
+    ]
 
 
 def test_scope_kpis_for_las_lagunillas_uses_exact_functional_definition():

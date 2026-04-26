@@ -281,7 +281,9 @@ def get_realtime(params, multi_params):
         return {"ts": int(max([i.get("ts_event", 0) for i in items] or [0])), "items": items}
 
     prefix = build_prefix(params.get("campus"), params.get("domain"))
-    if not prefix:
+    if not prefix and gateway_id:
+        prefix = ""
+    if prefix is None:
         return {"error": "missing_filters"}
 
     items = scan_latest(prefix, gateway_id)
@@ -982,9 +984,6 @@ def build_scope_kpis(state):
 
 
 def build_scope_series_rows(state, interval_minutes=SERIES_INTERVAL_MINUTES):
-    if state["status"] != "complete":
-        return []
-
     demand_series = sum_aligned_series_maps(
         [
             source["series_map"]
@@ -1001,6 +1000,8 @@ def build_scope_series_rows(state, interval_minutes=SERIES_INTERVAL_MINUTES):
         ],
         interval_minutes=interval_minutes,
     )
+    if not demand_series and not pv_series:
+        return []
     return align_balance_series(demand_series, pv_series, interval_minutes=interval_minutes)
 
 
@@ -1343,14 +1344,17 @@ def align_balance_series(demand_series, pv_series, interval_minutes=SERIES_INTER
             last_pv_ts = ts
             last_pv_value = float(pv_series[ts])
 
-        if not is_series_value_fresh(ts, last_demand_ts, interval_minutes=interval_minutes) or not is_series_value_fresh(ts, last_pv_ts, interval_minutes=interval_minutes):
+        demand_is_fresh = is_series_value_fresh(ts, last_demand_ts, interval_minutes=interval_minutes)
+        pv_is_fresh = is_series_value_fresh(ts, last_pv_ts, interval_minutes=interval_minutes)
+
+        if not demand_is_fresh and not pv_is_fresh:
             continue
 
         rows.append(
             {
                 "ts": ts,
-                "demand": float(last_demand_value),
-                "pv": float(last_pv_value),
+                "demand": float(last_demand_value) if demand_is_fresh else None,
+                "pv": float(last_pv_value) if pv_is_fresh else None,
             }
         )
 

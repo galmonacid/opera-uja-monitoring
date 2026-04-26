@@ -35,6 +35,22 @@ const buildFetchPayload = (url) => {
   }
 
   if (path.endsWith("/kpis")) {
+    if (params.get("scope") === "ctl_linares") {
+      return {
+        scope: "ctl_linares",
+        campus: "linares",
+        label: "Campus Científico Tecnológico de Linares",
+        status: "complete",
+        missing_sources: [],
+        ts_event: 1777230060,
+        kpis: [
+          { kpi: "demanda_kw", value: 83.41, unit: "kW" },
+          { kpi: "fv_kw", value: 4.13, unit: "kW" },
+          { kpi: "red_kw", value: 79.28, unit: "kW" },
+          { kpi: "autoconsumo_pct", value: 4.95, unit: "%" },
+        ],
+      };
+    }
     return {
       scope: params.get("scope"),
       campus: params.get("scope") === "ctl_linares" ? "linares" : "jaen",
@@ -48,6 +64,21 @@ const buildFetchPayload = (url) => {
 
   if (path.endsWith("/series/24h")) {
     if (params.get("scope")) {
+      if (params.get("scope") === "ctl_linares") {
+        return {
+          scope: "ctl_linares",
+          campus: "linares",
+          label: "Campus Científico Tecnológico de Linares",
+          status: "partial",
+          missing_sources: ["linares_fv_endesa_total"],
+          interval_minutes: 15,
+          unit: "kW",
+          series: [
+            { ts: 1777229100, demand: 79.1, pv: null },
+            { ts: 1777230000, demand: 83.4, pv: null },
+          ],
+        };
+      }
       return {
         scope: params.get("scope"),
         campus: params.get("scope") === "ctl_linares" ? "linares" : "jaen",
@@ -174,6 +205,18 @@ describe("App toolbar", () => {
     expect(screen.getAllByText("Demanda energética").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("renders the demand chart for Linares even when FV series data is missing", async () => {
+    render(<App />);
+
+    const linaresCardTitle = await screen.findByText("Campus Científico Tecnológico de Linares");
+    const summaryCard = linaresCardTitle.closest("article");
+    expect(summaryCard).not.toBeNull();
+    expect(within(summaryCard).getByText("Datos parciales")).toBeInTheDocument();
+    expect(within(summaryCard).getByText("Curva Demanda kW")).toBeInTheDocument();
+    expect(within(summaryCard).queryByText("Curva Generación kW")).not.toBeInTheDocument();
+    expect(within(summaryCard).queryByText("Sin curva resumida disponible.")).not.toBeInTheDocument();
+  });
+
   it("shows the updated portal branding and hides validation from visible navigation", () => {
     render(<App />);
 
@@ -189,6 +232,20 @@ describe("App toolbar", () => {
 
     expect(screen.getByRole("heading", { name: "Validación de datos" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Validación" })).not.toBeInTheDocument();
+  });
+
+  it("shows the four missing Jaen water points in validation even without realtime values", async () => {
+    window.location.hash = "#/validacion";
+
+    render(<App />);
+
+    const gatewayTitle = await screen.findByRole("heading", { name: "gw_jaen_agua" });
+    const gatewayCard = gatewayTitle.closest("article");
+    expect(gatewayCard).not.toBeNull();
+    expect(within(gatewayCard).getByText("Plaza de los Pueblos")).toBeInTheDocument();
+    expect(within(gatewayCard).getByText("Edificio C1 garaje")).toBeInTheDocument();
+    expect(within(gatewayCard).getByText("Polideportivo")).toBeInTheDocument();
+    expect(within(gatewayCard).getByText("Campo de fútbol")).toBeInTheDocument();
   });
 
   it("keeps 26 expected water points in Jaen and lists missing realtime points", async () => {

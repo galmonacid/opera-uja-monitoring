@@ -361,6 +361,7 @@ const GATEWAYS = [
     rtPrefixes: ["uja.jaen.agua."],
     seriesMetric: "agua_consumo",
     aggregateMetric: "agua_consumo",
+    expectedRtIds: JAEN_WATER_EXPECTED_RT_IDS,
   },
   {
     id: "gw_linares_mix",
@@ -729,6 +730,11 @@ const buildTimeSegments = (series, intervalMinutes = ANALYTICS_SERIES_INTERVAL_M
   return segments;
 };
 
+const hasFiniteSeriesValue = (series, valueKey) =>
+  (series || []).some(
+    (item) => item?.[valueKey] != null && Number.isFinite(Number(item?.[valueKey]))
+  );
+
 const buildLinePoints = (segment, xForTs, yForValue, valueKey = "value") =>
   segment
     .map((item) => `${xForTs(item.ts).toFixed(2)},${yForValue(item[valueKey]).toFixed(2)}`)
@@ -757,13 +763,19 @@ const AreaChart = ({
         .filter(
           (item) =>
             Number.isFinite(Number(item?.ts)) &&
-            Number.isFinite(Number(item?.demand)) &&
-            Number.isFinite(Number(item?.pv))
+            (
+              (item?.demand != null && Number.isFinite(Number(item?.demand))) ||
+              (item?.pv != null && Number.isFinite(Number(item?.pv)))
+            )
         )
         .map((item) => ({
           ts: Number(item.ts),
-          demand: Number(item.demand),
-          pv: Number(item.pv),
+          demand:
+            item?.demand != null && Number.isFinite(Number(item?.demand))
+              ? Number(item.demand)
+              : null,
+          pv:
+            item?.pv != null && Number.isFinite(Number(item?.pv)) ? Number(item.pv) : null,
         }))
         .sort((a, b) => a.ts - b.ts),
     [series]
@@ -779,8 +791,11 @@ const AreaChart = ({
   const plotHeight = height - paddingTop - paddingBottom;
   const plotWidth = width - paddingLeft - paddingRight;
   const ticksY = 4;
+  const axisValues = chartSeries.flatMap((item) =>
+    [item.demand, item.pv].filter((value) => Number.isFinite(Number(value)))
+  );
   const { axisMax, tickValues } = buildYAxisScale(
-    chartSeries.flatMap((item) => [item.demand, item.pv]),
+    axisValues,
     ticksY
   );
   const now = Math.max(renderNow, chartSeries[chartSeries.length - 1]?.ts || 0);
@@ -788,7 +803,14 @@ const AreaChart = ({
   const xForTs = (ts) => paddingLeft + ((ts - start) / 86400) * plotWidth;
   const yForValue = (value) => paddingTop + plotHeight - (value / axisMax) * plotHeight;
   const baselineY = paddingTop + plotHeight;
-  const segments = buildTimeSegments(chartSeries, intervalMinutes);
+  const demandSegments = buildTimeSegments(
+    chartSeries.filter((item) => Number.isFinite(Number(item.demand))),
+    intervalMinutes
+  );
+  const pvSegments = buildTimeSegments(
+    chartSeries.filter((item) => Number.isFinite(Number(item.pv))),
+    intervalMinutes
+  );
 
   return (
     <svg
@@ -824,20 +846,20 @@ const AreaChart = ({
           );
         })}
       </g>
-      {segments.map((segment, idx) => (
+      {demandSegments.map((segment, idx) => (
         <path key={`demand-area-${idx}`} className="area area-demand" d={buildAreaPath(segment, xForTs, yForValue, baselineY, "demand")} />
       ))}
-      {segments.map((segment, idx) => (
+      {pvSegments.map((segment, idx) => (
         <path key={`pv-area-${idx}`} className="area area-pv" d={buildAreaPath(segment, xForTs, yForValue, baselineY, "pv")} />
       ))}
-      {segments.map((segment, idx) => (
+      {demandSegments.map((segment, idx) => (
         <polyline
           key={`demand-line-${idx}`}
           className="line line-demand"
           points={buildLinePoints(segment, xForTs, yForValue, "demand")}
         />
       ))}
-      {segments.map((segment, idx) => (
+      {pvSegments.map((segment, idx) => (
         <polyline
           key={`pv-line-${idx}`}
           className="line line-pv"
@@ -2203,17 +2225,31 @@ function App() {
     const state = validation[gateway.id] || {};
     const activeTab = validationActiveTabs[gateway.id] || "latest";
     const latestItems = state.latest?.data?.items || [];
-    const latestRows = latestItems
-      .map((item) => ({
-        sortLabel: getMonitoringPointLabel(item.rt_id),
-        cells: [
-          getMonitoringPointLabel(item.rt_id),
-          item.rt_id,
-          number.format(item.value),
-          item.unit || "kW",
-          formatTs(item.ts_event),
-        ],
-      }))
+    const latestByRtId = new Map(latestItems.map((item) => [item.rt_id, item]));
+    const expectedRtIds = gateway.expectedRtIds?.length
+      ? gateway.expectedRtIds.filter((rtId) =>
+          gateway.rtPrefixes?.some((prefix) => rtId?.startsWith(prefix))
+        )
+      : [];
+    const latestRtIds = expectedRtIds.length
+      ? expectedRtIds
+      : latestItems
+          .filter((item) => gateway.rtPrefixes?.some((prefix) => item.rt_id?.startsWith(prefix)))
+          .map((item) => item.rt_id);
+    const latestRows = latestRtIds
+      .map((rtId) => {
+        const item = latestByRtId.get(rtId) || {};
+        return {
+          sortLabel: getMonitoringPointLabel(rtId),
+          cells: [
+            getMonitoringPointLabel(rtId),
+            rtId,
+            item.value == null ? "--" : number.format(item.value),
+            item.unit || (gateway.domain === "agua" ? "m3" : "kW"),
+            formatTs(item.ts_event),
+          ],
+        };
+      })
       .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, "es"))
       .map((item) => item.cells);
 
@@ -2370,11 +2406,13 @@ function App() {
     const scope = DASHBOARD_SCOPES.find((item) => item.id === config.scopeId) || config;
     const state = dashboard[scope.id] || {};
     const panelStatus = resolveDashboardStatus(state.kpis || {}, state.series || {});
-    const isComplete = panelStatus.kind === "complete";
+    const canRenderChart = panelStatus.kind !== "error" && (state.series?.data?.series || []).length > 0;
     const warningText = buildMissingSourcesText(state.kpis || {}, state.series || {});
     const errorText = state.kpis?.error || state.series?.error || "api_error";
     const title = state.kpis?.data?.label || state.series?.data?.label || scope.title || config.label;
-    const chartSeries = isComplete ? state.series?.data?.series || [] : [];
+    const chartSeries = state.series?.data?.series || [];
+    const hasDemandSeries = hasFiniteSeriesValue(chartSeries, "demand");
+    const hasPvSeries = hasFiniteSeriesValue(chartSeries, "pv");
 
     let chartEmptyText = "Sin datos para las últimas 24 horas.";
     if (panelStatus.kind === "loading") {
@@ -2432,11 +2470,11 @@ function App() {
         {panelStatus.kind === "error" ? (
           <div className="dashboard-warning warning-error">Error: {errorText}</div>
         ) : null}
-        {isComplete && chartSeries.length ? (
+        {canRenderChart ? (
           <div className="chart-card" data-testid={`energy-chart-${config.scopeId}`}>
             <div className="chart-legend">
-              <span className="legend-item demand">Curva Demanda kW</span>
-              <span className="legend-item pv">Curva Generación kW</span>
+              {hasDemandSeries ? <span className="legend-item demand">Curva Demanda kW</span> : null}
+              {hasPvSeries ? <span className="legend-item pv">Curva Generación kW</span> : null}
             </div>
             <AreaChart series={chartSeries} unit="kW" density={chartDensity} />
           </div>
@@ -2454,6 +2492,8 @@ function App() {
   const buildSummaryCampusCard = (config) => {
     const scopeSummary = dashboardOverview[config.scopeId];
     const campusLabel = scopeSummary?.title || config.label;
+    const hasDemandSeries = hasFiniteSeriesValue(scopeSummary?.chartSeries, "demand");
+    const hasPvSeries = hasFiniteSeriesValue(scopeSummary?.chartSeries, "pv");
 
     return (
       <article key={config.scopeId} className="summary-campus-card">
@@ -2478,8 +2518,8 @@ function App() {
         {scopeSummary?.chartSeries?.length ? (
           <div className="summary-chart">
             <div className="chart-legend">
-              <span className="legend-item demand">Curva Demanda kW</span>
-              <span className="legend-item pv">Curva Generación kW</span>
+              {hasDemandSeries ? <span className="legend-item demand">Curva Demanda kW</span> : null}
+              {hasPvSeries ? <span className="legend-item pv">Curva Generación kW</span> : null}
             </div>
             <AreaChart series={scopeSummary.chartSeries} unit="kW" />
           </div>
