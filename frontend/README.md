@@ -1,6 +1,6 @@
 # Frontend UJA Monitoring
 
-SPA React/Vite del portal de monitorización.
+SPA React/Vite del Portal de monitorización UJA Sostenible.
 
 ## Comandos
 

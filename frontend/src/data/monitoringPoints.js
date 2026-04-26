@@ -376,3 +376,8 @@ export const getMonitoringPointMeta = (rtId) => {
 
 export const getMonitoringPointLabel = (rtId) => getMonitoringPointMeta(rtId).label;
 export const getMonitoringPointShortLabel = (rtId) => getMonitoringPointMeta(rtId).shortLabel;
+
+export const getMonitoringPointRtIds = (predicate = () => true) =>
+  Object.values(MONITORING_POINTS)
+    .filter(predicate)
+    .map((point) => point.rtId);

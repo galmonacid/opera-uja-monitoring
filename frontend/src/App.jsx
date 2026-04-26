@@ -9,6 +9,7 @@ import {
   buildWaterRows as buildWaterRowsViewModel,
 } from "./viewModels";
 import {
+  getMonitoringPointRtIds,
   getMonitoringPointLabel,
 } from "./data/monitoringPoints";
 
@@ -52,8 +53,15 @@ const HOUR_FORMATTER = new Intl.DateTimeFormat("es-ES", {
 const CAMPUS_VHE_RT_ID = "uja.jaen.energia.consumo.carga_vhe.p_kw";
 const JAEN_ENDESA_CT_TOTAL_RT_ID = "uja.jaen.fv.endesa.ct_total.p_kw";
 const JAEN_ENDESA_INVERTER_RT_PREFIX = "uja.jaen.fv.endesa.inv";
+const BRAND_PORTAL_NAME = "Portal de monitorización UJA Sostenible";
 
 const getWaterAssetFromRtId = (rtId) => rtId?.split(".")[4] || null;
+const compareMonitoringPointLabels = (leftRtId, rightRtId) =>
+  getMonitoringPointLabel(leftRtId).localeCompare(getMonitoringPointLabel(rightRtId), "es");
+
+const JAEN_WATER_EXPECTED_RT_IDS = getMonitoringPointRtIds(
+  (point) => point.campus === "jaen" && point.domain === "agua"
+).sort(compareMonitoringPointLabels);
 
 const createMapEntry = ({
   id,
@@ -403,10 +411,9 @@ const GATEWAYS = [
 const PORTAL_ROUTES = [
   { id: "summary", hash: "#/", label: "Balance" },
   { id: "energy", hash: "#/energia", label: "Energía" },
-  { id: "map", hash: "#/mapa", label: "Mapa" },
+  { id: "map", hash: "#/mapa", label: "Demanda energética" },
   { id: "water", hash: "#/agua", label: "Agua" },
   { id: "solar", hash: "#/fotovoltaica", label: "Fotovoltaica" },
-  { id: "validation", hash: "#/validacion", label: "Validación" },
 ];
 
 const ENERGY_VIEW_CONFIG = [
@@ -431,6 +438,7 @@ const WATER_VIEW_CONFIG = [
     label: "Las Lagunillas",
     gatewayId: "gw_jaen_agua",
     prefix: "uja.jaen.agua.",
+    expectedRtIds: JAEN_WATER_EXPECTED_RT_IDS,
   },
   {
     id: "linares",
@@ -2048,9 +2056,9 @@ function App() {
         ...getLatestAggregateAssetValues(metrics.monthly?.data),
         ...(current.monthly?.data?.asset_values || {}),
       };
-      const readingPointsCount = (latest.latestItems || []).filter((item) =>
-        item.rt_id?.startsWith(config.prefix)
-      ).length;
+      const readingPointsCount = config.expectedRtIds?.length
+        ? config.expectedRtIds.length
+        : (latest.latestItems || []).filter((item) => item.rt_id?.startsWith(config.prefix)).length;
       result[config.id] = {
         latestItems: latest.latestItems || [],
         latestStatus: latest.latestStatus || "idle",
@@ -2488,6 +2496,7 @@ function App() {
       prefix: config.prefix,
       dailyAssetValues,
       getLabel: getMonitoringPointLabel,
+      expectedRtIds: config.expectedRtIds,
     }).map((item) => [
       item.pointLabel,
       item.dailyValue == null ? "--" : number.format(item.dailyValue),
@@ -2511,10 +2520,10 @@ function App() {
       primaryAction: refreshDashboard,
     },
     map: {
-      title: "Mapa de campus",
+      title: "Demanda energética",
       subtitle:
-        "Vista cartográfica operativa con la capa de demanda de energía y detalle del punto seleccionado.",
-      primaryLabel: "Actualizar mapa",
+        "Vista cartográfica operativa con la demanda energética del campus, el detalle del punto seleccionado y la referencia visual de Magisterio.",
+      primaryLabel: "Actualizar demanda",
       primaryAction: fetchRealtime,
     },
     water: {
@@ -2617,7 +2626,7 @@ function App() {
 
     let note = "Vista operativa lista.";
     if (routeId === "map") {
-      note = `${visibleMapEntries.length} puntos visibles en demanda de energía.`;
+      note = `${visibleMapEntries.length} puntos visibles en demanda energética.`;
     } else if (routeId === "validation") {
       note = `${filteredValidationGateways.length} gateways visibles en seguimiento.`;
     } else if (routeId === "solar") {
@@ -2646,7 +2655,7 @@ function App() {
       },
       {
         href: "#/mapa",
-        title: "Mapa campus",
+        title: "Demanda energética",
         copy: "Vista cartográfica operativa con la capa activa de demanda y detalle de puntos.",
         status: `${ACTIVE_MAP_ENTRY_COUNT} puntos cartográficos visibles`,
       },
@@ -2661,12 +2670,6 @@ function App() {
         title: "Fotovoltaica",
         copy: "Explotación unificada por instalación, incluyendo autoconsumo e irradiancia.",
         status: `${SOLAR_VIEW_CONFIG.length} instalaciones`,
-      },
-      {
-        href: "#/validacion",
-        title: "Validación",
-        copy: "Gateway por gateway, con incidencias y series técnicas.",
-        status: `${validationSummary.errors} incidencias abiertas`,
       },
     ];
 
@@ -2729,9 +2732,10 @@ function App() {
     <section className="section">
       <div className="container">
         <div className="section-header">
-          <h2 className="section-title">Mapa operacional</h2>
+          <h2 className="section-title">Demanda energética</h2>
           <p className="section-subtitle">
-            Consulte el detalle del punto de demanda seleccionado debajo del plano.
+            Consulte el detalle del punto de demanda seleccionado y la referencia visual de
+            Magisterio integrada sobre el plano.
           </p>
         </div>
         <div className="map-layout">
@@ -2739,7 +2743,7 @@ function App() {
             <div className="map-canvas">
               <img
                 src={campus}
-                alt="Plano del campus con puntos de lectura energética destacados"
+                alt="Plano del campus con la demanda energética destacada y la referencia visual de Magisterio"
               />
               {visibleMapEntries.map((entry) => {
                 const reading = getMapEntryReading(entry);
@@ -3104,14 +3108,14 @@ function App() {
         <div className="utility-bar">
           <div className="container utility-bar-inner">
             <p className="utility-bar-text">Universidad de Jaén</p>
-            <p className="utility-bar-text">Portal de monitorización operativa</p>
+            <p className="utility-bar-text">{BRAND_PORTAL_NAME}</p>
           </div>
         </div>
         <div className="topbar">
           <div className="container topbar-inner">
             <div className="brand-lockup">
               <p className="brand-kicker">Universidad de Jaén</p>
-              <p className="brand-title">Portal de monitorización de campus</p>
+              <p className="brand-title">{BRAND_PORTAL_NAME}</p>
             </div>
             <nav className="topbar-nav portal-nav" aria-label="Navegación principal">
               {PORTAL_ROUTES.map((item) => (

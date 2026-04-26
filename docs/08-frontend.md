@@ -26,10 +26,11 @@ Motivos:
    - Dos paneles: `Campus Las Lagunillas` y `Campus Científico Tecnológico de Linares`
    - KPIs por panel desde `/kpis?scope=...`
    - Gráfica de áreas 24h por panel desde `/series/24h?scope=...&interval_minutes=15`
-2. Mapa
+2. Demanda energética
    - `campus.png` con la capa operativa visible de `Demanda de energía`
    - Valores instantáneos desde `/realtime`
    - Panel inferior con detalle del punto seleccionado
+   - Referencia visual integrada de `Antigua Escuela de Magisterio`
 3. Agua
    - Tarjetas de puntos de lectura, consumo diario y consumo mensual por campus
    - Tabla operativa por campus con consumo diario por punto
@@ -40,6 +41,7 @@ Motivos:
    - Irradiancia agregada desde `/series/24h?rt_id=...&aggregation=avg&interval_minutes=15`
 5. Validación
    - Gateways con pestañas y tabla global de anomalías
+   - Accesible por URL directa `#/validacion`, oculta de la navegación visible
 
 ## Estado actual implementado
 - Dashboard principal por scope:
@@ -51,11 +53,12 @@ Motivos:
     - FV = `uja.linares.fv.endesa.ct_total.p_kw`
   - Cada panel muestra `demanda`, `FV`, `red` y `autoconsumo %`
   - Si backend marca `partial`, el panel muestra aviso visible y placeholders en lugar de curva agregada
-- Mapa principal:
+- Vista `Demanda energética`:
   - mantiene el `campus.png`
   - en esta entrega solo expone la capa `Demanda de energía`
   - no muestra selectores de capa ni de lectura de agua
   - mantiene un panel de detalle para el punto seleccionado
+  - integra una referencia visual fija de `Antigua Escuela de Magisterio` dentro del plano
 - Vista `Energía`:
   - mantiene filtro de campus
   - elimina selector de periodo
@@ -64,6 +67,7 @@ Motivos:
   - mantiene filtro de campus
   - elimina selector de periodo
   - consume `/aggregates/current?metric=agua_consumo&period=daily|monthly&asset=all` para el resumen y la tabla por punto
+  - en Jaén usa como catálogo canónico los 26 puntos esperados y mantiene visibles los que no lleguen en `realtime` como puntos sin dato
 - Pantalla `#/validacion`:
   - 6 tarjetas, una por gateway requerido
   - bloque global `Anomalías detectadas` antes de los gateways

@@ -3,14 +3,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import App from "./App";
 
+const BRAND_PORTAL_NAME = "Portal de monitorización UJA Sostenible";
+const JAEN_WATER_REALTIME_ITEMS = [
+  {
+    rt_id: "uja.jaen.agua.consumo.edificio_a0.v_m3",
+    value: 120,
+    unit: "m3",
+    ts_event: 1700000000,
+  },
+  {
+    rt_id: "uja.jaen.agua.consumo.edificio_b1.v_m3",
+    value: 220,
+    unit: "m3",
+    ts_event: 1700000300,
+  },
+];
+
 const buildFetchPayload = (url) => {
   const requestUrl = new URL(url);
   const path = requestUrl.pathname;
   const params = requestUrl.searchParams;
   const metric = params.get("metric");
   const period = params.get("period");
+  const gatewayId = params.get("gateway_id");
 
   if (path.endsWith("/realtime")) {
+    if (gatewayId === "gw_jaen_agua") {
+      return { ts: 1700000300, items: JAEN_WATER_REALTIME_ITEMS };
+    }
     return { ts: 0, items: [] };
   }
 
@@ -132,11 +152,10 @@ describe("App toolbar", () => {
     expect(screen.queryByText("Periodo")).not.toBeInTheDocument();
     const jaenCard = screen.getByTestId("water-card-jaen");
     expect(jaenCard).toBeInTheDocument();
-    expect(within(jaenCard).getByText("Puntos de lectura")).toBeInTheDocument();
-    expect(within(jaenCard).getByText("Consumo diario")).toBeInTheDocument();
-    expect(within(jaenCard).getByText("Consumo mensual")).toBeInTheDocument();
-
     const metrics = within(jaenCard).getByTestId("water-metrics-jaen");
+    expect(within(metrics).getByText("Puntos de lectura")).toBeInTheDocument();
+    expect(within(metrics).getByText("Consumo diario")).toBeInTheDocument();
+    expect(within(metrics).getByText("Consumo mensual")).toBeInTheDocument();
     const chart = within(jaenCard).getByTestId("water-chart-jaen");
     const table = within(jaenCard).getByTestId("water-table-jaen");
     expect(metrics.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -152,5 +171,36 @@ describe("App toolbar", () => {
 
     expect(screen.queryByRole("combobox", { name: /capa/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: /lectura agua/i })).not.toBeInTheDocument();
+    expect(screen.getAllByText("Demanda energética").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows the updated portal branding and hides validation from visible navigation", () => {
+    render(<App />);
+
+    expect(screen.getAllByText(BRAND_PORTAL_NAME)).toHaveLength(2);
+    expect(screen.queryByRole("link", { name: "Validación" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Gateway por gateway, con incidencias y series técnicas.")).not.toBeInTheDocument();
+  });
+
+  it("keeps the validation route reachable by direct hash without visible menu links", () => {
+    window.location.hash = "#/validacion";
+
+    render(<App />);
+
+    expect(screen.getByRole("heading", { name: "Validación de datos" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Validación" })).not.toBeInTheDocument();
+  });
+
+  it("keeps 26 expected water points in Jaen and lists missing realtime points", async () => {
+    window.location.hash = "#/agua";
+
+    render(<App />);
+
+    const jaenCard = screen.getByTestId("water-card-jaen");
+    expect(await within(jaenCard).findByText("26")).toBeInTheDocument();
+    expect(await within(jaenCard).findByText("Plaza de los Pueblos")).toBeInTheDocument();
+    expect(await within(jaenCard).findByText("Edificio C1 garaje")).toBeInTheDocument();
+    expect(await within(jaenCard).findByText("Polideportivo")).toBeInTheDocument();
+    expect(await within(jaenCard).findByText("Campo de fútbol")).toBeInTheDocument();
   });
 });

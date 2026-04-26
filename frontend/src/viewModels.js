@@ -105,15 +105,26 @@ export const buildWaterCampusCards = ({ configs, waterOverview }) =>
     };
   });
 
-export const buildWaterRows = ({ latestItems, prefix, dailyAssetValues, getLabel }) =>
-  (latestItems || [])
-    .filter((item) => item.rt_id?.startsWith(prefix))
-    .map((item) => {
-      const asset = getAssetFromRtId(item.rt_id);
+export const buildWaterRows = ({
+  latestItems,
+  prefix,
+  dailyAssetValues,
+  getLabel,
+  expectedRtIds = null,
+}) => {
+  const filteredLatestItems = (latestItems || []).filter((item) => item.rt_id?.startsWith(prefix));
+  const latestByRtId = new Map(filteredLatestItems.map((item) => [item.rt_id, item]));
+  const expectedIds = (expectedRtIds || []).filter((rtId) => rtId?.startsWith(prefix));
+  const rtIds = expectedIds.length ? expectedIds : filteredLatestItems.map((item) => item.rt_id);
+
+  return rtIds
+    .map((rtId) => {
+      const item = latestByRtId.get(rtId) || {};
+      const asset = getAssetFromRtId(rtId);
       return {
-        id: item.rt_id,
-        sortLabel: getLabel(item.rt_id),
-        pointLabel: getLabel(item.rt_id),
+        id: rtId,
+        sortLabel: getLabel(rtId),
+        pointLabel: getLabel(rtId),
         dailyValue:
           asset && Object.prototype.hasOwnProperty.call(dailyAssetValues || {}, asset)
             ? dailyAssetValues[asset]
@@ -123,3 +134,4 @@ export const buildWaterRows = ({ latestItems, prefix, dailyAssetValues, getLabel
       };
     })
     .sort((left, right) => left.sortLabel.localeCompare(right.sortLabel, "es"));
+};

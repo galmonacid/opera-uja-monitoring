@@ -143,7 +143,7 @@ describe("viewModels", () => {
     ]);
   });
 
-  it("buildWaterRows maps daily asset values onto realtime rows", () => {
+  it("buildWaterRows maps daily asset values onto realtime rows and keeps expected missing points", () => {
     const rows = buildWaterRows({
       latestItems: [
         {
@@ -162,10 +162,16 @@ describe("viewModels", () => {
         edificio_a0: 1.5,
         edificio_b1: 2.75,
       },
+      expectedRtIds: [
+        "uja.jaen.agua.consumo.edificio_a0.v_m3",
+        "uja.jaen.agua.consumo.edificio_b1.v_m3",
+        "uja.jaen.agua.consumo.plaz_pueblos.v_m3",
+      ],
       getLabel: (rtId) =>
         ({
           "uja.jaen.agua.consumo.edificio_a0.v_m3": "Edificio A0",
           "uja.jaen.agua.consumo.edificio_b1.v_m3": "Edificio B1",
+          "uja.jaen.agua.consumo.plaz_pueblos.v_m3": "Plaza de los Pueblos",
         })[rtId],
     });
 
@@ -185,6 +191,14 @@ describe("viewModels", () => {
         dailyValue: 2.75,
         unit: "m3",
         tsEvent: 1700000200,
+      },
+      {
+        id: "uja.jaen.agua.consumo.plaz_pueblos.v_m3",
+        sortLabel: "Plaza de los Pueblos",
+        pointLabel: "Plaza de los Pueblos",
+        dailyValue: null,
+        unit: "m3",
+        tsEvent: null,
       },
     ]);
   });

@@ -1,7 +1,7 @@
   # 16 — Entregable funcional del frontend
 
   ## 1. Objeto del documento
-  Este documento describe, en lenguaje funcional, la versión entregada del portal web de monitorización de la Universidad de Jaén.
+  Este documento describe, en lenguaje funcional, la versión entregada del Portal de monitorización UJA Sostenible de la Universidad de Jaén.
 
   Su objetivo es explicar:
   - qué resuelve cada sección del frontend,
@@ -114,13 +114,14 @@
   - El impacto medioambiental anual se deriva del acumulado energético anual mediante los coeficientes configurados en frontend.
   - La gráfica de 24 horas representa la evolución de `Demanda` y `FV` con bins de `15 minutos`.
 
-  ## 5. Sección `Mapa`
+  ## 5. Sección `Demanda energética`
 
   ### Objetivo
   Mostrar la distribución espacial de los puntos de demanda sobre el plano del campus y permitir una consulta rápida de cada punto.
 
   ### Contenido
   - Imagen del plano general del campus.
+  - Referencia visual integrada de `Antigua Escuela de Magisterio`.
   - Puntos superpuestos sobre la imagen.
   - Panel de detalle del punto seleccionado.
 
@@ -158,7 +159,7 @@
   - Selector de campus.
 
   ### Información que muestra
-  - Número de puntos con lectura por campus.
+  - Número de puntos esperados por campus.
   - Consumo diario y mensual del periodo en curso.
   - Tabla con:
     - Punto
@@ -185,6 +186,8 @@
       devuelve el consumo mensual acumulado del mes en curso, incluyendo el total del campus.
 
   ### Cálculo
+  - En Jaén, el portal usa como catálogo canónico los `26` puntos esperados del gateway de agua.
+  - Si un punto esperado no llega en `realtime`, sigue mostrándose en tabla como punto sin dato, sin inventar lectura.
   - Los puntos de agua son contadores acumulados.
   - El consumo del intervalo se calcula como:
     `contador del bin actual - contador del bin anterior`
@@ -273,6 +276,8 @@
   ### Objetivo
   Proporcionar una vista técnica para revisar calidad de dato, disponibilidad y consistencia de cada gateway integrado en el sistema.
 
+  La sección permanece disponible por acceso directo a `#/validacion`, aunque sus enlaces visibles se ocultan de la navegación principal y de los accesos operativos de la home.
+
   ### Contenido
   - Tarjetas resumen:
     - Gateways visibles
@@ -313,8 +318,9 @@
   - `Anomalías detectadas` muestra el registro técnico de valores descartados, ajustados o fuera de rango, sin ocultar la evidencia del problema.
 
   ## 9. Resumen funcional de la entrega
-  - El portal queda organizado en `Balance`, `Energía`, `Mapa`, `Agua`, `Fotovoltaica` y `Validación`.
+  - El portal queda organizado visiblemente en `Balance`, `Energía`, `Demanda energética`, `Agua` y `Fotovoltaica`.
+  - `Validación` permanece disponible por enlace directo `#/validacion`, pero no aparece en la navegación visible.
   - `Autoconsumo` se integra dentro de `Fotovoltaica`.
   - Todas las gráficas operativas trabajan con bins de `15 minutos`.
   - Todas las horas se presentan en la hora local del usuario.
-  - El `Mapa` se entrega con una única capa visible: `Demanda de energía`.
+  - `Demanda energética` se entrega con una única capa visible: `Demanda de energía`.

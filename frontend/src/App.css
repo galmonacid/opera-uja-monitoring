@@ -953,6 +953,7 @@
 
 .map-pin {
   position: absolute;
+  z-index: 2;
   transform: translate(0, -50%);
   margin-left: 0.4rem;
   display: inline-flex;
