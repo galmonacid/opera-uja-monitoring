@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import "./App.css";
 
 import campus from "./assets/sections/campus.png";
@@ -23,6 +23,9 @@ const ANOMALIES_LOOKBACK_HOURS = 72;
 const ANOMALIES_LIMIT = 200;
 const CO2_EMISSIONS_COEFFICIENT_TON_PER_KWH = 0.000331;
 const CARBON_FOOTPRINT_COEFFICIENT_KWH_PER_TREE = 30;
+const DEFAULT_REFRESH_MS = 300000;
+const HISTORICAL_REFRESH_MS = 900000;
+const BACKGROUND_REFRESH_MS = 900000;
 
 const number = new Intl.NumberFormat("es-ES", {
   maximumFractionDigits: 2,
@@ -58,6 +61,25 @@ const BRAND_PORTAL_NAME = "Portal de monitorización UJA Sostenible";
 const getWaterAssetFromRtId = (rtId) => rtId?.split(".")[4] || null;
 const compareMonitoringPointLabels = (leftRtId, rightRtId) =>
   getMonitoringPointLabel(leftRtId).localeCompare(getMonitoringPointLabel(rightRtId), "es");
+
+const getDocumentVisibilityState = () =>
+  typeof document === "undefined" ? "visible" : document.visibilityState;
+
+const schedulePolling = ({ action, visibleIntervalMs, hiddenIntervalMs = null, documentVisibility }) => {
+  if (documentVisibility === "visible") {
+    action();
+  } else if (hiddenIntervalMs == null) {
+    return undefined;
+  }
+
+  const intervalMs = documentVisibility === "visible" ? visibleIntervalMs : hiddenIntervalMs;
+  if (intervalMs == null) {
+    return undefined;
+  }
+
+  const interval = setInterval(action, intervalMs);
+  return () => clearInterval(interval);
+};
 
 const JAEN_WATER_EXPECTED_RT_IDS = getMonitoringPointRtIds(
   (point) => point.campus === "jaen" && point.domain === "agua"
@@ -1245,6 +1267,7 @@ function App() {
     });
     return initial;
   });
+  const [documentVisibility, setDocumentVisibility] = useState(() => getDocumentVisibilityState());
 
   const routeId = resolveRouteId(routeHash);
 
@@ -1761,61 +1784,98 @@ function App() {
     refreshDashboard();
     refreshOperationalData();
   };
-
-  useEffect(() => {
-    fetchRealtime();
-    const interval = setInterval(fetchRealtime, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
+  const pollDashboardKpis = useEffectEvent(() => {
     DASHBOARD_SCOPES.forEach((scope) => {
       fetchDashboardKpis(scope);
     });
-    const interval = setInterval(() => {
-      DASHBOARD_SCOPES.forEach((scope) => {
-        fetchDashboardKpis(scope);
-      });
-    }, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
+  });
+  const pollDashboardSeries = useEffectEvent(() => {
     DASHBOARD_SCOPES.forEach((scope) => {
       fetchDashboardSeries(scope);
     });
-    const interval = setInterval(() => {
-      DASHBOARD_SCOPES.forEach((scope) => {
-        fetchDashboardSeries(scope);
-      });
-    }, 300000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
+  });
+  const pollRealtime = useEffectEvent(() => {
+    fetchRealtime();
+  });
+  const pollOperationalLatest = useEffectEvent(() => {
     refreshOperationalLatest();
-    const interval = setInterval(refreshOperationalLatest, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
+  });
+  const pollOperationalHistory = useEffectEvent(() => {
     refreshOperationalHistory();
-    const interval = setInterval(refreshOperationalHistory, 300000);
-    return () => clearInterval(interval);
+  });
+  const pollWaterHistory = useEffectEvent(() => {
+    refreshWaterHistory();
+  });
+  const pollAnomalies = useEffectEvent(() => {
+    fetchAnomalies();
+  });
+
+  useEffect(() => {
+    const handleVisibilityChange = () => setDocumentVisibility(getDocumentVisibilityState());
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   useEffect(() => {
-    refreshWaterHistory();
-    const interval = setInterval(refreshWaterHistory, 300000);
-    return () => clearInterval(interval);
-  }, []);
+    return schedulePolling({
+      action: pollDashboardKpis,
+      visibleIntervalMs: DEFAULT_REFRESH_MS,
+      hiddenIntervalMs: BACKGROUND_REFRESH_MS,
+      documentVisibility,
+    });
+  }, [documentVisibility]);
+
+  useEffect(() => {
+    return schedulePolling({
+      action: pollDashboardSeries,
+      visibleIntervalMs: HISTORICAL_REFRESH_MS,
+      documentVisibility,
+    });
+  }, [documentVisibility]);
+
+  useEffect(() => {
+    return schedulePolling({
+      action: pollRealtime,
+      visibleIntervalMs: DEFAULT_REFRESH_MS,
+      hiddenIntervalMs: BACKGROUND_REFRESH_MS,
+      documentVisibility,
+    });
+  }, [documentVisibility]);
+
+  useEffect(() => {
+    return schedulePolling({
+      action: pollOperationalLatest,
+      visibleIntervalMs: DEFAULT_REFRESH_MS,
+      hiddenIntervalMs: BACKGROUND_REFRESH_MS,
+      documentVisibility,
+    });
+  }, [documentVisibility]);
+
+  useEffect(() => {
+    return schedulePolling({
+      action: pollOperationalHistory,
+      visibleIntervalMs: HISTORICAL_REFRESH_MS,
+      documentVisibility,
+    });
+  }, [documentVisibility]);
 
   useEffect(() => {
     if (routeId !== "validation") return undefined;
-    fetchAnomalies();
-    const interval = setInterval(fetchAnomalies, 60000);
-    return () => clearInterval(interval);
-  }, [routeId, campusFilter, validationDomainFilter]);
+    return schedulePolling({
+      action: pollAnomalies,
+      visibleIntervalMs: DEFAULT_REFRESH_MS,
+      hiddenIntervalMs: BACKGROUND_REFRESH_MS,
+      documentVisibility,
+    });
+  }, [routeId, campusFilter, validationDomainFilter, documentVisibility]);
+
+  useEffect(() => {
+    return schedulePolling({
+      action: pollWaterHistory,
+      visibleIntervalMs: HISTORICAL_REFRESH_MS,
+      documentVisibility,
+    });
+  }, [documentVisibility]);
 
   useEffect(() => {
     const handleHash = () => setRouteHash(window.location.hash || "#/");
