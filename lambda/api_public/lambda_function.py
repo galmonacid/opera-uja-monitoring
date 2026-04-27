@@ -57,6 +57,9 @@ SERIES_INTERVAL_MINUTES = 5
 BALANCE_SERIES_STABILIZATION_DELAY_SECONDS = int(
     os.getenv("BALANCE_SERIES_STABILIZATION_DELAY_SECONDS", "600")
 )
+MAX_TIMESERIES_ANOMALY_FILTERS = int(
+    os.getenv("MAX_TIMESERIES_ANOMALY_FILTERS", "32")
+)
 LAS_LAGUNILLAS_DEMAND_RT_IDS = [
     "uja.jaen.energia.consumo.edificio_a0.p_kw",
     "uja.jaen.energia.consumo.edificio_a1.p_kw",
@@ -1587,13 +1590,18 @@ def build_timeseries_value_expression(candidate_rt_ids):
 
 def build_anomaly_exclusion_clause(anomaly_exact):
     grouped_conditions = []
+    total_timestamp_filters = 0
     for rt_id, timestamps in sorted((anomaly_exact or {}).items()):
         if not timestamps:
             continue
+        normalized_timestamps = sorted(set(timestamps))
+        total_timestamp_filters += len(normalized_timestamps)
+        if total_timestamp_filters > MAX_TIMESERIES_ANOMALY_FILTERS:
+            return ""
         timestamp_conditions = " OR ".join(
             [
                 f"time = from_iso8601_timestamp('{format_timestream_timestamp(ts)}')"
-                for ts in sorted(set(timestamps))
+                for ts in normalized_timestamps
             ]
         )
         grouped_conditions.append(
