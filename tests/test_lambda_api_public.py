@@ -129,13 +129,6 @@ def test_query_timeseries_analytics_carries_forward_after_negative_anomaly():
         },
         {
             "Data": [
-                {"ScalarValue": "2025-01-01 00:05:00.000000000"},
-                {"ScalarValue": "uja.jaen.energia.consumo.edificio_a3.p_kw"},
-                {"ScalarValue": "-106.63"},
-            ]
-        },
-        {
-            "Data": [
                 {"ScalarValue": "2025-01-01 00:10:00.000000000"},
                 {"ScalarValue": "uja.jaen.energia.consumo.edificio_a3.p_kw"},
                 {"ScalarValue": "220"},
@@ -311,30 +304,16 @@ def test_query_timeseries_uses_mean_of_valid_samples_within_bin():
     rows = [
         {
             "Data": [
-                {"ScalarValue": "2025-01-01 00:01:00.000000000"},
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
                 {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
-                {"ScalarValue": "100"},
+                {"ScalarValue": "150"},
             ]
         },
         {
             "Data": [
-                {"ScalarValue": "2025-01-01 00:11:00.000000000"},
-                {"ScalarValue": "uja.jaen.fv.endesa.inv01.p_ac_kw"},
-                {"ScalarValue": "200"},
-            ]
-        },
-        {
-            "Data": [
-                {"ScalarValue": "2025-01-01 00:04:00.000000000"},
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
                 {"ScalarValue": "uja.jaen.fv.endesa.inv02.p_ac_kw"},
-                {"ScalarValue": "50"},
-            ]
-        },
-        {
-            "Data": [
-                {"ScalarValue": "2025-01-01 00:13:00.000000000"},
-                {"ScalarValue": "uja.jaen.fv.endesa.inv02.p_ac_kw"},
-                {"ScalarValue": "70"},
+                {"ScalarValue": "60"},
             ]
         },
     ]
@@ -361,21 +340,14 @@ def test_query_timeseries_drops_invalid_irradiance_samples_before_bin_average():
     rows = [
         {
             "Data": [
-                {"ScalarValue": "2025-01-01 00:01:00.000000000"},
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
                 {"ScalarValue": "uja.jaen.fv.auto.pergola_rad.g_wm2"},
                 {"ScalarValue": "600"},
             ]
         },
         {
             "Data": [
-                {"ScalarValue": "2025-01-01 00:06:00.000000000"},
-                {"ScalarValue": "uja.jaen.fv.auto.pergola_rad.g_wm2"},
-                {"ScalarValue": "300000"},
-            ]
-        },
-        {
-            "Data": [
-                {"ScalarValue": "2025-01-01 00:11:00.000000000"},
+                {"ScalarValue": "2025-01-01 00:00:00.000000000"},
                 {"ScalarValue": "uja.jaen.fv.auto.b5_rad.g_wm2"},
                 {"ScalarValue": "900"},
             ]

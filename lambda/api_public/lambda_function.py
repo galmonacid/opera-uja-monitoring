@@ -1431,64 +1431,42 @@ def query_timeseries_by_select(
     analytics=False,
     aggregation="sum",
 ):
-    where_clauses = [
-        "time > ago(24h)",
-        "measure_name = 'value'",
-    ]
-    if rt_ids:
-        in_clause = ",".join([f"'{rt_id}'" for rt_id in rt_ids])
-        where_clauses.append(f"rt_id IN ({in_clause})")
-    elif rt_prefix:
-        where_clauses.append(f"rt_id LIKE '{rt_prefix}%'")
-    else:
+    candidate_rt_ids = resolve_series_candidate_rt_ids(
+        rt_ids=rt_ids,
+        rt_prefix=rt_prefix,
+        rt_like_patterns=rt_like_patterns,
+    )
+    anomaly_exact = {}
+    if analytics and candidate_rt_ids:
+        anomaly_exact = get_recent_anomaly_exact_map(
+            candidate_rt_ids,
+            min_ts=get_recent_series_min_ts(),
+        )
+
+    where_clauses = build_timeseries_where_clauses(
+        rt_ids=rt_ids,
+        rt_prefix=rt_prefix,
+        rt_like_patterns=rt_like_patterns,
+        candidate_rt_ids=candidate_rt_ids,
+        analytics=analytics,
+        anomaly_exact=anomaly_exact,
+    )
+    if not where_clauses:
         return {}
 
-    if rt_like_patterns:
-        patterns = " OR ".join([f"rt_id LIKE '{pattern}'" for pattern in rt_like_patterns])
-        where_clauses.append(f"({patterns})")
-
-    max_abs_value = resolve_query_value_limit(rt_ids=rt_ids, rt_like_patterns=rt_like_patterns)
-    where_clauses.append(f"measure_value::double <= {max_abs_value}")
-    where_clauses.append(f"measure_value::double >= {-max_abs_value}")
+    value_expression = build_timeseries_value_expression(candidate_rt_ids)
     query = f"""
 SELECT
-  time,
+  bin(time, {int(interval_minutes)}m) AS time,
   rt_id,
-  measure_value::double AS value
+  avg({value_expression}) AS value
 FROM "{TS_DATABASE}"."{TS_TABLE}"
 WHERE {" AND ".join(where_clauses)}
+GROUP BY rt_id, bin(time, {int(interval_minutes)}m)
 ORDER BY rt_id, time
 """
     rows = query_timestream(query)
-    resolved_rt_ids = sorted(
-        {
-            data[1].get("ScalarValue")
-            for row in rows
-            for data in [row.get("Data", [])]
-            if len(data) >= 2 and data[1].get("ScalarValue")
-        }
-    )
-    if analytics:
-        anomaly_exact = get_recent_anomaly_exact_map(
-            resolved_rt_ids,
-            min_ts=get_recent_series_min_ts(),
-        )
-        series_maps = rows_to_binned_timeseries_by_rt_maps(
-            rows,
-            interval_minutes=interval_minutes,
-            analytics=True,
-            anomaly_exact=anomaly_exact,
-        )
-        return aggregate_aligned_series_maps(
-            list(series_maps.values()),
-            interval_minutes=interval_minutes,
-            aggregation=aggregation,
-        )
-    series_maps = rows_to_binned_timeseries_by_rt_maps(
-        rows,
-        interval_minutes=interval_minutes,
-        analytics=False,
-    )
+    series_maps = rows_to_series_by_rt_maps(rows)
     return aggregate_aligned_series_maps(
         list(series_maps.values()),
         interval_minutes=interval_minutes,
@@ -1502,6 +1480,137 @@ def resolve_query_value_limit(rt_ids=None, rt_like_patterns=None):
     if targets and all(target.endswith(".e_kwh") or target.endswith("%.e_kwh") for target in targets):
         return MAX_VALID_VALUE_KWH
     return MAX_VALID_VALUE
+
+
+def resolve_series_candidate_rt_ids(rt_ids=None, rt_prefix=None, rt_like_patterns=None):
+    if rt_ids:
+        return sorted({str(rt_id) for rt_id in rt_ids if rt_id})
+    if not rt_prefix:
+        return []
+    try:
+        items = scan_latest(rt_prefix)
+    except Exception:
+        return []
+    resolved = []
+    for item in items:
+        rt_id = item.get("rt_id", "")
+        if not rt_id.startswith(rt_prefix):
+            continue
+        if rt_like_patterns and not any(
+            matches_like_pattern(rt_id, pattern) for pattern in rt_like_patterns
+        ):
+            continue
+        resolved.append(rt_id)
+    return sorted(set(resolved))
+
+
+def build_timeseries_where_clauses(
+    rt_ids=None,
+    rt_prefix=None,
+    rt_like_patterns=None,
+    candidate_rt_ids=None,
+    analytics=False,
+    anomaly_exact=None,
+):
+    where_clauses = [
+        "time > ago(24h)",
+        "measure_name = 'value'",
+    ]
+    if rt_ids:
+        in_clause = ",".join([quote_timestream_string(rt_id) for rt_id in rt_ids])
+        where_clauses.append(f"rt_id IN ({in_clause})")
+    elif rt_prefix:
+        where_clauses.append(f"rt_id LIKE {quote_timestream_string(f'{rt_prefix}%')}")
+    else:
+        return []
+
+    if rt_like_patterns:
+        patterns = " OR ".join(
+            [f"rt_id LIKE {quote_timestream_string(pattern)}" for pattern in rt_like_patterns]
+        )
+        where_clauses.append(f"({patterns})")
+
+    max_abs_value = resolve_query_value_limit(rt_ids=rt_ids, rt_like_patterns=rt_like_patterns)
+    where_clauses.append(f"measure_value::double <= {max_abs_value}")
+    where_clauses.append(f"measure_value::double >= {-max_abs_value}")
+
+    candidate_rt_ids = candidate_rt_ids or []
+    if candidate_rt_ids:
+        irradiance_rt_ids = [
+            rt_id for rt_id in candidate_rt_ids if infer_rt_unit(rt_id) == "W/m²"
+        ]
+        if irradiance_rt_ids:
+            in_clause = ",".join([quote_timestream_string(rt_id) for rt_id in irradiance_rt_ids])
+            where_clauses.append(
+                f"(rt_id NOT IN ({in_clause}) OR abs(measure_value::double) <= 2000)"
+            )
+
+        if analytics:
+            disallow_negative_rt_ids = [
+                rt_id
+                for rt_id in candidate_rt_ids
+                if rt_id not in NEGATIVE_TO_ZERO_RT_IDS
+                and detect_anomaly(rt_id, -1.0, unit=infer_rt_unit(rt_id)) is not None
+            ]
+            if disallow_negative_rt_ids:
+                in_clause = ",".join(
+                    [quote_timestream_string(rt_id) for rt_id in disallow_negative_rt_ids]
+                )
+                where_clauses.append(
+                    f"(rt_id NOT IN ({in_clause}) OR measure_value::double >= 0)"
+                )
+
+            exclusion_clause = build_anomaly_exclusion_clause(anomaly_exact or {})
+            if exclusion_clause:
+                where_clauses.append(exclusion_clause)
+
+    return where_clauses
+
+
+def build_timeseries_value_expression(candidate_rt_ids):
+    negative_to_zero_rt_ids = sorted(
+        {
+            str(rt_id)
+            for rt_id in (candidate_rt_ids or [])
+            if str(rt_id) in NEGATIVE_TO_ZERO_RT_IDS
+        }
+    )
+    if not negative_to_zero_rt_ids:
+        return "measure_value::double"
+    in_clause = ",".join([quote_timestream_string(rt_id) for rt_id in negative_to_zero_rt_ids])
+    return (
+        "CASE "
+        f"WHEN rt_id IN ({in_clause}) AND measure_value::double < 0 THEN 0.0 "
+        "ELSE measure_value::double END"
+    )
+
+
+def build_anomaly_exclusion_clause(anomaly_exact):
+    grouped_conditions = []
+    for rt_id, timestamps in sorted((anomaly_exact or {}).items()):
+        if not timestamps:
+            continue
+        timestamp_conditions = " OR ".join(
+            [
+                f"time = from_iso8601_timestamp('{format_timestream_timestamp(ts)}')"
+                for ts in sorted(set(timestamps))
+            ]
+        )
+        grouped_conditions.append(
+            f"(rt_id = {quote_timestream_string(rt_id)} AND ({timestamp_conditions}))"
+        )
+    if not grouped_conditions:
+        return ""
+    return f"NOT ({' OR '.join(grouped_conditions)})"
+
+
+def quote_timestream_string(value):
+    escaped = str(value).replace("'", "''")
+    return "'" + escaped + "'"
+
+
+def format_timestream_timestamp(ts_epoch):
+    return datetime.fromtimestamp(int(ts_epoch), tz=timezone.utc).isoformat()
 
 
 def query_counter_deltas(rt_prefix, rt_like_patterns, interval, lookback):
@@ -2182,6 +2291,24 @@ def rows_to_series_map(rows):
             continue
         result[ts_epoch] = float(value)
     return result
+
+
+def rows_to_series_by_rt_maps(rows):
+    grouped = {}
+    for row in rows:
+        data = row.get("Data", [])
+        if len(data) < 3:
+            continue
+        ts_value = data[0].get("ScalarValue")
+        rt_id = data[1].get("ScalarValue")
+        value_raw = data[2].get("ScalarValue")
+        if ts_value is None or value_raw is None or not rt_id:
+            continue
+        ts_epoch = parse_ts(ts_value)
+        if ts_epoch == 0:
+            continue
+        grouped.setdefault(rt_id, {})[ts_epoch] = float(value_raw)
+    return {rt_id: dict(sorted(series.items())) for rt_id, series in grouped.items()}
 
 
 def rows_to_binned_timeseries_by_rt_maps(
